@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ипотека — аннуитет + досрочка (реалтайм)</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; background:#f6f7f9; color:#111; }
+    .wrap { max-width: 1150px; margin: 24px auto; padding: 0 16px 48px; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    .muted { color:#666; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-top: 16px; }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+    .card { background:#fff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.06); padding: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px){ .row{ grid-template-columns: 1fr; } }
+    label { display:block; font-size: 12px; color:#444; margin: 0 0 6px; }
+    input, select, button { width: 100%; box-sizing: border-box; padding: 10px 10px; border: 1px solid #d9dde3; border-radius: 10px; background:#fff; font-size: 14px; }
+    input[type="number"]{ font-variant-numeric: tabular-nums; }
+    button { cursor: pointer; border: 1px solid #cfd5dd; background:#f5f7fa; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button.danger { background:#fff5f5; border-color:#ffd1d1; color:#a10000; }
+    .seg { display:flex; gap: 8px; }
+    .seg button { flex:1; }
+    .seg button.active { background:#111; color:#fff; border-color:#111; }
+    .kpi { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 520px){ .kpi{ grid-template-columns: 1fr; } }
+    .kpi .box { border:1px solid #eef1f5; border-radius: 12px; padding: 12px; background:#fbfcfe; }
+    .kpi .box .t { font-size: 12px; color:#555; }
+    .kpi .box .v { font-size: 18px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .kpi .box .s { font-size: 12px; color:#666; margin-top: 4px; }
+    .hr { height:1px; background:#eef1f5; margin: 16px 0; }
+    table { width:100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: 10px 8px; border-bottom:1px solid #eef1f5; text-align: right; font-size: 12px; }
+    th { color:#444; font-weight: 600; background:#fafbfc; position: sticky; top: 0; }
+    th:first-child, td:first-child { text-align: left; }
+    .scroll { max-height: 420px; overflow:auto; border:1px solid #eef1f5; border-radius: 12px; }
+    .pill { display:inline-block; padding: 3px 8px; border-radius: 999px; background:#eef3ff; color:#1b44d6; font-size: 12px; }
+    .hint { font-size: 12px; color:#666; margin-top: 8px; }
+    .inline { display:flex; gap: 8px; align-items: center; }
+    .inline > * { flex: 1; }
+    .inline .mini { flex: 0 0 110px; }
+    .inline .mini2 { flex: 0 0 140px; }
+    .small { font-size: 12px; color:#666; }
+    canvas { width:100%; height: 140px; border:1px solid #eef1f5; border-radius: 12px; background:#fff; }
+    .two { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 760px){ .two{ grid-template-columns: 1fr; } }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>Ипотека (аннуитет) + досрочное погашение</h1>
+    <div class="muted">Считает график, переплату по процентам , срок и эффект разовой/регулярной досрочки. Комиссии/страховки не учитываются.</div>
+
+    <div class="grid">
+      <!-- LEFT: INPUTS -->
+      <div class="card">
+        <h2>Параметры кредита</h2>
+        <div class="row">
+          <div>
+            <label>Сумма кредита (₽)</label>
+            <input id="principal" type="number" min="0" step="1000" value="17000000" />
+          </div>
+          <div>
+            <label>Ставка (% годовых, фикс)</label>
+            <input id="rate" type="number" min="0" step="0.01" value="21" />
+          </div>
+          <div>
+            <label>Срок (лет)</label>
+            <input id="years" type="number" min="1" step="1" value="15" />
+          </div>
+          <div>
+            <label>Дата выдачи</label>
+            <input id="startDate" type="date" />
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h2>Досрочное погашение</h2>
+
+        <div class="row">
+          <div>
+            <label>Режим после досрочки</label>
+            <div class="seg">
+              <button id="modeKeepPayment" class="active" type="button">Сохранять платёж → сокращать срок</button>
+              <button id="modeKeepTerm" type="button">Сохранять срок → уменьшать платёж</button>
+            </div>
+            <div class="hint">В обоих режимах досрочка уходит в тело кредита (principal).</div>
+          </div>
+          <div>
+            <label>Регулярное доссрочное погашение</label>
+            <div class="two">
+              <div>
+                <label class="small">Сумма (₽)</label>
+                <input id="regAmount" type="number" min="0" step="1000" value="0" />
+              </div>
+              <div>
+                <label class="small">Старт с месяца №</label>
+                <input id="regStart" type="number" min="1" step="1" value="1" />
+              </div>
+              <div>
+                <label class="small">Частота</label>
+                <select id="regFreq">
+                  <option value="1">каждый месяц</option>
+                  <option value="3">раз в квартал (каждые 3 мес.)</option>
+                  <option value="12">раз в год (каждые 12 мес.)</option>
+                </select>
+              </div>
+              <div>
+                <label class="small">До месяца № (0 = до конца)</label>
+                <input id="regEnd" type="number" min="0" step="1" value="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h2>Разовые досрочные платежи</h2>
+        <div class="inline" style="margin-bottom:10px;">
+          <div class="mini">
+            <label>Месяц №</label>
+            <input id="oneMonth" type="number" min="1" step="1" value="12" />
+          </div>
+          <div class="mini2">
+            <label>Сумма (₽)</label>
+            <input id="oneAmount" type="number" min="0" step="1000" value="300000" />
+          </div>
+          <div style="align-self:end;">
+            <button id="addOne" class="primary" type="button">Добавить</button>
+          </div>
+        </div>
+
+        <div class="scroll" style="max-height:180px;">
+          <table id="oneTable">
+            <thead>
+              <tr>
+                <th>Месяц</th>
+                <th>Сумма, ₽</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="hint">
+          <span class="pill">Важно</span>
+          Для простоты: в каждом месяце сначала списывается обычный платеж, затем досрочка.
+        </div>
+      </div>
+
+      <!-- RIGHT: RESULTS -->
+      <div class="card">
+        <h2>Результаты</h2>
+
+        <div class="kpi">
+          <div class="box">
+            <div class="t">Ежемесячный платёж</div>
+            <div class="v" id="kpiPayment">—</div>
+            <div class="s" id="kpiPaymentNote">—</div>
+          </div>
+          <div class="box">
+            <div class="t">Срок до закрытия</div>
+            <div class="v" id="kpiTerm">—</div>
+            <div class="s" id="kpiEndDate">—</div>
+          </div>
+          <div class="box">
+            <div class="t">Переплата по % </div>
+            <div class="v" id="kpiInterest">—</div>
+            <div class="s" id="kpiInterestDelta">—</div>
+          </div>
+          <div class="box">
+            <div class="t">Итого выплат</div>
+            <div class="v" id="kpiTotal">—</div>
+            <div class="s" id="kpiTotalDelta">—</div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h2>Графики (без досрочки vs с досрочкой)</h2>
+        <div class="muted" style="margin: -6px 0 10px;">Остаток долга по месяцам</div>
+        <canvas id="chart" width="900" height="200"></canvas>
+
+        <div class="hr"></div>
+
+        <div class="inline" style="margin-bottom:10px;">
+          <div>
+            <label>Показать строк графика</label>
+            <select id="rowsMode">
+              <option value="all">всё</option>
+              <option value="firstlast">первые 24 и последние 24</option>
+              <option value="first60">первые 60</option>
+            </select>
+          </div>
+          <div style="align-self:end;">
+            <button id="exportCsv" type="button">Экспорт CSV</button>
+          </div>
+        </div>
+
+        <div class="scroll">
+          <table id="schedule">
+            <thead>
+              <tr>
+                <th>Месяц</th>
+                <th>Дата</th>
+                <th>Платёж, ₽</th>
+                <th>Проценты, ₽</th>
+                <th>Тело, ₽</th>
+                <th>Досрочка, ₽</th>
+                <th>Остаток, ₽</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="hint">
+          «Переплата по %» = сумма всех процентов за период. Округление применяется только при отображении.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ------------------------------
+  // Helpers
+  // ------------------------------
+  const fmtRUB = (n) => {
+    if (!isFinite(n)) return "—";
+    return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(n);
+  };
+  const fmtInt = (n) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n);
+  const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+
+  const addMonths = (date, m) => {
+    const d = new Date(date);
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + m);
+    // JS sometimes rolls months; keep "end of month" reasonably stable
+    if (d.getDate() < day) d.setDate(0);
+    return d;
+  };
+  const toISODate = (d) => {
+    const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return z.toISOString().slice(0,10);
+  };
+
+  function annuityPayment(P, annualRate, nMonths) {
+    const r = annualRate / 12;
+    if (nMonths <= 0) return 0;
+    if (r === 0) return P / nMonths;
+    const k = r * Math.pow(1 + r, nMonths) / (Math.pow(1 + r, nMonths) - 1);
+    return P * k;
+  }
+
+  // ------------------------------
+  // State: one-time extra payments list
+  // ------------------------------
+  let mode = "keepPayment"; // keepPayment | keepTerm
+  let oneTimes = [
+    // {month: 12, amount: 300000}
+  ];
+
+  // ------------------------------
+  // DOM
+  // ------------------------------
+  const el = (id) => document.getElementById(id);
+
+  const principalEl = el("principal");
+  const rateEl = el("rate");
+  const yearsEl = el("years");
+  const startDateEl = el("startDate");
+
+  const keepPaymentBtn = el("modeKeepPayment");
+  const keepTermBtn = el("modeKeepTerm");
+
+  const regAmountEl = el("regAmount");
+  const regStartEl = el("regStart");
+  const regFreqEl = el("regFreq");
+  const regEndEl = el("regEnd");
+
+  const oneMonthEl = el("oneMonth");
+  const oneAmountEl = el("oneAmount");
+  const addOneBtn = el("addOne");
+  const oneTableBody = el("oneTable").querySelector("tbody");
+
+  const kpiPayment = el("kpiPayment");
+  const kpiPaymentNote = el("kpiPaymentNote");
+  const kpiTerm = el("kpiTerm");
+  const kpiEndDate = el("kpiEndDate");
+  const kpiInterest = el("kpiInterest");
+  const kpiInterestDelta = el("kpiInterestDelta");
+  const kpiTotal = el("kpiTotal");
+  const kpiTotalDelta = el("kpiTotalDelta");
+
+  const scheduleBody = el("schedule").querySelector("tbody");
+  const rowsModeEl = el("rowsMode");
+  const exportCsvBtn = el("exportCsv");
+
+  const chart = el("chart");
+  const ctx = chart.getContext("2d");
+
+  // default start date = today
+  startDateEl.value = toISODate(new Date());
+
+  // ------------------------------
+  // Extras building
+  // ------------------------------
+  function buildExtrasMap(nMaxMonths) {
+    const map = new Map(); // month -> extra sum
+    // one-time
+    for (const o of oneTimes) {
+      if (!o || !isFinite(o.month) || !isFinite(o.amount)) continue;
+      const m = Math.trunc(o.month);
+      if (m < 1) continue;
+      const a = Math.max(0, o.amount);
+      map.set(m, (map.get(m) || 0) + a);
+    }
+    // regular
+    const regAmt = Math.max(0, Number(regAmountEl.value || 0));
+    const regStart = Math.max(1, Math.trunc(Number(regStartEl.value || 1)));
+    const regFreq = Math.max(1, Math.trunc(Number(regFreqEl.value || 1)));
+    const regEndRaw = Math.trunc(Number(regEndEl.value || 0));
+    const regEnd = regEndRaw <= 0 ? nMaxMonths : Math.max(regStart, regEndRaw);
+
+    if (regAmt > 0) {
+      for (let m = regStart; m <= Math.min(regEnd, nMaxMonths); m += regFreq) {
+        map.set(m, (map.get(m) || 0) + regAmt);
+      }
+    }
+    return map;
+  }
+
+  // ------------------------------
+  // Core amortization simulation
+  // ------------------------------
+  function simulate({ P0, annualRate, months, startDate, mode, extrasMap }) {
+    const r = annualRate / 12;
+    let balance = P0;
+
+    let payment = annuityPayment(balance, annualRate, months);
+    const basePayment = payment;
+
+    let totalInterest = 0;
+    let totalPaid = 0;
+
+    const rows = [];
+    let m = 0;
+
+    // to avoid infinite loops on insane inputs
+    const hardCap = 2000;
+
+    while (balance > 1e-6 && m < hardCap) {
+      m++;
+      const date = addMonths(startDate, m);
+
+      const interest = balance * r;
+      let payThisMonth = payment;
+
+      // If keeping term: payment might be recalculated after applying extra (we do it after the month’s operations).
+      // But the scheduled (current) payment is paid now.
+      // last payment clamp:
+      if (payThisMonth > balance + interest) payThisMonth = balance + interest;
+
+      const principalPart = Math.max(0, payThisMonth - interest);
+      let extra = extrasMap.get(m) || 0;
+      extra = Math.max(0, extra);
+
+      // In the last month, don't overpay extra beyond remaining principal
+      const maxExtra = Math.max(0, balance - principalPart);
+      if (extra > maxExtra) extra = maxExtra;
+
+      const newBalance = balance - principalPart - extra;
+
+      totalInterest += interest;
+      totalPaid += (payThisMonth + extra);
+
+      rows.push({
+        month: m,
+        date,
+        payment: payThisMonth,
+        interest,
+        principal: principalPart,
+        extra,
+        balance: Math.max(0, newBalance)
+      });
+
+      balance = Math.max(0, newBalance);
+
+      // If mode = keepTerm, recalc payment for remaining months (if any) after this month.
+      if (mode === "keepTerm") {
+        const remaining = months - m;
+        if (remaining > 0 && balance > 1e-6) {
+          payment = annuityPayment(balance, annualRate, remaining);
+        } else {
+          // If term ends but balance remains (edge), force payoff next month with computed payment
+          // or if balance is 0, we're done
+        }
+      }
+
+      // If mode = keepPayment, payment stays basePayment
+      if (mode === "keepPayment") {
+        payment = basePayment;
+      }
+
+      // Safety: if payment is too small to cover interest (can happen if rate high + keepTerm + tiny remaining months?),
+      // force pay interest+epsilon to avoid negative amortization.
+      if (payment < interest && balance > 1e-6) {
+        payment = interest + 1;
+      }
+    }
+
+    const endDate = rows.length ? rows[rows.length - 1].date : addMonths(startDate, 0);
+
+    return {
+      monthsActual: rows.length,
+      endDate,
+      basePayment,
+      lastPayment: rows.length ? rows[rows.length - 1].payment : 0,
+      totalInterest,
+      totalPaid,
+      rows
+    };
+  }
+
+  // ------------------------------
+  // Rendering
+  // ------------------------------
+  function renderOneTimes() {
+    oneTimes.sort((a,b) => a.month - b.month);
+    oneTableBody.innerHTML = "";
+    for (let i = 0; i < oneTimes.length; i++) {
+      const o = oneTimes[i];
+      const tr = document.createElement("tr");
+
+      const tdM = document.createElement("td");
+      tdM.textContent = String(o.month);
+      tr.appendChild(tdM);
+
+      const tdA = document.createElement("td");
+      tdA.textContent = fmtRUB(o.amount);
+      tr.appendChild(tdA);
+
+      const tdX = document.createElement("td");
+      tdX.style.textAlign = "right";
+      const btn = document.createElement("button");
+      btn.className = "danger";
+      btn.type = "button";
+      btn.textContent = "Удалить";
+      btn.addEventListener("click", () => {
+        oneTimes.splice(i, 1);
+        renderOneTimes();
+        recalc();
+      });
+      tdX.appendChild(btn);
+      tr.appendChild(tdX);
+
+      oneTableBody.appendChild(tr);
+    }
+  }
+
+  function pickRowsForDisplay(rows, mode) {
+    if (mode === "all") return rows;
+    if (mode === "first60") return rows.slice(0, 60);
+    if (mode === "firstlast") {
+      if (rows.length <= 48) return rows;
+      return rows.slice(0, 24).concat([{__gap:true}], rows.slice(-24));
+    }
+    return rows;
+  }
+
+  function renderSchedule(rows) {
+    const mode = rowsModeEl.value;
+    const show = pickRowsForDisplay(rows, mode);
+
+    scheduleBody.innerHTML = "";
+    for (const r of show) {
+      if (r.__gap) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.style.textAlign = "center";
+        td.style.color = "#777";
+        td.textContent = "…";
+        tr.appendChild(td);
+        scheduleBody.appendChild(tr);
+        continue;
+      }
+
+      const tr = document.createElement("tr");
+      const dateStr = toISODate(r.date);
+
+      const cells = [
+        r.month,
+        dateStr,
+        r.payment,
+        r.interest,
+        r.principal,
+        r.extra,
+        r.balance
+      ];
+
+      for (let i = 0; i < cells.length; i++) {
+        const td = document.createElement("td");
+        if (i === 0) td.textContent = String(cells[i]);
+        else if (i === 1) td.textContent = cells[i];
+        else td.textContent = fmtRUB(cells[i]);
+        tr.appendChild(td);
+      }
+      scheduleBody.appendChild(tr);
+    }
+  }
+
+  function drawChart(baseline, scenario) {
+    const base = baseline.rows.map(x => x.balance);
+    const sc = scenario.rows.map(x => x.balance);
+    const n = Math.max(base.length, sc.length, 1);
+
+    const w = chart.width, h = chart.height;
+    ctx.clearRect(0,0,w,h);
+
+    const maxY = Math.max(base[0] || 0, sc[0] || 0, 1);
+    const pad = 18;
+
+    // axes
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#e9edf3";
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(w - pad, h - pad);
+    ctx.stroke();
+
+    function plot(series, stroke, dash=[]) {
+      ctx.strokeStyle = stroke;
+      ctx.setLineDash(dash);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i=0; i<series.length; i++){
+        const x = pad + (w - 2*pad) * (i / Math.max(series.length - 1, 1));
+        const y = (h - pad) - (h - 2*pad) * (series[i] / maxY);
+        if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // baseline = solid, scenario = dashed
+    plot(base, "#111", []);
+    plot(sc, "#111", [6,5]);
+
+    // legend
+    ctx.fillStyle = "#111";
+    ctx.font = "12px -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText("Без досрочки — линия", pad, pad - 4);
+    ctx.fillText("С досрочкой — пунктир", pad + 200, pad - 4);
+  }
+
+  function makeCsv(rows) {
+    const header = ["month","date","payment","interest","principal","extra","balance"];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push([
+        r.month,
+        toISODate(r.date),
+        r.payment.toFixed(2),
+        r.interest.toFixed(2),
+        r.principal.toFixed(2),
+        r.extra.toFixed(2),
+        r.balance.toFixed(2),
+      ].join(","));
+    }
+    return lines.join("\n");
+  }
+
+  // ------------------------------
+  // Main recalculation
+  // ------------------------------
+  let raf = null;
+  function recalc() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const P0 = Math.max(0, Number(principalEl.value || 0));
+      const annualRate = Math.max(0, Number(rateEl.value || 0)) / 100;
+      const months = Math.max(1, Math.trunc(Number(yearsEl.value || 1) * 12));
+      const startDate = new Date(startDateEl.value ? startDateEl.value + "T00:00:00" : new Date());
+
+      // Baseline: no extras, keepPayment doesn't matter (no extras), keepTerm doesn't matter. Use keepPayment.
+      const baseline = simulate({
+        P0, annualRate, months, startDate,
+        mode: "keepPayment",
+        extrasMap: new Map()
+      });
+
+      // Scenario: build extras map up to a max horizon (months, but scenario may end earlier)
+      const extrasMap = buildExtrasMap(months);
+      const scenario = simulate({
+        P0, annualRate, months, startDate,
+        mode,
+        extrasMap
+      });
+
+      // KPIs
+      const basePay = baseline.basePayment;
+      const scFirstPay = scenario.rows[0] ? scenario.rows[0].payment : basePay;
+      const scLastPay = scenario.lastPayment;
+
+      kpiPayment.textContent = fmtRUB(mode === "keepPayment" ? basePay : scFirstPay);
+      kpiPaymentNote.textContent =
+        mode === "keepPayment"
+          ? "платёж фиксирован (аннуитет), меняется срок"
+          : "платёж может пересчитываться после досрочек";
+
+      kpiTerm.textContent = `${fmtInt(scenario.monthsActual)} мес.`;
+      kpiEndDate.textContent = `закрытие: ${toISODate(scenario.endDate)}`;
+
+      kpiInterest.textContent = fmtRUB(scenario.totalInterest);
+      const di = scenario.totalInterest - baseline.totalInterest;
+      kpiInterestDelta.textContent = `разница к базовому: ${fmtRUB(di)}`;
+
+      kpiTotal.textContent = fmtRUB(scenario.totalPaid);
+      const dt = scenario.totalPaid - baseline.totalPaid;
+      kpiTotalDelta.textContent = `разница к базовому: ${fmtRUB(dt)}`;
+
+      // Table + chart
+      renderSchedule(scenario.rows);
+      drawChart(baseline, scenario);
+
+      // attach export handler (use latest scenario)
+      exportCsvBtn.onclick = () => {
+        const csv = makeCsv(scenario.rows);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "mortgage_schedule.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+    });
+  }
+
+  // ------------------------------
+  // Events
+  // ------------------------------
+  function bindRecalcInputs() {
+    const inputs = [
+      principalEl, rateEl, yearsEl, startDateEl,
+      regAmountEl, regStartEl, regFreqEl, regEndEl,
+      rowsModeEl
+    ];
+    for (const x of inputs) {
+      x.addEventListener("input", recalc);
+      x.addEventListener("change", recalc);
+    }
+  }
+
+  keepPaymentBtn.addEventListener("click", () => {
+    mode = "keepPayment";
+    keepPaymentBtn.classList.add("active");
+    keepTermBtn.classList.remove("active");
+    recalc();
+  });
+
+  keepTermBtn.addEventListener("click", () => {
+    mode = "keepTerm";
+    keepTermBtn.classList.add("active");
+    keepPaymentBtn.classList.remove("active");
+    recalc();
+  });
+
+  addOneBtn.addEventListener("click", () => {
+    const m = Math.max(1, Math.trunc(Number(oneMonthEl.value || 1)));
+    const a = Math.max(0, Number(oneAmountEl.value || 0));
+    if (a <= 0) return;
+
+    oneTimes.push({ month: m, amount: a });
+    renderOneTimes();
+    recalc();
+  });
+
+  // init
+  bindRecalcInputs();
+  renderOneTimes();
+  recalc();
+})();
+</script>
+</body>
+</html>
