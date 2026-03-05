@@ -90,13 +90,20 @@ jobs:
           CHECKSUM_PATH="${ARTIFACT_PATH}.sha256"
           ssh -p "${PORT}" -i ~/.ssh/id_ed25519 "${USER_NAME}@${DEPLOY_HOST}" \
             "cd ${ROOT_PATH} && ./scripts/deploy-staging.sh '${ARTIFACT_PATH}' '${CHECKSUM_PATH}' '${BASE_URL}'"
-
-      - name: Verify staging release
+      - name: Verify staging release (from server)
         env:
           RELEASE_ID: ${{ inputs.release_id }}
           BASE_URL: ${{ inputs.base_url }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
+          USER_NAME="${DEPLOY_USER:-root}"
+          PORT="${DEPLOY_PORT:-22}"
+          ssh -p "${PORT}" -i ~/.ssh/id_ed25519 "${USER_NAME}@${DEPLOY_HOST}"             "BASE_URL='${BASE_URL}' RELEASE_ID='${RELEASE_ID}' bash -s" <<'SSH'
+          set -euo pipefail
           curl -fsS "${BASE_URL}/api/v1/health" >/dev/null
           VERSION_JSON="$(curl -fsS "${BASE_URL}/api/v1/release/version")"
           echo "${VERSION_JSON}"
           echo "${VERSION_JSON}" | grep -q "\"releaseId\":\"${RELEASE_ID}\""
+          SSH
