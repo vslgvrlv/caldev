@@ -76,9 +76,10 @@ const App: React.FC = () => {
             api.getFinanceMembers(data.team.id),
           ]);
 
-          if (financeOverview?.summary?.balance !== undefined) {
+          const financeBalance = financeOverview?.summary?.balance;
+          if (financeBalance !== undefined) {
             setActiveTeam((prev) =>
-              prev ? { ...prev, budget: Number(financeOverview.summary.balance) } : prev
+              prev ? { ...prev, budget: Number(financeBalance) } : prev
             );
           }
 

@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, Transaction, User, RSVPStatus, EventType } from './types';
+import { Event, Team, TeamMember, Transaction, User, RSVPStatus, EventType, TransactionType } from './types';
 
 const baseFromEnv = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 const API_URL = baseFromEnv ? `${baseFromEnv}/api/v1` : '/api/v1';
