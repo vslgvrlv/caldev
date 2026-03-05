@@ -1,0 +1,5 @@
+{
+  "name": "PaintBall Team Hub",
+  "description": "A PWA for managing paintball teams, events, attendance, and ICS calendar integration.",
+  "requestFramePermissions": []
+}

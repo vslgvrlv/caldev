@@ -1,0 +1,85 @@
+upstream pbth_prod_frontend {
+    server 127.0.0.1:3100;
+}
+
+upstream pbth_prod_backend {
+    server 127.0.0.1:8100;
+}
+
+upstream pbth_staging_frontend {
+    server 127.0.0.1:3200;
+}
+
+upstream pbth_staging_backend {
+    server 127.0.0.1:8200;
+}
+
+server {
+    listen 80;
+    server_name pbthub.ru www.pbthub.ru;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 80;
+    server_name staging.pbthub.ru;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name pbthub.ru www.pbthub.ru;
+
+    # ssl_certificate /etc/letsencrypt/live/pbthub.ru/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/pbthub.ru/privkey.pem;
+
+    location /api/ {
+        proxy_pass http://pbth_prod_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /calendar/ {
+        proxy_pass http://pbth_prod_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        proxy_pass http://pbth_prod_frontend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name staging.pbthub.ru;
+
+    # ssl_certificate /etc/letsencrypt/live/staging.pbthub.ru/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/staging.pbthub.ru/privkey.pem;
+
+    location /api/ {
+        proxy_pass http://pbth_staging_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /calendar/ {
+        proxy_pass http://pbth_staging_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        proxy_pass http://pbth_staging_frontend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}

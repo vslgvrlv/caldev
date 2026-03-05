@@ -1,0 +1,57 @@
+:root {
+  --pb-primary: #00e676;
+  --pb-secondary: #39ff14;
+  --pb-background: #0f0f0f;
+  --pb-surface: #1e1e2e;
+  --pb-warning: #ff6d00;
+  --pb-danger: #ff1744;
+  --pb-subtext: #a0a0b0;
+}
+
+.text-pb-primary { color: var(--pb-primary); }
+.text-pb-secondary { color: var(--pb-secondary); }
+.text-pb-background { color: var(--pb-background); }
+.text-pb-subtext { color: var(--pb-subtext); }
+.text-pb-warning { color: var(--pb-warning); }
+.text-pb-danger { color: var(--pb-danger); }
+
+.bg-pb-primary { background-color: var(--pb-primary); }
+.bg-pb-background { background-color: var(--pb-background); }
+.bg-pb-surface { background-color: var(--pb-surface); }
+.bg-pb-subtext { background-color: var(--pb-subtext); }
+.bg-pb-warning { background-color: var(--pb-warning); }
+.bg-pb-danger { background-color: var(--pb-danger); }
+
+.border-pb-primary { border-color: var(--pb-primary); }
+.border-pb-background { border-color: var(--pb-background); }
+.border-pb-surface { border-color: var(--pb-surface); }
+.border-pb-warning { border-color: var(--pb-warning); }
+.border-pb-danger { border-color: var(--pb-danger); }
+.focus\:border-pb-primary:focus { border-color: var(--pb-primary); }
+
+.hover\:bg-pb-primary:hover { background-color: var(--pb-primary); }
+.hover\:bg-pb-surface:hover { background-color: var(--pb-surface); }
+.hover\:bg-pb-danger:hover { background-color: var(--pb-danger); }
+.hover\:text-pb-primary:hover { color: var(--pb-primary); }
+
+.placeholder\:text-pb-subtext::placeholder { color: var(--pb-subtext); }
+
+.selection\:bg-pb-primary::selection,
+.selection\:bg-pb-primary *::selection { background-color: var(--pb-primary); }
+.selection\:text-pb-background::selection,
+.selection\:text-pb-background *::selection { color: var(--pb-background); }
+
+.ring-pb-surface { --tw-ring-color: var(--pb-surface); }
+.shadow-pb-primary { --tw-shadow-color: var(--pb-primary); }
+
+.from-pb-primary {
+  --tw-gradient-from: var(--pb-primary) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(0 230 118 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.from-pb-surface {
+  --tw-gradient-from: var(--pb-surface) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(30 30 46 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}

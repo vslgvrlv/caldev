@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0F0F0F" />
+    <meta name="description" content="PaintBall Team Hub — управление пейнтбольной командой: расписание, RSVP, финансы и состав в одном месте." />
+    <meta name="robots" content="index,follow" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="canonical" href="https://pbthub.ru/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PaintBall Team Hub" />
+    <meta property="og:title" content="PaintBall Team Hub" />
+    <meta property="og:description" content="Единый хаб для капитанов и игроков: события, участники, напоминания и финансы команды." />
+    <meta property="og:url" content="https://pbthub.ru/" />
+    <meta property="og:image" content="https://pbthub.ru/og-image.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PaintBall Team Hub" />
+    <meta name="twitter:description" content="Управление пейнтбольной командой в одном приложении." />
+    <meta name="twitter:image" content="https://pbthub.ru/og-image.png" />
+
+    <title>PaintBall Team Hub</title>
+
+    <link rel="stylesheet" href="/pb-theme-fallback.css?v=20260304-1" />
+    <script src="/tailwind.runtime.config.js?v=20260304-1"></script>
+    <script src="/api/v1/vendor/tailwindcss.js?v=20260304-1"></script>
+    <script src="/api/v1/vendor/telegram-web-app.js?v=20260304-1"></script>
+
+    <style>
+      body {
+        background-color: #0F0F0F;
+        color: #FFFFFF;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+      }
+
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

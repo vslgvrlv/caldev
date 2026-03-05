@@ -1,0 +1,74 @@
+name: Release Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Release id/tag (example: v2026.02.28-1). If empty, auto-generated."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release branch
+        run: |
+          if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
+            echo "Release artifact must be created from main. Current ref: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release artifact
+        id: build
+        run: |
+          chmod +x scripts/release/build-artifact.sh
+          if [[ -n "${{ inputs.release_id }}" ]]; then
+            OUT="$(./scripts/release/build-artifact.sh "${{ inputs.release_id }}")"
+          else
+            OUT="$(./scripts/release/build-artifact.sh)"
+          fi
+          echo "${OUT}"
+          RELEASE_ID="$(echo "${OUT}" | awk -F= '/^release_id=/{print $2}')"
+          ARTIFACT_PATH="$(echo "${OUT}" | awk -F= '/^artifact_path=/{print $2}')"
+          CHECKSUM_PATH="$(echo "${OUT}" | awk -F= '/^checksum_path=/{print $2}')"
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+          echo "artifact_path=${ARTIFACT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "checksum_path=${CHECKSUM_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.release_id }}
+          path: |
+            ${{ steps.build.outputs.artifact_path }}
+            ${{ steps.build.outputs.checksum_path }}
+
+      - name: Create release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "${{ steps.build.outputs.release_id }}" >/dev/null 2>&1; then
+            echo "Tag already exists: ${{ steps.build.outputs.release_id }}"
+          else
+            git tag "${{ steps.build.outputs.release_id }}"
+            git push origin "${{ steps.build.outputs.release_id }}"
+          fi
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.build.outputs.release_id }}
+          name: ${{ steps.build.outputs.release_id }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            ${{ steps.build.outputs.artifact_path }}
+            ${{ steps.build.outputs.checksum_path }}
+          generate_release_notes: true

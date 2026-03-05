@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pbth}
+      POSTGRES_USER: ${DB_USER:-pbth}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pbth}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pbth} -d ${DB_NAME:-pbth}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 8000
+      FRONTEND_URL: ${FRONTEND_URL:-http://127.0.0.1:3000}
+      ADMIN_ROLE_ALLOWLIST_USERNAMES: ${ADMIN_ROLE_ALLOWLIST_USERNAMES:-}
+      ADMIN_ROLE_ALLOWLIST_IDS: ${ADMIN_ROLE_ALLOWLIST_IDS:-}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-pbth}
+      DB_USER: ${DB_USER:-pbth}
+      DB_PASSWORD: ${DB_PASSWORD:-pbth}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-change-me}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pbth.sid}
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-lax}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-0}
+      DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_CALLBACK_URL: ${TELEGRAM_CALLBACK_URL:-http://127.0.0.1:8000/api/v1/auth/telegram/callback}
+      TELEGRAM_MAX_AUTH_AGE_SEC: ${TELEGRAM_MAX_AUTH_AGE_SEC:-86400}
+      ICS_TOKEN_SECRET: ${ICS_TOKEN_SECRET:-dev-ics-secret}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Europe/Moscow}
+      SEED_ON_START: ${SEED_ON_START:-0}
+      NOTIFICATIONS_QUEUE_ENABLED: ${NOTIFICATIONS_QUEUE_ENABLED:-0}
+      NOTIFICATIONS_QUEUE_CONCURRENCY: ${NOTIFICATIONS_QUEUE_CONCURRENCY:-5}
+      NOTIFICATIONS_QUEUE_RETRY_LIMIT: ${NOTIFICATIONS_QUEUE_RETRY_LIMIT:-4}
+      NOTIFICATIONS_QUEUE_RETRY_DELAY_SECONDS: ${NOTIFICATIONS_QUEUE_RETRY_DELAY_SECONDS:-20}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./pbth
+      dockerfile: Dockerfile
+      args:
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-pbthub_bot}
+    environment:
+      VITE_BACKEND_TARGET: http://backend:8000
+      VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-pbthub_bot}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

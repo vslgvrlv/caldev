@@ -1,0 +1,102 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Release tag (example: v2026.03.05-1)"
+        required: true
+        type: string
+      base_url:
+        description: "Staging base URL"
+        required: false
+        default: "https://staging.pbthub.ru"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pbth-deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate deploy secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          [[ -n "${DEPLOY_HOST}" ]] || { echo "Missing secret: DEPLOY_HOST" >&2; exit 1; }
+          [[ -n "${DEPLOY_SSH_KEY}" ]] || { echo "Missing secret: DEPLOY_SSH_KEY" >&2; exit 1; }
+
+      - name: Download release artifact from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          mkdir -p dist/releases
+          gh release download "${RELEASE_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "pbth-release-${RELEASE_ID}.tar.gz" \
+            --pattern "pbth-release-${RELEASE_ID}.tar.gz.sha256" \
+            --dir dist/releases
+          ls -lah dist/releases
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${DEPLOY_PORT:-22}"
+          ssh-keyscan -p "${PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload artifact to server
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          USER_NAME="${DEPLOY_USER:-root}"
+          PORT="${DEPLOY_PORT:-22}"
+          ROOT_PATH="${DEPLOY_PATH:-/root/caldev}"
+          ARTIFACT="pbth-release-${RELEASE_ID}.tar.gz"
+          CHECKSUM="${ARTIFACT}.sha256"
+          scp -P "${PORT}" -i ~/.ssh/id_ed25519 "dist/releases/${ARTIFACT}" "${USER_NAME}@${DEPLOY_HOST}:${ROOT_PATH}/dist/releases/${ARTIFACT}"
+          scp -P "${PORT}" -i ~/.ssh/id_ed25519 "dist/releases/${CHECKSUM}" "${USER_NAME}@${DEPLOY_HOST}:${ROOT_PATH}/dist/releases/${CHECKSUM}"
+
+      - name: Deploy release to staging
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          BASE_URL: ${{ inputs.base_url }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          USER_NAME="${DEPLOY_USER:-root}"
+          PORT="${DEPLOY_PORT:-22}"
+          ROOT_PATH="${DEPLOY_PATH:-/root/caldev}"
+          ARTIFACT_PATH="${ROOT_PATH}/dist/releases/pbth-release-${RELEASE_ID}.tar.gz"
+          CHECKSUM_PATH="${ARTIFACT_PATH}.sha256"
+          ssh -p "${PORT}" -i ~/.ssh/id_ed25519 "${USER_NAME}@${DEPLOY_HOST}" \
+            "cd ${ROOT_PATH} && ./scripts/deploy-staging.sh '${ARTIFACT_PATH}' '${CHECKSUM_PATH}' '${BASE_URL}'"
+
+      - name: Verify staging release
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          curl -fsS "${BASE_URL}/api/v1/health" >/dev/null
+          VERSION_JSON="$(curl -fsS "${BASE_URL}/api/v1/release/version")"
+          echo "${VERSION_JSON}"
+          echo "${VERSION_JSON}" | grep -q "\"releaseId\":\"${RELEASE_ID}\""

@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.release
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8000
+      FRONTEND_URL: ${FRONTEND_URL}
+      ADMIN_ROLE_ALLOWLIST_USERNAMES: ${ADMIN_ROLE_ALLOWLIST_USERNAMES:-}
+      ADMIN_ROLE_ALLOWLIST_IDS: ${ADMIN_ROLE_ALLOWLIST_IDS:-}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSL: ${DB_SSL:-0}
+      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pbth.sid}
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-lax}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_CALLBACK_URL: ${TELEGRAM_CALLBACK_URL}
+      TELEGRAM_MAX_AUTH_AGE_SEC: ${TELEGRAM_MAX_AUTH_AGE_SEC:-86400}
+      ICS_TOKEN_SECRET: ${ICS_TOKEN_SECRET}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Europe/Moscow}
+      ICS_RECURRING_WINDOW_DAYS: ${ICS_RECURRING_WINDOW_DAYS:-45}
+      RATE_AUTH_WINDOW_MS: ${RATE_AUTH_WINDOW_MS:-60000}
+      RATE_AUTH_MAX: ${RATE_AUTH_MAX:-20}
+      RATE_WRITE_WINDOW_MS: ${RATE_WRITE_WINDOW_MS:-60000}
+      RATE_WRITE_MAX: ${RATE_WRITE_MAX:-120}
+      NOTIFICATIONS_QUEUE_ENABLED: ${NOTIFICATIONS_QUEUE_ENABLED:-0}
+      NOTIFICATIONS_QUEUE_CONCURRENCY: ${NOTIFICATIONS_QUEUE_CONCURRENCY:-5}
+      NOTIFICATIONS_QUEUE_RETRY_LIMIT: ${NOTIFICATIONS_QUEUE_RETRY_LIMIT:-4}
+      NOTIFICATIONS_QUEUE_RETRY_DELAY_SECONDS: ${NOTIFICATIONS_QUEUE_RETRY_DELAY_SECONDS:-20}
+      RELEASE_ID: ${RELEASE_ID:-dev}
+      RELEASE_COMMIT: ${RELEASE_COMMIT:-unknown}
+      RELEASE_BUILT_AT: ${RELEASE_BUILT_AT:-unknown}
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./pbth
+      dockerfile: Dockerfile
+      args:
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME}
+    restart: unless-stopped
+    environment:
+      VITE_BACKEND_TARGET: http://backend:8000
+      VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME}
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
