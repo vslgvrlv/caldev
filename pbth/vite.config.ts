@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const apiTarget = process.env.VITE_BACKEND_TARGET || 'http://127.0.0.1:8000';
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+const apiTarget = runtimeProcess?.env?.VITE_BACKEND_TARGET || 'http://127.0.0.1:8000';
 
 export default defineConfig({
   plugins: [react()],
