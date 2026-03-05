@@ -70,13 +70,13 @@ if [[ -n "${CHECKSUM}" ]]; then
     cp "${CHECKSUM}" "${CHECKSUM_PATH}"
   fi
 
+  EXPECTED="$(awk '{print $1}' "${CHECKSUM_PATH}" | head -n1)"
   if command -v sha256sum >/dev/null 2>&1; then
-    (cd "${TMP_DIR}" && sha256sum -c "$(basename "${CHECKSUM_PATH}")")
+    ACTUAL="$(sha256sum "${ARTIFACT_PATH}" | awk '{print $1}')"
   else
-    EXPECTED="$(awk '{print $1}' "${CHECKSUM_PATH}")"
     ACTUAL="$(shasum -a 256 "${ARTIFACT_PATH}" | awk '{print $1}')"
-    [[ "${EXPECTED}" == "${ACTUAL}" ]] || die "Checksum mismatch for artifact"
   fi
+  [[ "${EXPECTED}" == "${ACTUAL}" ]] || die "Checksum mismatch for artifact"
 fi
 
 EXTRACT_DIR="${TMP_DIR}/extract"
