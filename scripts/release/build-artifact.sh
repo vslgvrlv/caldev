@@ -71,9 +71,9 @@ JSON
   tar -czf "${ARTIFACT_PATH}" .
 )
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "${ARTIFACT_PATH}" > "${ARTIFACT_PATH}.sha256"
+  (cd "${OUT_DIR}" && sha256sum "${ARTIFACT_NAME}" > "${ARTIFACT_NAME}.sha256")
 else
-  shasum -a 256 "${ARTIFACT_PATH}" > "${ARTIFACT_PATH}.sha256"
+  (cd "${OUT_DIR}" && shasum -a 256 "${ARTIFACT_NAME}" > "${ARTIFACT_NAME}.sha256")
 fi
 
 echo "release_id=${RELEASE_ID}"
