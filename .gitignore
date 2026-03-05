@@ -7,6 +7,8 @@ node_modules.bak.*/
 pbth/node_modules/
 pbth/node_modules.bak.*/
 pbth/dist/
+pbth/.npm-cache/
+pbth/.npm-logs/
 backend/node_modules/
 backend/dist/
 dist/releases/
