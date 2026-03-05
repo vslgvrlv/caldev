@@ -2,10 +2,13 @@
 set -euo pipefail
 
 BASE_URL=""
+SKIP_FRONTEND="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-url)
       BASE_URL="${2:-}"; shift 2 ;;
+    --skip-frontend)
+      SKIP_FRONTEND="true"; shift ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 1 ;;
@@ -14,6 +17,11 @@ done
 
 BASE_URL="${BASE_URL:-https://pbthub.ru}"
 echo "Running release smoke checks for ${BASE_URL}"
+
+if [[ "${SKIP_FRONTEND}" != "true" && "${BASE_URL}" =~ ^https?://(127\.0\.0\.1|localhost)(:[0-9]+)?$ ]]; then
+  # Server-side staging smoke may target backend-only localhost URL.
+  SKIP_FRONTEND="true"
+fi
 
 echo "[1/7] health"
 curl -fsS "${BASE_URL}/api/v1/health" | grep -q '"status":"ok"'
@@ -35,8 +43,12 @@ if [[ "${INIT_STATUS}" != "401" ]]; then
   exit 1
 fi
 
-echo "[6/7] frontend index reachable"
-curl -fsSI "${BASE_URL}/" >/dev/null
+if [[ "${SKIP_FRONTEND}" == "true" ]]; then
+  echo "[6/7] frontend index reachable (skipped)"
+else
+  echo "[6/7] frontend index reachable"
+  curl -fsSI "${BASE_URL}/" >/dev/null
+fi
 
 echo "[7/7] legacy deprecation headers"
 LEGACY_HEADERS="$(curl -fsSI "${BASE_URL}/api/health")"
