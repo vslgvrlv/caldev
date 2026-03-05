@@ -37,6 +37,30 @@ export type TeamInviteInfoResponse = {
   isRevoked: boolean;
 };
 
+type FinanceOverviewResponse = {
+  summary?: {
+    balance?: number;
+  };
+  recentTransactions?: Array<{
+    id: string;
+    type: TransactionType;
+    amount: number;
+    title: string;
+    date: string;
+    userId?: string | null;
+    userName?: string | null;
+    status?: 'PENDING' | 'COMPLETED';
+  }>;
+};
+
+type FinanceMembersResponse = {
+  items?: Array<{
+    userId: string;
+    outstanding?: number;
+    overpaid?: number;
+  }>;
+};
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -203,12 +227,12 @@ export const api = {
     return request<IcsInfo>(`/profile/ics/rotate${qs}`, { method: 'POST' });
   },
 
-  async getFinanceOverview(teamId: string) {
-    return request(`/finance/overview?teamId=${encodeURIComponent(teamId)}`);
+  async getFinanceOverview(teamId: string): Promise<FinanceOverviewResponse> {
+    return request<FinanceOverviewResponse>(`/finance/overview?teamId=${encodeURIComponent(teamId)}`);
   },
 
-  async getFinanceMembers(teamId: string) {
-    return request(`/finance/members?teamId=${encodeURIComponent(teamId)}`);
+  async getFinanceMembers(teamId: string): Promise<FinanceMembersResponse> {
+    return request<FinanceMembersResponse>(`/finance/members?teamId=${encodeURIComponent(teamId)}`);
   },
 
   async createFinancePayment(payload: {
