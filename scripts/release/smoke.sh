@@ -23,8 +23,25 @@ if [[ "${SKIP_FRONTEND}" != "true" && "${BASE_URL}" =~ ^https?://(127\.0\.0\.1|l
   SKIP_FRONTEND="true"
 fi
 
+wait_for_health() {
+  local url="$1"
+  local attempts="${2:-20}"
+  local delay="${3:-1}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if curl -fsS "${url}/api/v1/health" | grep -q '"status":"ok"'; then
+      return 0
+    fi
+    sleep "${delay}"
+  done
+  return 1
+}
+
 echo "[1/7] health"
-curl -fsS "${BASE_URL}/api/v1/health" | grep -q '"status":"ok"'
+if ! wait_for_health "${BASE_URL}" 30 1; then
+  echo "Health check failed after retries: ${BASE_URL}/api/v1/health" >&2
+  exit 1
+fi
 
 echo "[2/7] openapi"
 curl -fsS "${BASE_URL}/api/v1/openapi.json" | grep -q '"openapi":"3.0.3"'
