@@ -149,7 +149,7 @@ initRouter.get(
        JOIN rsvps r ON r.event_id = e.id AND r.user_id = $1
        WHERE e.team_id = ANY($2::uuid[])
          AND e.is_cancelled = FALSE
-         AND r.status IN ('CONFIRMED', 'PENDING')
+         AND r.status IN ('CONFIRMED', 'PENDING', 'DECLINED')
        ORDER BY e.start_at ASC`,
       [user.id, teamIds]
     );
