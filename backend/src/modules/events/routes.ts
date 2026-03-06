@@ -22,15 +22,15 @@ const eventCostStatusSchema = z.enum(["UNKNOWN", "ESTIMATED", "FINAL"]);
 const eventFinanceStateSchema = z.enum(["NOT_CALCULATED", "COLLECTING", "CLOSED"]);
 
 const createEventSchema = z.object({
-  id: z.string().uuid().optional(),
-  teamId: z.string().uuid().optional(),
+  id: z.string().optional(),
+  teamId: z.string().optional(),
   type: z.enum(["TRAINING", "TOURNAMENT", "CHAMPIONSHIP", "FRIENDLY_MATCH", "MEETING", "MAINTENANCE", "OTHER"]),
   title: z.string().min(1),
   description: z.string().optional(),
-  startDate: z.string().datetime().optional(),
-  startAt: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
+  startDate: z.string().optional(),
+  startAt: z.string().optional(),
+  endDate: z.string().optional(),
+  endAt: z.string().optional(),
   location: z.string().optional(),
   cost: z.number().optional(),
   costStatus: eventCostStatusSchema.optional(),
@@ -136,6 +136,19 @@ function assertCreateHorizon(date: Date) {
   }
 }
 
+function parseFlexibleDateTime(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function parseOptionalUuid(value: string | undefined): string | null {
+  if (!value) return null;
+  const parsed = z.string().uuid().safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 function resolveCreateCostStatus(payload: { cost?: number; costStatus?: z.infer<typeof eventCostStatusSchema> }) {
   if (payload.cost === undefined) {
     return "UNKNOWN" as const;
@@ -218,7 +231,11 @@ eventsRouter.post(
     const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
     const ctx = await getActiveContext(req);
 
-    const teamId = effectiveRole === "ADMIN" ? payload.teamId : ctx?.teamId;
+    const parsedPayloadTeamId = parseOptionalUuid(payload.teamId);
+    const teamId = effectiveRole === "ADMIN" ? parsedPayloadTeamId : ctx?.teamId;
+    if (effectiveRole === "ADMIN" && !parsedPayloadTeamId) {
+      return res.status(400).json({ detail: "Admin must provide valid teamId (uuid)" });
+    }
     if (!teamId) {
       return res.status(403).json({ detail: "Active team context required" });
     }
@@ -238,8 +255,12 @@ eventsRouter.post(
       return res.status(400).json({ detail: "Event start time is required" });
     }
     const endAtRaw = payload.endAt ?? payload.endDate;
-    const startDate = new Date(startAtRaw);
-    const endDate = endAtRaw ? new Date(endAtRaw) : new Date(startDate.getTime() + DEFAULT_EVENT_DURATION_MS);
+    const startDate = parseFlexibleDateTime(startAtRaw);
+    if (!startDate) {
+      return res.status(400).json({ detail: "Invalid event start time" });
+    }
+    const parsedEndDate = parseFlexibleDateTime(endAtRaw);
+    const endDate = parsedEndDate ?? new Date(startDate.getTime() + DEFAULT_EVENT_DURATION_MS);
     if (endDate.getTime() <= startDate.getTime()) {
       return res.status(400).json({ detail: "Event end time must be after start time" });
     }
@@ -362,7 +383,7 @@ eventsRouter.post(
          VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3::date, $4::event_type, $5, $6, $7, $8, $9, $10, $11::event_cost_status, $12::event_finance_state)
          RETURNING id, team_id, type, title, description, start_at, end_at, location, cost::text, cost_status::text, finance_state::text`,
         [
-          payload.id ?? null,
+          parseOptionalUuid(payload.id),
           teamId,
           toOccurrenceDate(startDate),
           payload.type,
