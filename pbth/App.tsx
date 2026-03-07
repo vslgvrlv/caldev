@@ -191,6 +191,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const tgDirectFallbackKey = 'pbth:tg-webapp-fallback-direct';
 
     const restoreSession = async () => {
       try {
@@ -200,8 +201,10 @@ const App: React.FC = () => {
 
         if (!payload?.authenticated && isTelegramMiniApp()) {
           const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
+          let webAppAttempted = false;
           if (initData) {
             try {
+              webAppAttempted = true;
               await api.authTelegramWebApp(initData);
               res = await fetch('/api/v1/auth/me', { credentials: 'include' });
               payload = res.ok ? await res.json() : payload;
@@ -209,9 +212,18 @@ const App: React.FC = () => {
               console.warn('Telegram Mini App auto-auth failed', err);
             }
           }
+          if (!payload?.authenticated && webAppAttempted && !cancelled) {
+            const alreadyTriedDirect = sessionStorage.getItem(tgDirectFallbackKey) === '1';
+            if (!alreadyTriedDirect) {
+              sessionStorage.setItem(tgDirectFallbackKey, '1');
+              window.location.assign('/api/v1/auth/telegram/direct?redirectTo=%2Fapp');
+              return;
+            }
+          }
         }
 
         if (!payload?.authenticated || cancelled) return;
+        sessionStorage.removeItem(tgDirectFallbackKey);
 
         if (payload?.user) {
           setUser((prev) => {
