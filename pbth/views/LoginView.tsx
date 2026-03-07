@@ -17,20 +17,35 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin: _onLogin, onSelec
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
 
+  const checkAuthenticated = async (): Promise<boolean> => {
+    const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+    if (!res.ok) return false;
+    const payload = await res.json();
+    return Boolean(payload?.authenticated);
+  };
+
   const handleTelegramLogin = async () => {
     setIsLoading(true);
-    sessionStorage.setItem('pbth:post-auth-app', '1');
-    const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
-    if (initData) {
-      try {
-        await api.authTelegramWebApp(initData);
-        window.location.assign('/app');
-        return;
-      } catch (err) {
-        console.warn('Telegram WebApp auth from login screen failed, fallback to OAuth redirect', err);
+    try {
+      sessionStorage.setItem('pbth:post-auth-app', '1');
+      const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
+      if (initData) {
+        try {
+          await api.authTelegramWebApp(initData);
+          const authenticated = await checkAuthenticated();
+          if (authenticated) {
+            window.location.assign('/app');
+            return;
+          }
+          console.warn('Telegram WebApp auth returned 200 but session is still anonymous, fallback to OAuth redirect');
+        } catch (err) {
+          console.warn('Telegram WebApp auth from login screen failed, fallback to OAuth redirect', err);
+        }
       }
+      window.location.assign('/api/v1/auth/telegram/direct?redirectTo=%2Fapp');
+    } finally {
+      setIsLoading(false);
     }
-    window.location.assign('/api/v1/auth/telegram/direct');
   };
 
   const handleLocalDevLogin = (telegramId: string) => {
