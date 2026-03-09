@@ -37,6 +37,127 @@ export type TeamInviteInfoResponse = {
   isRevoked: boolean;
 };
 
+export type AuthMethod = 'WEBAPP' | 'OIDC' | 'LEGACY_WIDGET' | 'DEV' | null;
+export type AdminScope = 'NONE' | 'TEAM' | 'PLATFORM';
+
+export type AuthMeResponse =
+  | { authenticated: false }
+  | {
+      authenticated: true;
+      user: {
+        id: string;
+        name: string;
+        nickname: string;
+        telegramUsername?: string | null;
+        avatar?: string | null;
+      };
+      accountRole: 'ADMIN' | 'USER' | null;
+      roleSelectionRequired: boolean;
+      canChooseAdminRole: boolean;
+      isOwnerAdminEligible: boolean;
+      hasMemberships: boolean;
+      activeMembershipId: string | null;
+      activeTeamId: string | null;
+      authMethod: AuthMethod;
+      capabilities: string[];
+      adminScope: AdminScope;
+      managedTeamIds: string[];
+      availableRoles: Array<{
+        membershipId: string;
+        teamId: string;
+        teamName: string;
+        role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+      }>;
+    };
+
+export type AdminOverviewResponse = {
+  scope: 'PLATFORM' | 'TEAM';
+  teamIds: string[];
+  summary: {
+    teamsCount: number;
+    membersCount: number;
+    upcomingEventsCount: number;
+    rsvpCompletionRate: number;
+    reminderDelivery: {
+      attempted: number;
+      sent: number;
+      queued: number;
+      failed: number;
+      successRate: number;
+    };
+  };
+};
+
+export type AdminEventScheduleItem = {
+  id?: string;
+  time: string;
+  opponent: string;
+  score?: string;
+  pitZone?: 'NEAR' | 'FAR';
+  gamePair?: 'FIRST' | 'SECOND';
+};
+
+export type AdminEventItem = {
+  id: string;
+  teamId: string;
+  type: EventType | string;
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string | null;
+  location: string | null;
+  isCancelled: boolean;
+  cost: number | null;
+  costStatus: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+  financeState: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';
+  createdAt: string;
+  schedule: AdminEventScheduleItem[];
+};
+
+export type AdminEventsResponse = {
+  items: AdminEventItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type AdminTeamMember = {
+  membershipId: string;
+  teamId: string;
+  userId: string;
+  role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+  status: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+  balance: number;
+  user: {
+    username: string | null;
+    name: string;
+    nickname: string;
+    avatar: string | null;
+    isActive: boolean;
+  };
+  createdAt: string;
+};
+
+export type AdminTeamMembersResponse = {
+  teamId: string;
+  items: AdminTeamMember[];
+};
+
+export type AdminAuditResponse = {
+  items: Array<{
+    id: string;
+    action: string;
+    payload: Record<string, unknown>;
+    createdAt: string;
+    actor: {
+      userId: string;
+      name: string | null;
+      username: string | null;
+    } | null;
+  }>;
+  limit: number;
+};
+
 type FinanceOverviewResponse = {
   summary?: {
     balance?: number;
@@ -89,6 +210,25 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
 }
 
 export const api = {
+  async getAuthMe(): Promise<AuthMeResponse> {
+    return request<AuthMeResponse>('/auth/me');
+  },
+
+  async selectAccountRole(accountRole: 'ADMIN' | 'USER'): Promise<{ ok: true; accountRole: 'ADMIN' | 'USER' }> {
+    return request<{ ok: true; accountRole: 'ADMIN' | 'USER' }>('/auth/select-role', {
+      method: 'POST',
+      body: { accountRole },
+    });
+  },
+
+  startTelegramOidc(redirectTo = '/app') {
+    window.location.assign(`/api/v1/auth/telegram/oidc/start?redirectTo=${encodeURIComponent(redirectTo)}`);
+  },
+
+  startTelegramDirect(redirectTo = '/app') {
+    window.location.assign(`/api/v1/auth/telegram/direct?redirectTo=${encodeURIComponent(redirectTo)}`);
+  },
+
   async getInitData() {
     const res = await fetch(`${API_URL}/init`, {
       credentials: 'include',
@@ -320,10 +460,127 @@ export const api = {
     });
   },
 
-  async authTelegramWebApp(initData: string) {
+  async updateTeamMembership(
+    teamId: string,
+    membershipId: string,
+    payload: {
+      teamRole?: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+      status?: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+    }
+  ): Promise<{ ok: true }> {
+    return request<{ ok: true }>(`/teams/${teamId}/memberships/${membershipId}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  },
+
+  async removeTeamMembership(teamId: string, membershipId: string): Promise<{ ok: true }> {
+    return request<{ ok: true }>(`/teams/${teamId}/memberships/${membershipId}`, {
+      method: 'DELETE',
+      body: {},
+    });
+  },
+
+  async authTelegramWebApp(initData: string, forceLogin = false) {
     return request('/auth/telegram/webapp', {
       method: 'POST',
-      body: { initData },
+      body: { initData, forceLogin },
     });
+  },
+
+  async getAdminOverview(teamId?: string): Promise<AdminOverviewResponse> {
+    const qs = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+    return request<AdminOverviewResponse>(`/admin/v1/overview${qs}`);
+  },
+
+  async getAdminEvents(params?: {
+    teamId?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AdminEventsResponse> {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    if (params?.q) search.set('q', params.q);
+    if (params?.from) search.set('from', params.from);
+    if (params?.to) search.set('to', params.to);
+    if (typeof params?.limit === 'number') search.set('limit', String(params.limit));
+    if (typeof params?.offset === 'number') search.set('offset', String(params.offset));
+    const qs = search.toString() ? `?${search.toString()}` : '';
+    return request<AdminEventsResponse>(`/admin/v1/events${qs}`);
+  },
+
+  async createAdminEvent(payload: {
+    teamId: string;
+    type: EventType | 'OTHER';
+    title: string;
+    description?: string;
+    startAt: string;
+    endAt?: string;
+    location?: string;
+    cost?: number;
+    costStatus?: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+    schedule?: AdminEventScheduleItem[];
+  }): Promise<{ event: AdminEventItem }> {
+    return request<{ event: AdminEventItem }>('/admin/v1/events', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async patchAdminEvent(
+    eventId: string,
+    payload: {
+      title?: string;
+      description?: string | null;
+      startAt?: string;
+      endAt?: string | null;
+      location?: string | null;
+      isCancelled?: boolean;
+      cost?: number | null;
+      costStatus?: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+      schedule?: AdminEventScheduleItem[];
+    }
+  ): Promise<{ event: AdminEventItem }> {
+    return request<{ event: AdminEventItem }>(`/admin/v1/events/${eventId}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  },
+
+  async getAdminTeamMembers(teamId: string): Promise<AdminTeamMembersResponse> {
+    return request<AdminTeamMembersResponse>(`/admin/v1/team/members?teamId=${encodeURIComponent(teamId)}`);
+  },
+
+  async patchAdminTeamMember(
+    teamId: string,
+    membershipId: string,
+    payload: {
+      teamRole?: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+      status?: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+    }
+  ) {
+    return request<{ ok: boolean }>(
+      `/admin/v1/team/members/${membershipId}?teamId=${encodeURIComponent(teamId)}`,
+      {
+        method: 'PATCH',
+        body: payload,
+      }
+    );
+  },
+
+  async getAdminAudit(params?: {
+    teamId?: string;
+    action?: string;
+    limit?: number;
+  }): Promise<AdminAuditResponse> {
+    const search = new URLSearchParams();
+    if (params?.teamId) search.set('teamId', params.teamId);
+    if (params?.action) search.set('action', params.action);
+    if (typeof params?.limit === 'number') search.set('limit', String(params.limit));
+    const qs = search.toString() ? `?${search.toString()}` : '';
+    return request<AdminAuditResponse>(`/admin/v1/audit${qs}`);
   },
 };

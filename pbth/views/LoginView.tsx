@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserRoleOption, Role } from '../types';
 import { Send, Shield, User as UserIcon, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
 interface LoginViewProps {
@@ -10,9 +10,11 @@ interface LoginViewProps {
   availableRoles: UserRoleOption[];
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLogin: _onLogin, onSelectRole, availableRoles }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onSelectRole, availableRoles }) => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string>('');
   const isLocalDev =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
@@ -24,25 +26,60 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin: _onLogin, onSelec
     return Boolean(payload?.authenticated);
   };
 
+  const waitMiniAppInitData = async (timeoutMs = 1200): Promise<string> => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg) return '';
+    try {
+      tg.ready?.();
+      tg.expand?.();
+    } catch {
+      // ignore telegram webapp readiness errors
+    }
+
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const initData = String(tg.initData || '').trim();
+      if (initData) return initData;
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+    return String(tg.initData || '').trim();
+  };
+
   const handleTelegramLogin = async () => {
     setIsLoading(true);
+    setAuthError('');
     try {
       sessionStorage.setItem('pbth:post-auth-app', '1');
-      const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
+      sessionStorage.removeItem('pbth:skip-auto-auth-after-logout');
+      sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
+      localStorage.removeItem('pbth:skip-auto-auth-after-logout');
+      const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+      if (!isMiniApp) {
+        api.startTelegramDirect('/app');
+        return;
+      }
+      const initData = await waitMiniAppInitData();
+      if (!initData) {
+        setAuthError('Не удалось получить Telegram initData. Закройте и заново откройте Mini App из бота.');
+        return;
+      }
       if (initData) {
         try {
-          await api.authTelegramWebApp(initData);
+          await api.authTelegramWebApp(initData, true);
           const authenticated = await checkAuthenticated();
           if (authenticated) {
-            window.location.assign('/app');
+            onLogin();
             return;
           }
-          console.warn('Telegram WebApp auth returned 200 but session is still anonymous, fallback to OAuth redirect');
+          console.warn('Telegram WebApp auth returned 200 but session is still anonymous');
+          setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
+          return;
         } catch (err) {
-          console.warn('Telegram WebApp auth from login screen failed, fallback to OAuth redirect', err);
+          console.warn('Telegram WebApp auth from login screen failed', err);
+          setAuthError('Ошибка входа через Telegram Mini App. Повторите попытку.');
+          return;
         }
       }
-      window.location.assign('/api/v1/auth/telegram/direct?redirectTo=%2Fapp');
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +145,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin: _onLogin, onSelec
           <p className="text-pb-subtext">Управляй командой, тренировками<br/> и победами в одном месте.</p>
        </div>
 
-       <div className="w-full max-w-sm z-10">
+      <div className="w-full max-w-sm z-10">
+          {authError && (
+            <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {authError}
+            </div>
+          )}
           <button 
             onClick={handleTelegramLogin}
             disabled={isLoading}
@@ -122,6 +164,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin: _onLogin, onSelec
                  <span>Войти через Telegram</span>
                </>
             )}
+          </button>
+          <button
+            onClick={() => navigate('/admin/login')}
+            className="w-full mt-3 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-all active:scale-95"
+          >
+            <Shield size={18} />
+            <span>Режим админки</span>
           </button>
           {isLocalDev && (
             <div className="mt-3 grid grid-cols-2 gap-2">

@@ -9,12 +9,23 @@ interface TeamViewProps {
   members: TeamMember[];
   currentUserRole: Role;
   onMemberClick: (member: TeamMember) => void;
+  onUpdateMemberStatus: (member: TeamMember, status: PlayerStatus) => Promise<void> | void;
+  onRemoveMember: (member: TeamMember) => Promise<void> | void;
 }
 
-export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRole, onMemberClick }) => {
+export const TeamView: React.FC<TeamViewProps> = ({
+  team,
+  members,
+  currentUserRole,
+  onMemberClick,
+  onUpdateMemberStatus,
+  onRemoveMember,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCopied, setShowCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'ROSTER' | 'STATS'>('ROSTER');
+  const [quickMember, setQuickMember] = useState<TeamMember | null>(null);
+  const [quickBusy, setQuickBusy] = useState(false);
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
 
@@ -84,6 +95,19 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
     }
   };
 
+  const runQuickAction = async (fn: () => Promise<void> | void) => {
+    if (!quickMember || quickBusy) return;
+    setQuickBusy(true);
+    try {
+      await fn();
+      setQuickMember(null);
+    } catch (err) {
+      alert(`Не удалось применить действие: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setQuickBusy(false);
+    }
+  };
+
   const renderRoster = () => {
     // Grouping
     const leaders = filteredMembers.filter(m => m.role === Role.ADMIN || m.role === Role.CAPTAIN);
@@ -104,6 +128,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
                 member={member}
                 isViewerAdmin={isAdminOrCaptain}
                 onClick={() => onMemberClick(member)}
+                onQuickActions={() => setQuickMember(member)}
               />
             ))}
           </section>
@@ -119,6 +144,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
                 member={member}
                 isViewerAdmin={isAdminOrCaptain}
                 onClick={() => onMemberClick(member)}
+                onQuickActions={() => setQuickMember(member)}
               />
             ))}
           </section>
@@ -134,6 +160,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
                 member={member}
                 isViewerAdmin={isAdminOrCaptain}
                 onClick={() => onMemberClick(member)}
+                onQuickActions={() => setQuickMember(member)}
               />
             ))}
           </section>
@@ -149,6 +176,7 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
                 member={member}
                 isViewerAdmin={isAdminOrCaptain}
                 onClick={() => onMemberClick(member)}
+                onQuickActions={() => setQuickMember(member)}
               />
             ))}
           </section>
@@ -283,6 +311,76 @@ export const TeamView: React.FC<TeamViewProps> = ({ team, members, currentUserRo
       <div className="flex-1 overflow-y-auto">
          {activeTab === 'ROSTER' ? renderRoster() : renderStats()}
       </div>
+
+      {quickMember && (
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-end" onClick={() => setQuickMember(null)}>
+          <div
+            className="w-full bg-pb-surface border-t border-white/10 rounded-t-2xl p-4 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm text-pb-subtext">Быстрые действия</div>
+            <div className="font-semibold text-white">{quickMember.name}</div>
+
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                void runQuickAction(async () => onUpdateMemberStatus(quickMember, PlayerStatus.ACTIVE));
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10"
+            >
+              В строю
+            </button>
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                void runQuickAction(async () => onUpdateMemberStatus(quickMember, PlayerStatus.RESERVE));
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10"
+            >
+              В резерв
+            </button>
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                void runQuickAction(async () => onUpdateMemberStatus(quickMember, PlayerStatus.INJURED));
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10"
+            >
+              Травма
+            </button>
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                void runQuickAction(async () => onUpdateMemberStatus(quickMember, PlayerStatus.VACATION));
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10"
+            >
+              Отпуск
+            </button>
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                const confirmed = window.confirm(`Исключить ${quickMember.name} из команды?`);
+                if (!confirmed) return;
+                void runQuickAction(async () => onRemoveMember(quickMember));
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-red-500/10 text-red-300 hover:bg-red-500/20"
+            >
+              Исключить из команды
+            </button>
+            <button
+              disabled={quickBusy}
+              onClick={() => {
+                onMemberClick(quickMember);
+                setQuickMember(null);
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl bg-pb-primary/15 text-pb-primary hover:bg-pb-primary/25"
+            >
+              Открыть профиль игрока
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

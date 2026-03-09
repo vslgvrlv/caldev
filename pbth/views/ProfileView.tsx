@@ -5,7 +5,7 @@ import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, 
 interface ProfileViewProps {
   user: User;
   onUpdateUser: (updatedUser: User) => void;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
   calendarLink: string;
   onCopyLink: () => void;
   onShareLink: () => void;
@@ -113,7 +113,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
             <div>
                 <div className="text-white font-bold text-sm">Telegram подключен</div>
-                <div className="text-[#24A1DE] text-xs">@{user.nickname}_tg</div>
+                <div className="text-[#24A1DE] text-xs">@{user.telegramUsername || user.nickname}</div>
             </div>
          </div>
       </div>
@@ -155,7 +155,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       <button 
-        onClick={onLogout}
+        onClick={() => {
+          void onLogout();
+        }}
         className="w-full py-3 text-pb-danger font-semibold flex items-center justify-center gap-2 mt-8 hover:bg-pb-danger/10 rounded-xl transition-colors"
       >
            <LogOut size={18} /> Выйти из аккаунта

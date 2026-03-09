@@ -1,0 +1,179 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, ShieldCheck, Send } from 'lucide-react';
+import { api, type AuthMeResponse } from '../../api';
+
+type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
+
+export const AdminLoginView: React.FC = () => {
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(true);
+  const [authMe, setAuthMe] = useState<AuthenticatedMe | null>(null);
+  const [error, setError] = useState<string>('');
+  const [switchingRole, setSwitchingRole] = useState(false);
+  const [startingLogin, setStartingLogin] = useState(false);
+
+  const bootstrap = async (cancelled = false) => {
+    try {
+      const me = await api.getAuthMe();
+      if (cancelled) return;
+      if (me.authenticated) {
+        setAuthMe(me);
+        if (me.adminScope !== 'NONE') {
+          navigate('/admin', { replace: true });
+          return;
+        }
+      } else {
+        setAuthMe(null);
+      }
+      setError('');
+    } catch (err) {
+      if (!cancelled) {
+        setError(err instanceof Error ? err.message : 'auth check failed');
+      }
+    } finally {
+      if (!cancelled) setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void bootstrap().catch((err) => {
+      if (!cancelled) {
+        setError(err instanceof Error ? err.message : 'auth check failed');
+        setChecking(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  const handleSwitchToAdmin = async () => {
+    setSwitchingRole(true);
+    setError('');
+    try {
+      await api.selectAccountRole('ADMIN');
+      await bootstrap();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to switch role');
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
+
+  const handleTelegramLogin = () => {
+    const run = async () => {
+      setStartingLogin(true);
+      setError('');
+      try {
+        const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+        if (isMiniApp) {
+          const tg = (window as any).Telegram?.WebApp;
+          try {
+            tg?.ready?.();
+            tg?.expand?.();
+          } catch {
+            // ignore telegram webapp readiness errors
+          }
+
+          let initData = '';
+          const started = Date.now();
+          while (Date.now() - started < 1200) {
+            initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
+            if (initData) break;
+            await new Promise((resolve) => setTimeout(resolve, 80));
+          }
+
+          if (!initData) {
+            setError('Не удалось получить Telegram initData. Откройте Mini App заново из бота.');
+            return;
+          }
+
+          await api.authTelegramWebApp(initData, true);
+          const me = await api.getAuthMe();
+          if (me.authenticated) {
+            if (me.canChooseAdminRole && me.accountRole !== 'ADMIN') {
+              await api.selectAccountRole('ADMIN');
+            }
+            const refreshed = await api.getAuthMe();
+            if (refreshed.authenticated && refreshed.adminScope !== 'NONE') {
+              navigate('/admin', { replace: true });
+              return;
+            }
+            setError('Для этого аккаунта сейчас нет доступа к админке.');
+            return;
+          }
+
+          setError('Не удалось завершить вход. Повторите попытку.');
+          return;
+        }
+
+        api.startTelegramOidc('/admin');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'failed to start admin login');
+      } finally {
+        setStartingLogin(false);
+      }
+    };
+
+    void run();
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
+        <Loader2 className="animate-spin text-pb-primary" size={42} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-pb-background flex items-center justify-center text-white p-6">
+      <div className="w-full max-w-md bg-pb-surface border border-white/10 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-11 h-11 rounded-xl bg-pb-primary/20 flex items-center justify-center">
+            <ShieldCheck className="text-pb-primary" size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">PBTH Admin Console</h1>
+            <p className="text-pb-subtext text-sm">Вход только через Telegram OIDC</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 text-sm bg-red-500/10 text-red-300 border border-red-500/30 rounded-xl p-3">
+            Ошибка проверки сессии: {error}
+          </div>
+        )}
+
+        {authMe?.authenticated && authMe.canChooseAdminRole && authMe.accountRole !== 'ADMIN' && (
+          <button
+            onClick={() => {
+              void handleSwitchToAdmin();
+            }}
+            disabled={switchingRole}
+            className="w-full mb-3 bg-pb-primary text-pb-background font-bold py-3 rounded-xl disabled:opacity-60"
+          >
+            {switchingRole ? 'Переключаем роль...' : 'Переключить роль на ADMIN'}
+          </button>
+        )}
+
+        <button
+          onClick={handleTelegramLogin}
+          disabled={startingLogin}
+          className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+        >
+          <Send size={18} />
+          {startingLogin ? 'Переходим в Telegram...' : 'Войти в Admin через Telegram'}
+        </button>
+        <button
+          onClick={() => navigate('/login', { replace: true })}
+          className="w-full mt-3 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl"
+        >
+          Войти в команду
+        </button>
+      </div>
+    </div>
+  );
+};
