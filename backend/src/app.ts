@@ -63,9 +63,13 @@ const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // `/auth/me` is called multiple times during bootstrap and Telegram Mini App startup.
-  // `/auth/telegram/webapp` can also retry on slow Android WebView/script initialization.
+  // Telegram auth endpoints can retry on slow WebView/script initialization.
   // Limiting these by IP causes false 429s for mobile users behind carrier NAT.
-  skip: (req) => req.path === "/me" || req.path === "/telegram/webapp",
+  skip: (req) =>
+    req.path === "/me" ||
+    req.path === "/telegram/webapp" ||
+    req.path === "/telegram/oidc/start" ||
+    req.path === "/telegram/oidc/callback",
 });
 
 const writeRateLimiter = rateLimit({

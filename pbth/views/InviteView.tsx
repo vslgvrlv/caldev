@@ -77,7 +77,7 @@ export const InviteView: React.FC = () => {
   const handleLogin = () => {
     if (!inviteId) return;
     const redirectTo = `/invite/${inviteId}`;
-    window.location.assign(`/api/v1/auth/telegram/direct?redirectTo=${encodeURIComponent(redirectTo)}`);
+    api.startTelegramOidc(redirectTo);
   };
 
   const handleAccept = async () => {
@@ -160,4 +160,3 @@ export const InviteView: React.FC = () => {
     </div>
   );
 };
-

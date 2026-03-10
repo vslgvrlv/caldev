@@ -27,6 +27,17 @@ Required secrets and click-by-click flow are documented in `.github/DEPLOYMENT.m
 - `/opt/pbth/shared/env/staging.env`
 - `/opt/pbth/shared/env/prod.env`
 
+Auth v2 env block is mandatory for both files:
+
+- `AUTH_OIDC_ENABLED`
+- `AUTH_OIDC_FALLBACK_ENABLED`
+- `AUTH_OIDC_ADMIN_REQUIRED`
+- `TELEGRAM_OIDC_CLIENT_ID`
+- `TELEGRAM_OIDC_CLIENT_SECRET`
+- `TELEGRAM_OIDC_REDIRECT_URI`
+- `TELEGRAM_OIDC_ISSUER`
+- `TELEGRAM_OIDC_JWKS_URL`
+
 ## How to release (copy-paste flow)
 
 ### 1) On Mac: build artifact
@@ -77,3 +88,5 @@ Also verify key product flows in Telegram Mini App on staging.
 
 Only `releaseId` changes between runs (`vYYYY.MM.DD-...`).  
 All other commands remain identical.
+
+After each successful prod deploy, update `docs/releases.md` with new stable and rollback anchor.

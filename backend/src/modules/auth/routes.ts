@@ -5,9 +5,11 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { attachAuthUser, requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { buildTelegramOAuthUrl, buildTelegramStartHtml, parseTelegramPayload, verifyTelegramAuth, verifyTelegramWebAppInitData } from "../../lib/telegram.js";
+import { buildOidcAuthorizeUrl, createOidcChallenge, exchangeOidcCode, verifyOidcIdToken } from "../../lib/telegram-oidc.js";
 import { getMembershipById, getUserMemberships } from "../../lib/permissions.js";
 import { canChooseAdminRole, getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { env } from "../../config/env.js";
+import { pruneExpiredAuthArtifacts, registerReplayPayload, sha256Hex } from "../../lib/replay-guard.js";
 
 const contextSchema = z.object({
   membershipId: z.string().uuid(),
@@ -21,6 +23,15 @@ const webAppAuthSchema = z.object({
   initData: z.string().min(1),
 });
 
+const oidcStartSchema = z.object({
+  redirectTo: z.string().optional(),
+});
+
+const oidcCallbackSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+
 const devLoginSchema = z.object({
   userId: z.string().uuid().optional(),
   telegramId: z.string().regex(/^\d+$/).optional(),
@@ -30,6 +41,33 @@ const devLoginSchema = z.object({
 });
 
 export const authRouter = Router();
+const LOGOUT_GUARD_COOKIE_NAME = "pbth.logout.guard";
+const LOGOUT_GUARD_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+
+function logoutGuardCookieOptions() {
+  return {
+    path: "/",
+    domain: env.session.cookieDomain,
+    sameSite: env.session.cookieSameSite,
+    secure: env.isProd,
+    httpOnly: true,
+  } as const;
+}
+
+function hasCookie(req: any, name: string): boolean {
+  const rawCookie = req?.headers?.cookie;
+  if (typeof rawCookie !== "string" || !rawCookie.trim()) return false;
+  const target = `${name}=`;
+  return rawCookie
+    .split(";")
+    .map((part: string) => part.trim())
+    .some((part: string) => part.startsWith(target));
+}
+
+function hashRequestSide(value: string | undefined): string | null {
+  if (!value) return null;
+  return sha256Hex(value).slice(0, 32);
+}
 
 function sanitizeRedirectTo(input: unknown, fallback = "/app"): string {
   if (typeof input !== "string" || input.length === 0) return fallback;
@@ -74,7 +112,8 @@ async function completeTelegramLogin(
     last_name?: string;
     username?: string;
     photo_url?: string;
-  }
+  },
+  options?: { authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" }
 ) {
   const name = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim() || payload.username || `tg-${payload.id}`;
   const nickname = payload.username || `tg_${payload.id}`;
@@ -119,6 +158,7 @@ async function completeTelegramLogin(
   });
 
   req.session.userId = userId;
+  req.session.authMethod = options?.authMethod ?? "WEBAPP";
   if (allowAdminChoice) {
     delete req.session.entryRole;
   } else {
@@ -136,7 +176,10 @@ async function completeTelegramLogin(
     delete req.session.activeTeamId;
   }
 
-  await writeAudit(userId, "auth.telegram.login", { telegramId: payload.id });
+  await writeAudit(userId, "auth.telegram.login", {
+    telegramId: payload.id,
+    authMethod: req.session.authMethod,
+  });
 
   await new Promise<void>((resolve, reject) => {
     req.session.save((err: unknown) => {
@@ -144,6 +187,7 @@ async function completeTelegramLogin(
       else resolve();
     });
   });
+  res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
 
   return { userId };
 }
@@ -251,6 +295,49 @@ async function resolveDevLoginPayload(parsed: DevLoginParsed) {
   };
 }
 
+type AdminScope = "NONE" | "TEAM" | "PLATFORM";
+
+function buildCapabilities(params: {
+  effectiveRole: "ADMIN" | "USER" | null;
+  memberships: Array<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>;
+  adminScope: AdminScope;
+}) {
+  const capabilities = new Set<string>(["auth:session"]);
+  if (params.memberships.length > 0) {
+    capabilities.add("team:read");
+    capabilities.add("event:read");
+  }
+  if (params.memberships.some((m) => m.role === "CAPTAIN" || m.role === "TRAINER")) {
+    capabilities.add("event:write");
+    capabilities.add("rsvp:manage");
+  }
+  if (params.memberships.some((m) => m.role === "CAPTAIN")) {
+    capabilities.add("team:manage");
+    capabilities.add("invite:manage");
+    capabilities.add("reminder:send");
+  }
+
+  if (params.adminScope === "TEAM") {
+    capabilities.add("admin:team");
+    capabilities.add("admin:team:overview");
+    capabilities.add("admin:team:events");
+    capabilities.add("admin:team:members");
+    capabilities.add("admin:team:audit");
+  }
+  if (params.adminScope === "PLATFORM") {
+    capabilities.add("admin:platform");
+    capabilities.add("admin:platform:overview");
+    capabilities.add("admin:platform:events");
+    capabilities.add("admin:platform:members");
+    capabilities.add("admin:platform:audit");
+  }
+
+  if (params.effectiveRole === "ADMIN") {
+    capabilities.add("entry:admin");
+  }
+  return Array.from(capabilities).sort();
+}
+
 authRouter.get(
   "/telegram/start",
   asyncHandler(async (_req, res) => {
@@ -260,10 +347,138 @@ authRouter.get(
 );
 
 authRouter.get(
+  "/telegram/oidc/start",
+  asyncHandler(async (req, res) => {
+    if (!env.telegramOidc.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+    const parsed = oidcStartSchema.parse(req.query ?? {});
+    const redirectTo = sanitizeRedirectTo(parsed.redirectTo, "/app");
+    const { state, nonce, codeVerifier, codeChallenge } = createOidcChallenge();
+    await pruneExpiredAuthArtifacts();
+    await query(
+      `INSERT INTO auth_oidc_state (state, code_verifier, nonce, redirect_to, ip_hash, ua_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(secs => $7))`,
+      [
+        state,
+        codeVerifier,
+        nonce,
+        redirectTo,
+        hashRequestSide(req.ip),
+        hashRequestSide(req.get("user-agent") || ""),
+        env.telegramOidc.stateTtlSeconds,
+      ]
+    );
+
+    const authorizeUrl = buildOidcAuthorizeUrl({
+      state,
+      nonce,
+      codeChallenge,
+      redirectUri: env.telegramOidc.redirectUri,
+    });
+    return res.redirect(302, authorizeUrl);
+  })
+);
+
+authRouter.get(
+  "/telegram/oidc/callback",
+  asyncHandler(async (req, res) => {
+    if (!env.telegramOidc.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+    const parsed = oidcCallbackSchema.parse(req.query ?? {});
+    await pruneExpiredAuthArtifacts();
+
+    const stateResult = await query<{
+      state: string;
+      code_verifier: string;
+      nonce: string | null;
+      redirect_to: string;
+      ip_hash: string | null;
+      ua_hash: string | null;
+      expires_at: string;
+    }>(
+      `DELETE FROM auth_oidc_state
+       WHERE state = $1
+       RETURNING state, code_verifier, nonce, redirect_to, ip_hash, ua_hash, expires_at`,
+      [parsed.state]
+    );
+    const row = stateResult.rows[0];
+    if (!row) {
+      return res.status(401).json({ detail: "OIDC state is missing or already used", code: "OIDC_STATE_EXPIRED" });
+    }
+
+    if (new Date(row.expires_at).getTime() <= Date.now()) {
+      return res.status(401).json({ detail: "OIDC state expired", code: "OIDC_STATE_EXPIRED" });
+    }
+
+    const currentIpHash = hashRequestSide(req.ip);
+    const currentUaHash = hashRequestSide(req.get("user-agent") || "");
+    if (row.ip_hash && currentIpHash && row.ip_hash !== currentIpHash) {
+      return res.status(401).json({ detail: "OIDC request origin mismatch", code: "OIDC_STATE_EXPIRED" });
+    }
+    if (row.ua_hash && currentUaHash && row.ua_hash !== currentUaHash) {
+      return res.status(401).json({ detail: "OIDC request agent mismatch", code: "OIDC_STATE_EXPIRED" });
+    }
+
+    const tokenSet = await exchangeOidcCode({
+      code: parsed.code,
+      codeVerifier: row.code_verifier,
+      redirectUri: env.telegramOidc.redirectUri,
+    });
+    const verified = await verifyOidcIdToken({
+      idToken: tokenSet.id_token!,
+      expectedNonce: row.nonce ?? undefined,
+    });
+
+    if (!/^\d+$/.test(verified.profile.id)) {
+      return res.status(401).json({ detail: "OIDC user identifier is invalid", code: "OIDC_TOKEN_INVALID" });
+    }
+
+    const replay = await registerReplayPayload({
+      provider: "telegram_oidc",
+      rawPayload: tokenSet.id_token!,
+      subjectId: verified.profile.id,
+      ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
+    });
+    if (!replay.ok) {
+      return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
+    }
+
+    await completeTelegramLogin(
+      req,
+      res,
+      {
+        id: verified.profile.id,
+        first_name: verified.profile.first_name,
+        last_name: verified.profile.last_name,
+        username: verified.profile.username,
+        photo_url: verified.profile.photo_url,
+      },
+      { authMethod: "OIDC" }
+    );
+
+    console.info("[auth] telegram oidc login success", {
+      userId: req.session.userId,
+      ip: req.ip,
+    });
+    const { origin } = getAuthPublicUrls(req);
+    const targetUrl = new URL(sanitizeRedirectTo(row.redirect_to, "/app"), origin).toString();
+    return res.redirect(302, targetUrl);
+  })
+);
+
+authRouter.get(
   "/telegram/direct",
   asyncHandler(async (req, res) => {
-    const urls = getAuthPublicUrls(req);
     const redirectTo = sanitizeRedirectTo(req.query.redirectTo, "/app");
+    if (env.telegramOidc.enabled && env.telegramOidc.fallbackEnabled) {
+      return res.redirect(
+        302,
+        `/api/v1/auth/telegram/oidc/start?redirectTo=${encodeURIComponent(redirectTo)}`
+      );
+    }
+    const urls = getAuthPublicUrls(req);
     const callbackUrlWithRedirect = new URL(urls.callbackUrl);
     callbackUrlWithRedirect.searchParams.set("redirectTo", redirectTo);
     res.redirect(302, buildTelegramOAuthUrl({ origin: urls.origin, returnTo: callbackUrlWithRedirect.toString() }));
@@ -369,7 +584,17 @@ authRouter.get(
       });
       return res.status(401).json({ detail: verification.reason || "Telegram verification failed" });
     }
-    await completeTelegramLogin(req, res, payload);
+    await pruneExpiredAuthArtifacts();
+    const callbackReplay = await registerReplayPayload({
+      provider: "telegram_callback",
+      rawPayload: `${payload.id}:${payload.auth_date}:${payload.hash}`,
+      subjectId: payload.id,
+      ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
+    });
+    if (!callbackReplay.ok) {
+      return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
+    }
+    await completeTelegramLogin(req, res, payload, { authMethod: "LEGACY_WIDGET" });
     console.info("[auth] telegram callback login success", {
       userId: req.session.userId,
       ip: req.ip,
@@ -384,6 +609,17 @@ authRouter.post(
   "/telegram/webapp",
   asyncHandler(async (req, res) => {
     const parsed = webAppAuthSchema.parse(req.body);
+    const forceLogin = Boolean((req.body as Record<string, unknown> | undefined)?.forceLogin === true);
+
+    if (hasCookie(req, LOGOUT_GUARD_COOKIE_NAME) && !forceLogin) {
+      return res
+        .status(409)
+        .json({
+          detail: "Session was explicitly logged out. Login via button is required.",
+          code: "LOGOUT_GUARD_ACTIVE",
+        });
+    }
+
     const verification = verifyTelegramWebAppInitData(parsed.initData);
     if (!verification.ok || !verification.payload) {
       console.warn("[auth] telegram webapp verification failed", {
@@ -393,7 +629,18 @@ authRouter.post(
       return res.status(401).json({ detail: verification.reason || "Telegram WebApp verification failed" });
     }
 
-    await completeTelegramLogin(req, res, verification.payload);
+    await pruneExpiredAuthArtifacts();
+    const webappReplay = await registerReplayPayload({
+      provider: "telegram_webapp",
+      rawPayload: parsed.initData,
+      subjectId: verification.payload.id,
+      ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
+    });
+    if (!webappReplay.ok) {
+      return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
+    }
+
+    await completeTelegramLogin(req, res, verification.payload, { authMethod: "WEBAPP" });
     console.info("[auth] telegram webapp login success", {
       userId: req.session.userId,
       ip: req.ip,
@@ -419,7 +666,7 @@ authRouter.post(
     const parsed = devLoginSchema.parse(req.body ?? {});
     const loginPayload = await resolveDevLoginPayload(parsed);
 
-    const login = await completeTelegramLogin(req, res, loginPayload);
+    const login = await completeTelegramLogin(req, res, loginPayload, { authMethod: "DEV" });
 
     await query(
       `UPDATE users
@@ -471,7 +718,7 @@ authRouter.get(
 
     const loginPayload = await resolveDevLoginPayload(parsed);
 
-    const login = await completeTelegramLogin(req, res, loginPayload);
+    const login = await completeTelegramLogin(req, res, loginPayload, { authMethod: "DEV" });
     await query(
       `UPDATE users
        SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW()
@@ -506,6 +753,30 @@ authRouter.get(
     const effectiveRole = getEffectiveEntryRole(req, user);
     const memberships = await getUserMemberships(user.id);
     const allowAdminChoice = canChooseAdminRole(user);
+    const captainedTeamIds = Array.from(
+      new Set(memberships.filter((m) => m.role === "CAPTAIN").map((m) => m.team_id))
+    );
+    const platformTeamIdsRaw =
+      effectiveRole === "ADMIN" && allowAdminChoice
+        ? (
+            await query<{ id: string }>(
+              `SELECT id FROM teams ORDER BY name ASC`
+            )
+          ).rows.map((r) => r.id)
+        : [];
+    const oidcAdminReady = !env.telegramOidc.adminRequired || req.session.authMethod === "OIDC";
+    const platformTeamIds = oidcAdminReady ? platformTeamIdsRaw : [];
+    const teamAdminTeamIds = oidcAdminReady ? captainedTeamIds : [];
+    const adminScope: AdminScope =
+      platformTeamIds.length > 0 ? "PLATFORM" : teamAdminTeamIds.length > 0 ? "TEAM" : "NONE";
+    const managedTeamIds =
+      adminScope === "PLATFORM" ? platformTeamIds : adminScope === "TEAM" ? teamAdminTeamIds : [];
+    const capabilities = buildCapabilities({
+      effectiveRole,
+      memberships,
+      adminScope,
+    });
+
     return res.json({
       authenticated: true,
       user: {
@@ -522,6 +793,10 @@ authRouter.get(
       hasMemberships: memberships.length > 0,
       activeMembershipId: req.session.activeMembershipId || null,
       activeTeamId: req.session.activeTeamId || null,
+      authMethod: req.session.authMethod ?? null,
+      capabilities,
+      adminScope,
+      managedTeamIds,
       availableRoles: memberships.map((m) => ({
         membershipId: m.id,
         teamId: m.team_id,
@@ -602,6 +877,10 @@ authRouter.post(
       await writeAudit(userId, "auth.logout");
     }
     res.clearCookie(env.session.cookieName);
+    res.cookie(LOGOUT_GUARD_COOKIE_NAME, "1", {
+      ...logoutGuardCookieOptions(),
+      maxAge: LOGOUT_GUARD_TTL_MS,
+    });
     return res.json({ ok: true });
   })
 );
