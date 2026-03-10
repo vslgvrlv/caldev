@@ -22,7 +22,7 @@ import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
 import { api, type NotificationDeliveryResponse } from './api'; // Import API
 
-type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'invalid_shape' | 'error';
+type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
 const App: React.FC = () => {
   const logoutGuardKey = 'pbth:skip-auto-auth-after-logout';
@@ -193,6 +193,8 @@ const App: React.FC = () => {
             alert('Вход выполнен в админ-режиме. Этот экран пока не поддерживается в мобильном приложении.');
             setAppGate('ADMIN_MODE');
             return 'admin_mode';
+          } else if (message.includes('ROLE_SELECTION_REQUIRED')) {
+            return 'role_selection_required';
           } else {
             alert("Не удалось открыть приложение после входа. Проверьте авторизацию и попробуйте еще раз.");
           }
@@ -205,6 +207,9 @@ const App: React.FC = () => {
           if (message.includes('INIT_ADMIN_MODE')) {
             setAppGate('ADMIN_MODE');
             return 'admin_mode';
+          }
+          if (message.includes('ROLE_SELECTION_REQUIRED')) {
+            return 'role_selection_required';
           }
         }
         return e instanceof Error && e.message.includes('INIT_INVALID_SHAPE')
@@ -223,7 +228,11 @@ const App: React.FC = () => {
       const me = await api.getAuthMe();
       if (!me?.authenticated) return false;
 
-      if (me?.roleSelectionRequired) {
+      const shouldSwitchToUser =
+        me?.roleSelectionRequired ||
+        (result === 'admin_mode' && me.canChooseAdminRole && me.accountRole === 'ADMIN');
+
+      if (shouldSwitchToUser) {
         const selectRes = await fetch('/api/v1/auth/select-role', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -238,7 +247,7 @@ const App: React.FC = () => {
       console.error('Failed to switch account role to USER', error);
     }
 
-    return result === 'admin_mode';
+    return false;
   };
 
   const handleSwitchToUserMode = async () => {
