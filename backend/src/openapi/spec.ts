@@ -18,6 +18,16 @@ export function buildOpenApiSpec() {
             correlationId: { type: "string", format: "uuid" },
           },
         },
+        AuthMeResponse: {
+          type: "object",
+          properties: {
+            authenticated: { type: "boolean" },
+            authMethod: { type: "string", enum: ["WEBAPP", "OIDC", "LEGACY_WIDGET", "DEV", null] },
+            adminScope: { type: "string", enum: ["NONE", "TEAM", "PLATFORM"] },
+            capabilities: { type: "array", items: { type: "string" } },
+            managedTeamIds: { type: "array", items: { type: "string", format: "uuid" } },
+          },
+        },
         Event: {
           type: "object",
           required: ["id", "type", "title", "startAt", "rsvpStatus"],
@@ -75,7 +85,43 @@ export function buildOpenApiSpec() {
         get: {
           summary: "Get current auth session",
           responses: {
-            "200": { description: "Auth payload" },
+            "200": {
+              description: "Auth payload",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/AuthMeResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/auth/telegram/oidc/start": {
+        get: {
+          summary: "Start Telegram OIDC login (Authorization Code + PKCE)",
+          parameters: [
+            {
+              name: "redirectTo",
+              in: "query",
+              required: false,
+              schema: { type: "string", example: "/app" },
+            },
+          ],
+          responses: {
+            "302": { description: "Redirect to Telegram OIDC authorize endpoint" },
+          },
+        },
+      },
+      "/auth/telegram/oidc/callback": {
+        get: {
+          summary: "Handle Telegram OIDC callback",
+          parameters: [
+            { name: "code", in: "query", required: true, schema: { type: "string" } },
+            { name: "state", in: "query", required: true, schema: { type: "string" } },
+          ],
+          responses: {
+            "302": { description: "Redirect back to application after successful login" },
+            "401": { description: "Invalid/expired OIDC state or token" },
           },
         },
       },
@@ -174,6 +220,71 @@ export function buildOpenApiSpec() {
           responses: {
             "201": { description: "Transaction created" },
             "200": { description: "Idempotent replay response" },
+          },
+        },
+      },
+      "/admin/v1/overview": {
+        get: {
+          summary: "Admin overview by scope/team",
+          responses: {
+            "200": { description: "Overview payload" },
+            "403": { description: "Admin access required" },
+          },
+        },
+      },
+      "/admin/v1/events": {
+        get: {
+          summary: "Admin events list",
+          responses: {
+            "200": { description: "Events list" },
+            "403": { description: "Admin access required" },
+          },
+        },
+        post: {
+          summary: "Admin create event",
+          responses: {
+            "201": { description: "Event created" },
+            "403": { description: "Admin access required" },
+          },
+        },
+      },
+      "/admin/v1/events/{eventId}": {
+        patch: {
+          summary: "Admin update event",
+          parameters: [{ name: "eventId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": { description: "Event updated" },
+            "404": { description: "Event not found" },
+          },
+        },
+      },
+      "/admin/v1/team/members": {
+        get: {
+          summary: "Admin list team members",
+          responses: {
+            "200": { description: "Members list" },
+            "400": { description: "teamId required" },
+          },
+        },
+      },
+      "/admin/v1/team/members/{membershipId}": {
+        patch: {
+          summary: "Admin update team member role/status",
+          parameters: [
+            { name: "membershipId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          ],
+          responses: {
+            "200": { description: "Member updated" },
+            "404": { description: "Membership not found" },
+          },
+        },
+      },
+      "/admin/v1/audit": {
+        get: {
+          summary: "Admin audit timeline",
+          responses: {
+            "200": { description: "Audit list" },
+            "403": { description: "Admin access required" },
           },
         },
       },

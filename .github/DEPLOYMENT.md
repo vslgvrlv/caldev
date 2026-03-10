@@ -45,3 +45,18 @@ The workflow runs rollback script and validates `/api/v1/release/version`.
 2. Never deploy prod from dirty local folder.
 3. Never skip staging verification.
 4. Never apply manual DB schema changes outside migrations.
+
+## 6) Auth v2 Rollout Guardrails
+
+Use dual-run rollout via env flags in `prod.env` / `staging.env`:
+
+- `AUTH_OIDC_ENABLED`
+- `AUTH_OIDC_FALLBACK_ENABLED`
+- `AUTH_OIDC_ADMIN_REQUIRED`
+
+Recommended order:
+
+1. enable in staging (`AUTH_OIDC_ENABLED=1`, `AUTH_OIDC_FALLBACK_ENABLED=1`);
+2. verify Android/iOS Mini App + web admin login;
+3. canary in prod with allowlist users;
+4. full enable only after stable success rate.

@@ -3,10 +3,19 @@ import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
 import { logger } from "./lib/logger.js";
 import { startNotificationQueue, stopNotificationQueue } from "./lib/notification-queue.js";
+import { pruneExpiredAuthArtifacts } from "./lib/replay-guard.js";
 
 async function start() {
   await pool.query("SELECT 1");
   await startNotificationQueue();
+  const authCleanupTimer = setInterval(() => {
+    void pruneExpiredAuthArtifacts().catch((error) => {
+      logger.error("auth.cleanup.failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, 10 * 60 * 1000);
+  authCleanupTimer.unref();
 
   const server = app.listen(env.port, () => {
     logger.info("server.started", { port: env.port, nodeEnv: env.nodeEnv });
@@ -21,6 +30,7 @@ async function start() {
     server.close(async () => {
       try {
         await stopNotificationQueue();
+        clearInterval(authCleanupTimer);
         await pool.end();
       } catch (error) {
         logger.error("server.shutdown.error", { signal, error: error instanceof Error ? error.message : String(error) });

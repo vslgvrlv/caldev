@@ -6,6 +6,20 @@ const apiTarget = runtimeProcess?.env?.VITE_BACKEND_TARGET || 'http://127.0.0.1:
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        const message = typeof warning === 'string' ? warning : warning.message || '';
+        if (
+          message.includes('/api/v1/vendor/tailwindcss.js') ||
+          message.includes('/api/v1/vendor/telegram-web-app.js')
+        ) {
+          return;
+        }
+        warn(warning);
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,

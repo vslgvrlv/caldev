@@ -59,9 +59,24 @@ export const env = {
 
   telegram: {
     botToken: required("TELEGRAM_BOT_TOKEN", ""),
-    allowedMaxAuthAgeSec: asNumber(process.env.TELEGRAM_MAX_AUTH_AGE_SEC || "86400", "TELEGRAM_MAX_AUTH_AGE_SEC"),
+    allowedMaxAuthAgeSec: asNumber(process.env.TELEGRAM_MAX_AUTH_AGE_SEC || "600", "TELEGRAM_MAX_AUTH_AGE_SEC"),
     callbackUrl: required("TELEGRAM_CALLBACK_URL", "http://127.0.0.1:8000/api/v1/auth/telegram/callback"),
     botUsername: required("TELEGRAM_BOT_USERNAME", ""),
+  },
+
+  telegramOidc: {
+    enabled: asBoolean(process.env.AUTH_OIDC_ENABLED, false),
+    fallbackEnabled: asBoolean(process.env.AUTH_OIDC_FALLBACK_ENABLED, true),
+    adminRequired: asBoolean(process.env.AUTH_OIDC_ADMIN_REQUIRED, false),
+    clientId: process.env.TELEGRAM_OIDC_CLIENT_ID || "",
+    clientSecret: process.env.TELEGRAM_OIDC_CLIENT_SECRET || "",
+    redirectUri: process.env.TELEGRAM_OIDC_REDIRECT_URI || "",
+    issuer: process.env.TELEGRAM_OIDC_ISSUER || "https://oauth.telegram.org",
+    jwksUrl: process.env.TELEGRAM_OIDC_JWKS_URL || "https://oauth.telegram.org/.well-known/jwks.json",
+    authorizeUrl: process.env.TELEGRAM_OIDC_AUTHORIZE_URL || "https://oauth.telegram.org/auth",
+    tokenUrl: process.env.TELEGRAM_OIDC_TOKEN_URL || "https://oauth.telegram.org/token",
+    stateTtlSeconds: asNumber(process.env.AUTH_OIDC_STATE_TTL_SEC || "600", "AUTH_OIDC_STATE_TTL_SEC"),
+    clockSkewSeconds: asNumber(process.env.AUTH_OIDC_CLOCK_SKEW_SEC || "60", "AUTH_OIDC_CLOCK_SKEW_SEC"),
   },
 
   adminRoleAllowlist: {
@@ -106,3 +121,15 @@ export const env = {
     builtAt: process.env.RELEASE_BUILT_AT || "unknown",
   },
 };
+
+if (env.telegramOidc.enabled) {
+  if (!env.telegramOidc.clientId) {
+    throw new Error("Missing TELEGRAM_OIDC_CLIENT_ID while AUTH_OIDC_ENABLED=true");
+  }
+  if (!env.telegramOidc.clientSecret) {
+    throw new Error("Missing TELEGRAM_OIDC_CLIENT_SECRET while AUTH_OIDC_ENABLED=true");
+  }
+  if (!env.telegramOidc.redirectUri) {
+    throw new Error("Missing TELEGRAM_OIDC_REDIRECT_URI while AUTH_OIDC_ENABLED=true");
+  }
+}
