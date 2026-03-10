@@ -8,6 +8,7 @@ import {
   type AdminTeamMembersResponse,
   type AuthMeResponse,
 } from '../../api';
+import { EventType } from '../../types';
 import { Loader2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
@@ -17,15 +18,26 @@ type MemberDraft = {
   status?: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
 };
 
-const EVENT_TYPE_OPTIONS = [
-  'TRAINING',
-  'TOURNAMENT',
-  'CHAMPIONSHIP',
-  'FRIENDLY_MATCH',
-  'MEETING',
-  'MAINTENANCE',
-  'OTHER',
-] as const;
+const EVENT_TYPE_OPTIONS: EventType[] = [
+  EventType.TRAINING,
+  EventType.TOURNAMENT,
+  EventType.CHAMPIONSHIP,
+  EventType.FRIENDLY_MATCH,
+  EventType.MEETING,
+  EventType.MAINTENANCE,
+  EventType.OTHER,
+];
+
+const extractManagedTeamIds = (auth: AuthenticatedMe): string[] => {
+  if (Array.isArray(auth.managedTeamIds) && auth.managedTeamIds.length > 0) {
+    return auth.managedTeamIds;
+  }
+  const fromCaptainRoles = (auth.availableRoles || [])
+    .filter((role) => role.role === 'CAPTAIN')
+    .map((role) => role.teamId)
+    .filter((teamId): teamId is string => Boolean(teamId));
+  return Array.from(new Set(fromCaptainRoles));
+};
 
 export const AdminConsoleView: React.FC = () => {
   const navigate = useNavigate();
@@ -41,18 +53,13 @@ export const AdminConsoleView: React.FC = () => {
   const [error, setError] = useState('');
 
   const [createTitle, setCreateTitle] = useState('');
-  const [createType, setCreateType] = useState<(typeof EVENT_TYPE_OPTIONS)[number]>('TRAINING');
+  const [createType, setCreateType] = useState<EventType>(EventType.TRAINING);
   const [createStartAt, setCreateStartAt] = useState('');
   const [createLocation, setCreateLocation] = useState('');
 
   const managedTeams = useMemo(() => {
-    if (Array.isArray(me?.managedTeamIds) && me.managedTeamIds.length > 0) {
-      return me.managedTeamIds;
-    }
-    const fromCaptainRoles = (me?.availableRoles || [])
-      .filter((role) => role.role === 'CAPTAIN')
-      .map((role) => role.teamId);
-    return Array.from(new Set(fromCaptainRoles));
+    if (!me) return [];
+    return extractManagedTeamIds(me);
   }, [me]);
   const adminScopeLabel = me?.adminScope || 'NONE';
 
@@ -77,17 +84,9 @@ export const AdminConsoleView: React.FC = () => {
       const auth = (await loadAuth()) || me;
       if (!auth || auth.adminScope === 'NONE') return;
 
-      const safeManagedTeamIds =
-        Array.isArray((auth as any).managedTeamIds) && (auth as any).managedTeamIds.length > 0
-          ? ((auth as any).managedTeamIds as string[])
-          : Array.from(
-              new Set(
-                ((auth as any).availableRoles || [])
-                  .filter((role: any) => role.role === 'CAPTAIN')
-                  .map((role: any) => role.teamId)
-              )
-            );
-      const currentTeam = teamIdOverride || selectedTeamId || safeManagedTeamIds[0] || '';
+      const safeManagedTeamIds = extractManagedTeamIds(auth);
+      const fallbackTeam = safeManagedTeamIds[0] ?? '';
+      const currentTeam = teamIdOverride || selectedTeamId || fallbackTeam;
       if (currentTeam && currentTeam !== selectedTeamId) {
         setSelectedTeamId(currentTeam);
       }
@@ -322,7 +321,7 @@ export const AdminConsoleView: React.FC = () => {
             />
             <select
               value={createType}
-              onChange={(e) => setCreateType(e.target.value as (typeof EVENT_TYPE_OPTIONS)[number])}
+              onChange={(e) => setCreateType(e.target.value as EventType)}
               className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
             >
               {EVENT_TYPE_OPTIONS.map((value) => (

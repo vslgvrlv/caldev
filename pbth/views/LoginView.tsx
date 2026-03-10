@@ -10,7 +10,7 @@ interface LoginViewProps {
   availableRoles: UserRoleOption[];
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onSelectRole, availableRoles }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, availableRoles }) => {
   const navigate = useNavigate();
   const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
