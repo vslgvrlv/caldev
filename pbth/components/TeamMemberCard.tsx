@@ -7,9 +7,10 @@ interface TeamMemberCardProps {
   member: TeamMember;
   isViewerAdmin: boolean;
   onClick?: () => void;
+  onQuickActions?: () => void;
 }
 
-export const TeamMemberCard: React.FC<TeamMemberCardProps> = ({ member, isViewerAdmin, onClick }) => {
+export const TeamMemberCard: React.FC<TeamMemberCardProps> = ({ member, isViewerAdmin, onClick, onQuickActions }) => {
   const isLeader = member.role === Role.ADMIN || member.role === Role.CAPTAIN;
   
   return (
@@ -68,8 +69,16 @@ export const TeamMemberCard: React.FC<TeamMemberCardProps> = ({ member, isViewer
         )}
         {isViewerAdmin && (
           <button
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onQuickActions) {
+                onQuickActions();
+                return;
+              }
+              onClick?.();
+            }}
             className="p-2 text-pb-subtext hover:text-white transition-colors"
+            aria-label={`Управление участником ${member.name}`}
           >
             <MoreVertical size={18} />
           </button>

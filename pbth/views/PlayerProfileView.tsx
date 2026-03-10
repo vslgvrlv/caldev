@@ -1,5 +1,5 @@
 import React from 'react';
-import { TeamMember } from '../types';
+import { TeamMember, PlayerStatus } from '../types';
 import { ROLE_LABELS, STATUS_LABELS } from '../constants';
 import { ChevronLeft, Phone, Shield, Activity, CalendarDays, Trophy, Coins } from 'lucide-react';
 
@@ -7,9 +7,19 @@ interface PlayerProfileViewProps {
   member: TeamMember;
   teamName: string;
   onBack: () => void;
+  canManage?: boolean;
+  onUpdateMemberStatus?: (member: TeamMember, status: PlayerStatus) => Promise<void> | void;
+  onRemoveMember?: (member: TeamMember) => Promise<void> | void;
 }
 
-export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ member, teamName, onBack }) => {
+export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
+  member,
+  teamName,
+  onBack,
+  canManage = false,
+  onUpdateMemberStatus,
+  onRemoveMember,
+}) => {
   const stats = member.stats || {
     attendanceRate: 0,
     eventsAttended: 0,
@@ -103,6 +113,56 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({ member, te
           </div>
           Источник данных: состав команды и подтвержденные RSVP.
         </div>
+
+        {canManage && (
+          <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
+            <div className="text-white font-semibold mb-3">Управление игроком</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  void onUpdateMemberStatus?.(member, PlayerStatus.ACTIVE);
+                }}
+                className="py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm"
+              >
+                В строю
+              </button>
+              <button
+                onClick={() => {
+                  void onUpdateMemberStatus?.(member, PlayerStatus.RESERVE);
+                }}
+                className="py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm"
+              >
+                Резерв
+              </button>
+              <button
+                onClick={() => {
+                  void onUpdateMemberStatus?.(member, PlayerStatus.INJURED);
+                }}
+                className="py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm"
+              >
+                Травма
+              </button>
+              <button
+                onClick={() => {
+                  void onUpdateMemberStatus?.(member, PlayerStatus.VACATION);
+                }}
+                className="py-2 rounded-xl bg-white/5 hover:bg-white/10 text-sm"
+              >
+                Отпуск
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                const confirmed = window.confirm(`Исключить ${member.name} из команды?`);
+                if (!confirmed) return;
+                void onRemoveMember?.(member);
+              }}
+              className="mt-3 w-full py-2 rounded-xl bg-red-500/10 text-red-300 hover:bg-red-500/20 text-sm"
+            >
+              Исключить из команды
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

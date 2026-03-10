@@ -34,6 +34,7 @@ export interface User {
   name: string;
   avatar?: string;
   nickname: string;
+  telegramUsername?: string;
   telegramId?: string;
   password?: string;
 }

@@ -16,6 +16,8 @@ import { TermsView } from './views/TermsView';
 import { SupportView } from './views/SupportView';
 import { PlayerProfileView } from './views/PlayerProfileView';
 import { InviteView } from './views/InviteView';
+import { AdminLoginView } from './views/admin/AdminLoginView';
+import { AdminConsoleView } from './views/admin/AdminConsoleView';
 import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
 import { api, type NotificationDeliveryResponse } from './api'; // Import API
@@ -23,9 +25,12 @@ import { api, type NotificationDeliveryResponse } from './api'; // Import API
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'invalid_shape' | 'error';
 
 const App: React.FC = () => {
+  const logoutGuardKey = 'pbth:skip-auto-auth-after-logout';
+  const logoutGuardCookie = 'pbth_logout_guard';
   const navigate = useNavigate();
   const [authStep, setAuthStep] = useState<AuthStep>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [authBootstrapDone, setAuthBootstrapDone] = useState(false);
   const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM' | 'ADMIN_MODE'>('READY');
   
@@ -47,6 +52,55 @@ const App: React.FC = () => {
 
   const isTelegramMiniApp = () =>
     typeof window !== 'undefined' && Boolean((window as any).Telegram?.WebApp);
+
+  const hasLogoutGuard = () => {
+    try {
+      const cookieGuard =
+        typeof document !== 'undefined' &&
+        document.cookie
+          .split(';')
+          .map((part) => part.trim())
+          .some((part) => part.startsWith(`${logoutGuardCookie}=1`));
+      return (
+        cookieGuard ||
+        sessionStorage.getItem(logoutGuardKey) === '1' ||
+        localStorage.getItem(logoutGuardKey) === '1'
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const clearLogoutGuard = () => {
+    try {
+      sessionStorage.removeItem(logoutGuardKey);
+      localStorage.removeItem(logoutGuardKey);
+      if (typeof document !== 'undefined') {
+        document.cookie = `${logoutGuardCookie}=; Max-Age=0; Path=/; SameSite=Lax`;
+        document.cookie = `${logoutGuardCookie}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
+        const host = window.location.hostname;
+        if (host && host.includes('.')) {
+          document.cookie = `${logoutGuardCookie}=; Max-Age=0; Path=/; Domain=.${host}; SameSite=Lax`;
+          document.cookie = `${logoutGuardCookie}=; Max-Age=0; Path=/; Domain=.${host}; SameSite=Lax; Secure`;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const enableLogoutGuard = () => {
+    try {
+      sessionStorage.setItem(logoutGuardKey, '1');
+      localStorage.setItem(logoutGuardKey, '1');
+      if (typeof document !== 'undefined') {
+        const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `${logoutGuardCookie}=1; Max-Age=1209600; Path=/; SameSite=Lax${secure}`;
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   // Initial Fetch
   const loadData = async (options?: { silent?: boolean }): Promise<InitLoadResult> => {
@@ -166,12 +220,10 @@ const App: React.FC = () => {
     if (result === 'ok' || result === 'no_team') return true;
 
     try {
-      const meRes = await fetch('/api/v1/auth/me', { credentials: 'include' });
-      if (!meRes.ok) return false;
-      const me = await meRes.json();
+      const me = await api.getAuthMe();
       if (!me?.authenticated) return false;
 
-      if (me?.roleSelectionRequired || me?.accountRole === 'ADMIN') {
+      if (me?.roleSelectionRequired) {
         const selectRes = await fetch('/api/v1/auth/select-role', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -189,41 +241,49 @@ const App: React.FC = () => {
     return result === 'admin_mode';
   };
 
+  const handleSwitchToUserMode = async () => {
+    try {
+      await api.selectAccountRole('USER');
+      setAppGate('READY');
+      const ok = await tryEnterUserApp();
+      if (ok) {
+        setAuthStep('APP');
+        navigate('/app', { replace: true });
+      } else {
+        navigate('/login', { replace: true });
+      }
+    } catch (error) {
+      console.error('Failed to switch to USER mode', error);
+      navigate('/login', { replace: true });
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    const tgDirectFallbackKey = 'pbth:tg-webapp-fallback-direct';
 
     const restoreSession = async () => {
       try {
-        let res = await fetch('/api/v1/auth/me', { credentials: 'include' });
-        if (!res.ok) return;
-        let payload = await res.json();
+        if (hasLogoutGuard()) {
+          setAuthStep('LOGIN');
+          return;
+        }
+
+        let payload = await api.getAuthMe();
 
         if (!payload?.authenticated && isTelegramMiniApp()) {
           const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
-          let webAppAttempted = false;
           if (initData) {
             try {
-              webAppAttempted = true;
               await api.authTelegramWebApp(initData);
-              res = await fetch('/api/v1/auth/me', { credentials: 'include' });
-              payload = res.ok ? await res.json() : payload;
+              payload = await api.getAuthMe();
             } catch (err) {
               console.warn('Telegram Mini App auto-auth failed', err);
-            }
-          }
-          if (!payload?.authenticated && webAppAttempted && !cancelled) {
-            const alreadyTriedDirect = sessionStorage.getItem(tgDirectFallbackKey) === '1';
-            if (!alreadyTriedDirect) {
-              sessionStorage.setItem(tgDirectFallbackKey, '1');
-              window.location.assign('/api/v1/auth/telegram/direct?redirectTo=%2Fapp');
-              return;
             }
           }
         }
 
         if (!payload?.authenticated || cancelled) return;
-        sessionStorage.removeItem(tgDirectFallbackKey);
+        clearLogoutGuard();
 
         if (payload?.user) {
           setUser((prev) => {
@@ -232,6 +292,9 @@ const App: React.FC = () => {
               id: String(payload.user.id),
               name: String(payload.user.name || ''),
               nickname: String(payload.user.nickname || ''),
+              telegramUsername: payload.user.telegramUsername
+                ? String(payload.user.telegramUsername)
+                : undefined,
               avatar: payload.user.avatar ? String(payload.user.avatar) : undefined,
             };
           });
@@ -278,6 +341,8 @@ const App: React.FC = () => {
 
   // --- AUTH HANDLERS ---
   const handleLogin = async () => {
+    clearLogoutGuard();
+    sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
     const ok = await tryEnterUserApp();
     if (ok) {
       sessionStorage.removeItem('pbth:post-auth-app');
@@ -291,16 +356,40 @@ const App: React.FC = () => {
     handleLogin();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    const redirectTo = '/login';
+
+    // Apply local guard first to prevent immediate auto re-login after app reopen.
+    sessionStorage.removeItem('pbth:post-auth-app');
+    sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
+    enableLogoutGuard();
+
     setAuthStep('LOGIN');
     setAppGate('READY');
+    setAuthBootstrapDone(true);
     setCurrentView('DASHBOARD');
     setUser(null);
     setActiveTeam(null);
+    setEvents([]);
+    setMembers([]);
+    setTransactions([]);
     setSelectedMember(null);
     setSelectedEvent(null);
     setCalendarLink('');
-    navigate('/');
+    navigate(redirectTo, { replace: true });
+
+    void fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      keepalive: true,
+    }).catch((error) => {
+      console.error('Failed to terminate server session', error);
+    });
+
+    setIsLoggingOut(false);
   };
 
   const handleCopyIcsLink = async () => {
@@ -635,6 +724,36 @@ const App: React.FC = () => {
     setSelectedMember(member);
   };
 
+  const handleUpdateMemberStatus = async (member: TeamMember, status: PlayerStatus) => {
+    if (!activeTeam) return;
+    if (!member.membershipId) {
+      alert('Не удалось определить membershipId участника');
+      return;
+    }
+
+    await api.updateTeamMembership(activeTeam.id, member.membershipId, { status });
+    setMembers((prev) =>
+      prev.map((item) => (item.id === member.id ? { ...item, status } : item))
+    );
+    setSelectedMember((prev) => (prev && prev.id === member.id ? { ...prev, status } : prev));
+  };
+
+  const handleRemoveMember = async (member: TeamMember) => {
+    if (!activeTeam || !user) return;
+    if (!member.membershipId) {
+      alert('Не удалось определить membershipId участника');
+      return;
+    }
+    if (member.id === user.id) {
+      alert('Нельзя исключить самого себя из команды через этот экран.');
+      return;
+    }
+
+    await api.removeTeamMembership(activeTeam.id, member.membershipId);
+    setMembers((prev) => prev.filter((item) => item.id !== member.id));
+    setSelectedMember((prev) => (prev && prev.id === member.id ? null : prev));
+  };
+
   const handleAttendeeClick = (
     userId: string,
     seed?: { name: string; nickname: string; avatar?: string; role?: 'CAPTAIN' | 'TRAINER' | 'PLAYER' }
@@ -667,11 +786,15 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (selectedMember) {
+      const canManageMembers = activeTeam!.role === Role.ADMIN || activeTeam!.role === Role.CAPTAIN;
       return (
         <PlayerProfileView
           member={selectedMember}
           teamName={activeTeam!.name}
           onBack={() => setSelectedMember(null)}
+          canManage={canManageMembers}
+          onUpdateMemberStatus={handleUpdateMemberStatus}
+          onRemoveMember={handleRemoveMember}
         />
       );
     }
@@ -730,6 +853,8 @@ const App: React.FC = () => {
             members={members}
             currentUserRole={activeTeam!.role}
             onMemberClick={handleMemberClick}
+            onUpdateMemberStatus={handleUpdateMemberStatus}
+            onRemoveMember={handleRemoveMember}
           />
         );
       case 'PROFILE':
@@ -769,7 +894,9 @@ const App: React.FC = () => {
               Попросите капитана прислать инвайт-ссылку и откройте её в Telegram.
             </p>
             <button
-              onClick={handleLogout}
+              onClick={() => {
+                void handleLogout();
+              }}
               className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
             >
               Выйти
@@ -787,12 +914,30 @@ const App: React.FC = () => {
             <p className="text-pb-subtext mb-6">
               Мобильный интерфейс для Product Admin пока не реализован.
             </p>
-            <button
-              onClick={handleLogout}
-              className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
-            >
-              Выйти
-            </button>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => navigate('/admin/login', { replace: true })}
+                className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
+              >
+                Перейти в админку
+              </button>
+              <button
+                onClick={() => {
+                  void handleSwitchToUserMode();
+                }}
+                className="bg-white/10 text-white px-5 py-3 rounded-xl font-bold"
+              >
+                Переключиться в режим USER
+              </button>
+              <button
+                onClick={() => {
+                  void handleLogout();
+                }}
+                className="bg-white/10 text-white px-5 py-3 rounded-xl font-bold"
+              >
+                Выйти
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -857,7 +1002,7 @@ const App: React.FC = () => {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || isLoggingOut) {
       return (
           <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
               <Loader2 className="animate-spin text-pb-primary" size={48} />
@@ -872,6 +1017,8 @@ const App: React.FC = () => {
       <Route path="/terms" element={<TermsView />} />
       <Route path="/support" element={<SupportView />} />
       <Route path="/invite/:inviteId" element={<InviteView />} />
+      <Route path="/admin/login" element={<AdminLoginView />} />
+      <Route path="/admin/*" element={<AdminConsoleView />} />
       <Route path="/login" element={
         authStep === 'APP'
           ? <Navigate to="/app" replace />
@@ -879,7 +1026,7 @@ const App: React.FC = () => {
             <LoginView 
               onLogin={handleLogin}
               onSelectRole={handleRoleSelect}
-              availableRoles={[{ teamId: 't1', teamName: 'Headshot Gladiators', role: Role.CAPTAIN }]}
+              availableRoles={[]}
             />
           )
       } />
