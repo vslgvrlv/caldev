@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserRoleOption, Role } from '../types';
 import { Send, Shield, User as UserIcon, ArrowLeft } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import { extractAuthError, normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
 
 interface LoginViewProps {
   onLogin: () => void;
@@ -12,12 +13,31 @@ interface LoginViewProps {
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, availableRoles }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const authQuery = searchParams.toString();
   const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string>('');
   const isLocalDev =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+
+  useEffect(() => {
+    const params = new URLSearchParams(authQuery);
+    const code = normalizeAuthErrorCode(params.get('auth_error') || params.get('code'));
+    const detail = params.get('detail');
+    if (!code && !detail) return;
+
+    const message = resolveAuthErrorMessage({ code, detail, scope: 'USER' });
+    setAuthError(message);
+    sendAuthTelemetry({
+      scope: 'USER',
+      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+      event: 'error_page',
+      code,
+      detail,
+    });
+  }, [authQuery]);
 
   const checkAuthenticated = async (): Promise<boolean> => {
     const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
@@ -54,13 +74,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
       localStorage.removeItem('pbth:skip-auto-auth-after-logout');
       const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+      sendAuthTelemetry({
+        scope: 'USER',
+        flow: isMiniApp ? 'MINIAPP' : 'OIDC',
+        event: 'login_start',
+      });
       if (!isMiniApp) {
+        sendAuthTelemetry({
+          scope: 'USER',
+          flow: 'OIDC',
+          event: 'oidc_redirect_start',
+        });
         api.startTelegramDirect('/app');
         return;
       }
       const initData = await waitMiniAppInitData();
       if (!initData) {
         setAuthError('Не удалось получить Telegram initData. Закройте и заново откройте Mini App из бота.');
+        sendAuthTelemetry({
+          scope: 'USER',
+          flow: 'MINIAPP',
+          event: 'login_error',
+          code: 'INITDATA_MISSING',
+        });
         return;
       }
       if (initData) {
@@ -68,15 +104,34 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
           await api.authTelegramWebApp(initData, true);
           const authenticated = await checkAuthenticated();
           if (authenticated) {
+            sendAuthTelemetry({
+              scope: 'USER',
+              flow: 'MINIAPP',
+              event: 'login_success',
+            });
             onLogin();
             return;
           }
           console.warn('Telegram WebApp auth returned 200 but session is still anonymous');
           setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
+          sendAuthTelemetry({
+            scope: 'USER',
+            flow: 'MINIAPP',
+            event: 'login_error',
+            code: 'SESSION_ANONYMOUS',
+          });
           return;
         } catch (err) {
           console.warn('Telegram WebApp auth from login screen failed', err);
-          setAuthError('Ошибка входа через Telegram Mini App. Повторите попытку.');
+          const authErr = extractAuthError(err);
+          setAuthError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'USER' }));
+          sendAuthTelemetry({
+            scope: 'USER',
+            flow: 'MINIAPP',
+            event: 'login_error',
+            code: authErr.code || 'WEBAPP_AUTH_FAILED',
+            detail: authErr.detail,
+          });
           return;
         }
       }

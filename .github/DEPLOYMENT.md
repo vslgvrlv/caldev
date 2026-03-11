@@ -53,10 +53,18 @@ Use dual-run rollout via env flags in `prod.env` / `staging.env`:
 - `AUTH_OIDC_ENABLED`
 - `AUTH_OIDC_FALLBACK_ENABLED`
 - `AUTH_OIDC_ADMIN_REQUIRED`
+- `AUTH_OIDC_CANARY_PERCENT`
+- `AUTH_OIDC_CANARY_COOKIE`
+- `AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC`
+- `AUTH_SLO_ENABLED`
+- `AUTH_SLO_WINDOW_MINUTES`
+- `AUTH_SLO_MIN_ATTEMPTS`
+- `AUTH_SLO_MAX_ERROR_RATE`
+- `AUTH_SLO_TOKEN` (optional, for protected `/api/v1/auth/slo`)
 
 Recommended order:
 
 1. enable in staging (`AUTH_OIDC_ENABLED=1`, `AUTH_OIDC_FALLBACK_ENABLED=1`);
 2. verify Android/iOS Mini App + web admin login;
-3. canary in prod with allowlist users;
-4. full enable only after stable success rate.
+3. enable canary in prod (`AUTH_OIDC_CANARY_PERCENT=5..20`) and monitor `Auth SLO Watch` workflow;
+4. increase canary gradually to `100` only after stable success/error budget.

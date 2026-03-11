@@ -30,3 +30,15 @@ Outputs:
 ```bash
 ./scripts/release/smoke.sh --base-url https://pbthub.ru
 ```
+
+## Auth SLO / Error Budget
+
+```bash
+./scripts/release/auth-slo-check.sh --base-url https://pbthub.ru --window-minutes 60
+```
+
+Optional token auth:
+
+```bash
+AUTH_SLO_TOKEN=<token> ./scripts/release/auth-slo-check.sh --base-url https://pbthub.ru
+```

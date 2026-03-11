@@ -86,6 +86,7 @@ docker compose up --build
 - `GET /api/v1/auth/telegram/start`
 - `GET /api/v1/auth/telegram/callback`
 - `GET /api/v1/auth/me`
+- `GET /api/v1/auth/slo`
 - `POST /api/v1/auth/context`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/init`
@@ -108,6 +109,7 @@ Workflows:
 - `.github/workflows/release-artifact.yml` (manual artifact + GitHub Release tag)
 - `.github/workflows/deploy-staging.yml` (manual staging deploy by `releaseId`)
 - `.github/workflows/deploy-prod.yml` (manual prod deploy by `releaseId`, optional staging match check)
+- `.github/workflows/auth-slo-alert.yml` (scheduled auth SLO/error-budget monitor)
 - `.github/workflows/rollback-release.yml` (manual rollback for staging/prod)
 
 GitHub deployment runbook:

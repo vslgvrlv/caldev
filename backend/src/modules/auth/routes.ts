@@ -10,6 +10,8 @@ import { getMembershipById, getUserMemberships } from "../../lib/permissions.js"
 import { canChooseAdminRole, getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { env } from "../../config/env.js";
 import { pruneExpiredAuthArtifacts, registerReplayPayload, sha256Hex } from "../../lib/replay-guard.js";
+import { decideOidcCanary, newCanaryBucket, normalizeForceOverride, parseCanaryBucket } from "../../lib/auth-canary.js";
+import { getAuthSloSummary, recordAuthMetric } from "../../lib/auth-slo.js";
 
 const contextSchema = z.object({
   membershipId: z.string().uuid(),
@@ -30,6 +32,21 @@ const oidcStartSchema = z.object({
 const oidcCallbackSchema = z.object({
   code: z.string().min(1),
   state: z.string().min(1),
+});
+
+const authSloQuerySchema = z.object({
+  windowMinutes: z.coerce.number().int().min(1).max(24 * 60).optional(),
+});
+
+const clientAuthTelemetrySchema = z.object({
+  scope: z.enum(["USER", "ADMIN", "INVITE"]),
+  flow: z.enum(["MINIAPP", "OIDC", "UNKNOWN"]).optional(),
+  event: z.string().min(1).max(64),
+  platform: z.enum(["android", "ios", "desktop", "unknown"]),
+  code: z.string().min(1).max(80).optional(),
+  detail: z.string().min(1).max(180).optional(),
+  path: z.string().min(1).max(180).optional(),
+  ts: z.string().optional(),
 });
 
 const devLoginSchema = z.object({
@@ -62,6 +79,22 @@ function hasCookie(req: any, name: string): boolean {
     .split(";")
     .map((part: string) => part.trim())
     .some((part: string) => part.startsWith(target));
+}
+
+function readCookie(req: any, name: string): string | null {
+  const rawCookie = req?.headers?.cookie;
+  if (typeof rawCookie !== "string" || !rawCookie.trim()) return null;
+  const target = `${name}=`;
+  for (const part of rawCookie.split(";").map((item: string) => item.trim())) {
+    if (!part.startsWith(target)) continue;
+    const value = part.slice(target.length);
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return null;
 }
 
 function hashRequestSide(value: string | undefined): string | null {
@@ -100,6 +133,74 @@ function getAuthPublicUrls(req: any) {
     callbackUrl: new URL("/api/v1/auth/telegram/callback", origin).toString(),
     appUrl: new URL("/app", origin).toString(),
     fallbackUrl: new URL("/", origin).toString(),
+  };
+}
+
+function detectRequestPlatform(req: any): "android" | "ios" | "desktop" | "unknown" {
+  const ua = String(req.get("user-agent") || "").toLowerCase();
+  if (ua.includes("android")) return "android";
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod") || ua.includes("cpu os")) {
+    return "ios";
+  }
+  if (ua) return "desktop";
+  return "unknown";
+}
+
+function normalizeErrorCode(code: unknown, fallback: string): string {
+  if (typeof code !== "string" || !code.trim()) return fallback;
+  const normalized = code
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return normalized || fallback;
+}
+
+function normalizeLoginPath(redirectTo: string | undefined): string {
+  const safe = sanitizeRedirectTo(redirectTo, "/app");
+  if (safe.startsWith("/admin")) return "/admin/login";
+  if (safe.startsWith("/invite/")) return safe;
+  return "/login";
+}
+
+function buildAuthErrorRedirectPath(params: {
+  redirectTo?: string;
+  code: string;
+  detail?: string;
+}): string {
+  const url = new URL(normalizeLoginPath(params.redirectTo), "http://localhost");
+  url.searchParams.set("auth_error", normalizeErrorCode(params.code, "AUTH_FAILED"));
+  if (params.detail) {
+    url.searchParams.set("detail", params.detail.slice(0, 120));
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+function shouldUseOidcFromCanary(req: any, res: any, redirectTo: string) {
+  const forceOverride = normalizeForceOverride(req.query?.oidc ?? req.query?.auth_canary);
+  const cookieName = env.telegramOidc.canaryCookieName;
+  let stickyBucket = parseCanaryBucket(readCookie(req, cookieName));
+  if (stickyBucket === null) {
+    stickyBucket = newCanaryBucket();
+    res.cookie(cookieName, String(stickyBucket), {
+      path: "/",
+      domain: env.session.cookieDomain,
+      sameSite: env.session.cookieSameSite,
+      secure: env.isProd,
+      httpOnly: true,
+      maxAge: env.telegramOidc.canaryCookieMaxAgeSec * 1000,
+    });
+  }
+
+  return {
+    stickyBucket,
+    decision: decideOidcCanary({
+      oidcEnabled: env.telegramOidc.enabled,
+      fallbackEnabled: env.telegramOidc.fallbackEnabled,
+      canaryPercent: env.telegramOidc.canaryPercent,
+      isAdminPath: redirectTo.startsWith("/admin"),
+      stickyBucket,
+      forceOverride,
+    }),
   };
 }
 
@@ -338,6 +439,81 @@ function buildCapabilities(params: {
   return Array.from(capabilities).sort();
 }
 
+authRouter.post(
+  "/telemetry/client",
+  asyncHandler(async (req, res) => {
+    const parsed = clientAuthTelemetrySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ detail: "Invalid auth telemetry payload", code: "INVALID_TELEMETRY" });
+    }
+
+    console.info("[auth] client telemetry", {
+      scope: parsed.data.scope,
+      flow: parsed.data.flow || "UNKNOWN",
+      event: parsed.data.event,
+      platform: parsed.data.platform,
+      code: parsed.data.code || null,
+      path: parsed.data.path || null,
+      ip: req.ip,
+      ua: req.get("user-agent") || "",
+    });
+
+    const flow = parsed.data.flow || "UNKNOWN";
+    const method =
+      flow === "OIDC"
+        ? "OIDC"
+        : flow === "MINIAPP"
+          ? "WEBAPP"
+          : "UNKNOWN";
+    if (parsed.data.event === "login_start" || parsed.data.event === "oidc_redirect_start") {
+      recordAuthMetric({
+        method,
+        platform: parsed.data.platform,
+        outcome: "ATTEMPT",
+      });
+    } else if (parsed.data.event === "login_success") {
+      recordAuthMetric({
+        method,
+        platform: parsed.data.platform,
+        outcome: "SUCCESS",
+      });
+    } else if (parsed.data.event === "login_error" || parsed.data.event === "error_page") {
+      recordAuthMetric({
+        method,
+        platform: parsed.data.platform,
+        outcome: "ERROR",
+        code: parsed.data.code,
+      });
+    }
+
+    return res.status(202).json({ ok: true });
+  })
+);
+
+authRouter.get(
+  "/slo",
+  asyncHandler(async (req, res) => {
+    if (!env.authSlo.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+
+    if (env.authSlo.token) {
+      const provided = String(req.get("x-auth-slo-token") || "");
+      if (provided !== env.authSlo.token) {
+        return res.status(401).json({ detail: "Invalid SLO token", code: "AUTH_REQUIRED" });
+      }
+    }
+
+    const parsed = authSloQuerySchema.parse(req.query ?? {});
+    const summary = getAuthSloSummary({
+      windowMinutes: parsed.windowMinutes ?? env.authSlo.windowMinutes,
+      minAttempts: env.authSlo.minAttempts,
+      maxErrorRate: env.authSlo.maxErrorRate,
+    });
+    return res.json(summary);
+  })
+);
+
 authRouter.get(
   "/telegram/start",
   asyncHandler(async (_req, res) => {
@@ -376,6 +552,11 @@ authRouter.get(
       codeChallenge,
       redirectUri: env.telegramOidc.redirectUri,
     });
+    recordAuthMetric({
+      method: "OIDC",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
     return res.redirect(302, authorizeUrl);
   })
 );
@@ -405,34 +586,123 @@ authRouter.get(
     );
     const row = stateResult.rows[0];
     if (!row) {
-      return res.status(401).json({ detail: "OIDC state is missing or already used", code: "OIDC_STATE_EXPIRED" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "OIDC_STATE_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          code: "OIDC_STATE_EXPIRED",
+          detail: "OIDC state is missing or already used",
+        })
+      );
     }
 
     if (new Date(row.expires_at).getTime() <= Date.now()) {
-      return res.status(401).json({ detail: "OIDC state expired", code: "OIDC_STATE_EXPIRED" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "OIDC_STATE_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code: "OIDC_STATE_EXPIRED",
+          detail: "OIDC state expired",
+        })
+      );
     }
 
     const currentIpHash = hashRequestSide(req.ip);
     const currentUaHash = hashRequestSide(req.get("user-agent") || "");
     if (row.ip_hash && currentIpHash && row.ip_hash !== currentIpHash) {
-      return res.status(401).json({ detail: "OIDC request origin mismatch", code: "OIDC_STATE_EXPIRED" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "OIDC_STATE_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code: "OIDC_STATE_EXPIRED",
+          detail: "OIDC request origin mismatch",
+        })
+      );
     }
     if (row.ua_hash && currentUaHash && row.ua_hash !== currentUaHash) {
-      return res.status(401).json({ detail: "OIDC request agent mismatch", code: "OIDC_STATE_EXPIRED" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "OIDC_STATE_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code: "OIDC_STATE_EXPIRED",
+          detail: "OIDC request agent mismatch",
+        })
+      );
     }
 
-    const tokenSet = await exchangeOidcCode({
-      code: parsed.code,
-      codeVerifier: row.code_verifier,
-      redirectUri: env.telegramOidc.redirectUri,
-    });
-    const verified = await verifyOidcIdToken({
-      idToken: tokenSet.id_token!,
-      expectedNonce: row.nonce ?? undefined,
-    });
+    let tokenSet: Awaited<ReturnType<typeof exchangeOidcCode>>;
+    let verified: Awaited<ReturnType<typeof verifyOidcIdToken>>;
+    try {
+      tokenSet = await exchangeOidcCode({
+        code: parsed.code,
+        codeVerifier: row.code_verifier,
+        redirectUri: env.telegramOidc.redirectUri,
+      });
+      verified = await verifyOidcIdToken({
+        idToken: tokenSet.id_token!,
+        expectedNonce: row.nonce ?? undefined,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "OIDC_TOKEN_INVALID";
+      const code = normalizeErrorCode(message.split(":")[0], "OIDC_TOKEN_INVALID");
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code,
+      });
+      console.warn("[auth] oidc callback token verification failed", {
+        code,
+        platform: detectRequestPlatform(req),
+        ip: req.ip,
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code,
+        })
+      );
+    }
 
     if (!/^\d+$/.test(verified.profile.id)) {
-      return res.status(401).json({ detail: "OIDC user identifier is invalid", code: "OIDC_TOKEN_INVALID" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "OIDC_TOKEN_INVALID",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code: "OIDC_TOKEN_INVALID",
+          detail: "OIDC user identifier is invalid",
+        })
+      );
     }
 
     const replay = await registerReplayPayload({
@@ -442,7 +712,20 @@ authRouter.get(
       ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
     });
     if (!replay.ok) {
-      return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
+      recordAuthMetric({
+        method: "OIDC",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "AUTH_REPLAY_DETECTED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: row.redirect_to,
+          code: "AUTH_REPLAY_DETECTED",
+          detail: "Replay login payload rejected",
+        })
+      );
     }
 
     await completeTelegramLogin(
@@ -457,10 +740,16 @@ authRouter.get(
       },
       { authMethod: "OIDC" }
     );
+    recordAuthMetric({
+      method: "OIDC",
+      platform: detectRequestPlatform(req),
+      outcome: "SUCCESS",
+    });
 
     console.info("[auth] telegram oidc login success", {
       userId: req.session.userId,
       ip: req.ip,
+      platform: detectRequestPlatform(req),
     });
     const { origin } = getAuthPublicUrls(req);
     const targetUrl = new URL(sanitizeRedirectTo(row.redirect_to, "/app"), origin).toString();
@@ -472,12 +761,32 @@ authRouter.get(
   "/telegram/direct",
   asyncHandler(async (req, res) => {
     const redirectTo = sanitizeRedirectTo(req.query.redirectTo, "/app");
-    if (env.telegramOidc.enabled && env.telegramOidc.fallbackEnabled) {
+    const { stickyBucket, decision } = shouldUseOidcFromCanary(req, res, redirectTo);
+    if (decision.useOidc) {
+      console.info("[auth] telegram direct route -> oidc", {
+        reason: decision.reason,
+        redirectTo,
+        canaryPercent: env.telegramOidc.canaryPercent,
+        stickyBucket,
+        ip: req.ip,
+      });
       return res.redirect(
         302,
         `/api/v1/auth/telegram/oidc/start?redirectTo=${encodeURIComponent(redirectTo)}`
       );
     }
+    recordAuthMetric({
+      method: "LEGACY_WIDGET",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
+    console.info("[auth] telegram direct route -> legacy", {
+      reason: decision.reason,
+      redirectTo,
+      canaryPercent: env.telegramOidc.canaryPercent,
+      stickyBucket,
+      ip: req.ip,
+    });
     const urls = getAuthPublicUrls(req);
     const callbackUrlWithRedirect = new URL(urls.callbackUrl);
     callbackUrlWithRedirect.searchParams.set("redirectTo", redirectTo);
@@ -490,10 +799,22 @@ authRouter.get(
   asyncHandler(async (req, res) => {
     const rawQuery = req.query as Record<string, unknown>;
     const redirectTo = sanitizeRedirectTo(req.query.redirectTo, "/app");
+    recordAuthMetric({
+      method: "LEGACY_WIDGET",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
     if (!rawQuery.id || !rawQuery.auth_date || !rawQuery.hash) {
+      recordAuthMetric({
+        method: "LEGACY_WIDGET",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "TELEGRAM_MISSING_FIELDS",
+      });
       console.warn("[auth] telegram callback missing required fields", {
         ip: req.ip,
         ua: req.get("user-agent") || "",
+        platform: detectRequestPlatform(req),
       });
       const { callbackUrl, fallbackUrl } = getAuthPublicUrls(req);
       const callbackUrlWithRedirect = new URL(callbackUrl);
@@ -578,9 +899,16 @@ authRouter.get(
     const payload = parseTelegramPayload(rawQuery);
     const verification = verifyTelegramAuth(payload);
     if (!verification.ok) {
+      recordAuthMetric({
+        method: "LEGACY_WIDGET",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: normalizeErrorCode(verification.reason, "TELEGRAM_VERIFICATION_FAILED"),
+      });
       console.warn("[auth] telegram callback verification failed", {
         ip: req.ip,
         reason: verification.reason || "unknown",
+        platform: detectRequestPlatform(req),
       });
       return res.status(401).json({ detail: verification.reason || "Telegram verification failed" });
     }
@@ -592,12 +920,24 @@ authRouter.get(
       ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
     });
     if (!callbackReplay.ok) {
+      recordAuthMetric({
+        method: "LEGACY_WIDGET",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "AUTH_REPLAY_DETECTED",
+      });
       return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
     }
     await completeTelegramLogin(req, res, payload, { authMethod: "LEGACY_WIDGET" });
+    recordAuthMetric({
+      method: "LEGACY_WIDGET",
+      platform: detectRequestPlatform(req),
+      outcome: "SUCCESS",
+    });
     console.info("[auth] telegram callback login success", {
       userId: req.session.userId,
       ip: req.ip,
+      platform: detectRequestPlatform(req),
     });
     const { origin } = getAuthPublicUrls(req);
     const targetUrl = new URL(redirectTo, origin).toString();
@@ -610,8 +950,19 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const parsed = webAppAuthSchema.parse(req.body);
     const forceLogin = Boolean((req.body as Record<string, unknown> | undefined)?.forceLogin === true);
+    recordAuthMetric({
+      method: "WEBAPP",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
 
     if (hasCookie(req, LOGOUT_GUARD_COOKIE_NAME) && !forceLogin) {
+      recordAuthMetric({
+        method: "WEBAPP",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "LOGOUT_GUARD_ACTIVE",
+      });
       return res
         .status(409)
         .json({
@@ -622,9 +973,16 @@ authRouter.post(
 
     const verification = verifyTelegramWebAppInitData(parsed.initData);
     if (!verification.ok || !verification.payload) {
+      recordAuthMetric({
+        method: "WEBAPP",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: normalizeErrorCode(verification.reason, "TELEGRAM_WEBAPP_INVALID"),
+      });
       console.warn("[auth] telegram webapp verification failed", {
         ip: req.ip,
         reason: verification.reason || "unknown",
+        platform: detectRequestPlatform(req),
       });
       return res.status(401).json({ detail: verification.reason || "Telegram WebApp verification failed" });
     }
@@ -637,13 +995,25 @@ authRouter.post(
       ttlSeconds: env.telegram.allowedMaxAuthAgeSec,
     });
     if (!webappReplay.ok) {
+      recordAuthMetric({
+        method: "WEBAPP",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "AUTH_REPLAY_DETECTED",
+      });
       return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
     }
 
     await completeTelegramLogin(req, res, verification.payload, { authMethod: "WEBAPP" });
+    recordAuthMetric({
+      method: "WEBAPP",
+      platform: detectRequestPlatform(req),
+      outcome: "SUCCESS",
+    });
     console.info("[auth] telegram webapp login success", {
       userId: req.session.userId,
       ip: req.ip,
+      platform: detectRequestPlatform(req),
     });
     return res.json({ ok: true });
   })

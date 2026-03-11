@@ -88,6 +88,10 @@ export type AdminOverviewResponse = {
   };
 };
 
+export type EventOwnerKind = 'TEAM' | 'VENUE' | 'INTEGRATION';
+export type EventSourceKind = 'MANUAL' | 'VENUE_API' | 'INTEGRATION_API';
+export type EventRegistrationStatus = 'REQUESTED' | 'CONFIRMED' | 'WAITLISTED' | 'REJECTED' | 'CANCELLED';
+
 export type AdminEventScheduleItem = {
   id?: string;
   time: string;
@@ -95,6 +99,34 @@ export type AdminEventScheduleItem = {
   score?: string;
   pitZone?: 'NEAR' | 'FAR';
   gamePair?: 'FIRST' | 'SECOND';
+};
+
+export type AdminImportedScheduleItem = AdminEventScheduleItem & {
+  teamId: string;
+  startAt?: string | null;
+  sourceKind?: EventSourceKind;
+  sourceProvider?: string | null;
+  sourceExternalGameId?: string | null;
+  publishedAt?: string;
+};
+
+export type AdminEventRegistration = {
+  id: string;
+  teamId: string;
+  status: EventRegistrationStatus;
+  requestedAt?: string;
+  confirmedAt?: string | null;
+  externalRegistrationId?: string | null;
+  confirmedByUserId?: string | null;
+};
+
+export type AdminEventRegistrationSummary = {
+  total: number;
+  requested: number;
+  confirmed: number;
+  waitlisted: number;
+  rejected: number;
+  cancelled: number;
 };
 
 export type AdminEventItem = {
@@ -110,6 +142,15 @@ export type AdminEventItem = {
   cost: number | null;
   costStatus: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
   financeState: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';
+  ownerKind: EventOwnerKind;
+  ownerTeamId: string | null;
+  ownerName: string | null;
+  sourceKind: EventSourceKind;
+  sourceProvider: string | null;
+  sourceExternalEventId: string | null;
+  registration?: AdminEventRegistration | null;
+  registrationSummary?: AdminEventRegistrationSummary;
+  importedSchedule?: AdminImportedScheduleItem[];
   createdAt: string;
   schedule: AdminEventScheduleItem[];
 };
@@ -140,6 +181,28 @@ export type AdminTeamMember = {
 
 export type AdminTeamMembersResponse = {
   teamId: string;
+  team?: {
+    id: string;
+    name: string;
+    shortCode: string;
+    timezone: string;
+    ownerEventsCount: number;
+    registrationSummary: AdminEventRegistrationSummary;
+  };
+  registrationLinks?: Array<{
+    registrationId: string;
+    eventId: string;
+    eventTitle: string;
+    status: EventRegistrationStatus;
+    requestedAt: string;
+    confirmedAt: string | null;
+    ownerKind: EventOwnerKind;
+    ownerName: string | null;
+    sourceKind: EventSourceKind;
+    sourceProvider: string | null;
+    importedItemsCount: number;
+    lastPublishedAt: string | null;
+  }>;
   items: AdminTeamMember[];
 };
 
@@ -153,6 +216,18 @@ export type AdminAuditResponse = {
       userId: string;
       name: string | null;
       username: string | null;
+    } | null;
+    flow?: {
+      key: string | null;
+      stage:
+        | 'registration_requested'
+        | 'registration_confirmed'
+        | 'registration_waitlisted'
+        | 'registration_rejected'
+        | 'registration_cancelled'
+        | 'schedule_published';
+      eventId: string | null;
+      teamId: string | null;
     } | null;
   }>;
   limit: number;
@@ -188,6 +263,12 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+type ApiError = Error & {
+  code?: string;
+  detail?: string;
+  status?: number;
+};
+
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: options?.method || 'GET',
@@ -200,11 +281,17 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   });
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
+    let code: string | undefined;
     try {
       const payload = await res.json();
       if (payload?.detail) detail = String(payload.detail);
+      if (payload?.code) code = String(payload.code);
     } catch (_) {}
-    throw new Error(detail);
+    const err = new Error(detail) as ApiError;
+    err.code = code;
+    err.detail = detail;
+    err.status = res.status;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -522,6 +609,30 @@ export const api = {
     location?: string;
     cost?: number;
     costStatus?: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+    ownerKind?: EventOwnerKind;
+    ownerTeamId?: string;
+    ownerName?: string;
+    sourceKind?: EventSourceKind;
+    sourceProvider?: string;
+    sourceExternalEventId?: string;
+    registration?: {
+      teamId?: string;
+      status: EventRegistrationStatus;
+      externalRegistrationId?: string;
+      confirmedAt?: string;
+    };
+    importedSchedule?: Array<{
+      time: string;
+      startAt?: string;
+      opponent: string;
+      score?: string;
+      pitZone?: 'NEAR' | 'FAR';
+      gamePair?: 'FIRST' | 'SECOND';
+      sourceKind?: EventSourceKind;
+      sourceProvider?: string;
+      sourceExternalGameId?: string;
+      publishedAt?: string;
+    }>;
     schedule?: AdminEventScheduleItem[];
   }): Promise<{ event: AdminEventItem }> {
     return request<{ event: AdminEventItem }>('/admin/v1/events', {
@@ -541,6 +652,20 @@ export const api = {
       isCancelled?: boolean;
       cost?: number | null;
       costStatus?: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+      registrationStatus?: EventRegistrationStatus;
+      externalRegistrationId?: string | null;
+      importedSchedule?: Array<{
+        time: string;
+        startAt?: string;
+        opponent: string;
+        score?: string;
+        pitZone?: 'NEAR' | 'FAR';
+        gamePair?: 'FIRST' | 'SECOND';
+        sourceKind?: EventSourceKind;
+        sourceProvider?: string;
+        sourceExternalGameId?: string;
+        publishedAt?: string;
+      }>;
       schedule?: AdminEventScheduleItem[];
     }
   ): Promise<{ event: AdminEventItem }> {

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { api, type TeamInviteInfoResponse } from '../api';
+import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
 
 type InviteMode = 'TOKEN' | 'TEAM_FALLBACK';
 
@@ -22,6 +23,8 @@ function isAuthRequired(err: unknown): boolean {
 export const InviteView: React.FC = () => {
   const navigate = useNavigate();
   const { inviteId } = useParams<{ inviteId: string }>();
+  const [searchParams] = useSearchParams();
+  const authQuery = searchParams.toString();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [mode, setMode] = useState<InviteMode>('TOKEN');
@@ -29,6 +32,24 @@ export const InviteView: React.FC = () => {
   const [statusText, setStatusText] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(authQuery);
+    const code = normalizeAuthErrorCode(params.get('auth_error') || params.get('code'));
+    const detail = params.get('detail');
+    if (!code && !detail) return;
+
+    const message = resolveAuthErrorMessage({ code, detail, scope: 'INVITE' });
+    setStatusText(message);
+    sendAuthTelemetry({
+      scope: 'INVITE',
+      flow: 'OIDC',
+      event: 'error_page',
+      code,
+      detail,
+      path: window.location.pathname,
+    });
+  }, [authQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +98,12 @@ export const InviteView: React.FC = () => {
   const handleLogin = () => {
     if (!inviteId) return;
     const redirectTo = `/invite/${inviteId}`;
+    sendAuthTelemetry({
+      scope: 'INVITE',
+      flow: 'OIDC',
+      event: 'oidc_redirect_start',
+      path: redirectTo,
+    });
     api.startTelegramOidc(redirectTo);
   };
 

@@ -28,6 +28,19 @@ export function buildOpenApiSpec() {
             managedTeamIds: { type: "array", items: { type: "string", format: "uuid" } },
           },
         },
+        AuthSloResponse: {
+          type: "object",
+          required: ["status", "windowMinutes", "attempts", "successes", "errors"],
+          properties: {
+            status: { type: "string", enum: ["ok", "breached", "insufficient_data"] },
+            windowMinutes: { type: "integer", minimum: 1 },
+            attempts: { type: "integer", minimum: 0 },
+            successes: { type: "integer", minimum: 0 },
+            errors: { type: "integer", minimum: 0 },
+            successRate: { type: "number", nullable: true, example: 0.95 },
+            errorRate: { type: "number", nullable: true, example: 0.05 },
+          },
+        },
         Event: {
           type: "object",
           required: ["id", "type", "title", "startAt", "rsvpStatus"],
@@ -41,6 +54,24 @@ export function buildOpenApiSpec() {
             endAt: { type: "string", format: "date-time", nullable: true },
             teamTimezone: { type: "string", example: "Europe/Moscow" },
             financeState: { type: "string", enum: ["NOT_CALCULATED", "COLLECTING", "CLOSED"] },
+            ownerKind: { type: "string", enum: ["TEAM", "VENUE", "INTEGRATION"] },
+            ownerTeamId: { type: "string", format: "uuid", nullable: true },
+            ownerName: { type: "string", nullable: true },
+            sourceKind: { type: "string", enum: ["MANUAL", "VENUE_API", "INTEGRATION_API"] },
+            sourceProvider: { type: "string", nullable: true },
+            sourceExternalEventId: { type: "string", nullable: true },
+            registration: {
+              type: "object",
+              nullable: true,
+              properties: {
+                id: { type: "string", format: "uuid" },
+                teamId: { type: "string", format: "uuid" },
+                status: { type: "string", enum: ["REQUESTED", "CONFIRMED", "WAITLISTED", "REJECTED", "CANCELLED"] },
+                requestedAt: { type: "string", format: "date-time" },
+                confirmedAt: { type: "string", format: "date-time", nullable: true },
+                externalRegistrationId: { type: "string", nullable: true },
+              },
+            },
             rsvpStatus: { type: "string", enum: ["UNANSWERED", "PENDING", "CONFIRMED", "DECLINED"] },
           },
         },
@@ -93,6 +124,46 @@ export function buildOpenApiSpec() {
                 },
               },
             },
+          },
+        },
+      },
+      "/auth/slo": {
+        get: {
+          summary: "Get auth SLO / error-budget summary for recent window",
+          parameters: [
+            {
+              name: "windowMinutes",
+              in: "query",
+              required: false,
+              schema: { type: "integer", minimum: 1, maximum: 1440, example: 60 },
+            },
+            {
+              name: "x-auth-slo-token",
+              in: "header",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "SLO summary",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/AuthSloResponse" },
+                },
+              },
+            },
+            "401": { description: "Invalid SLO token" },
+            "404": { description: "SLO endpoint disabled" },
+          },
+        },
+      },
+      "/auth/telemetry/client": {
+        post: {
+          summary: "Accept client auth telemetry events",
+          responses: {
+            "202": { description: "Telemetry accepted" },
+            "400": { description: "Validation failed" },
           },
         },
       },
@@ -234,14 +305,14 @@ export function buildOpenApiSpec() {
       },
       "/admin/v1/events": {
         get: {
-          summary: "Admin events list",
+          summary: "Admin events list with owner/source/registration context",
           responses: {
             "200": { description: "Events list" },
             "403": { description: "Admin access required" },
           },
         },
         post: {
-          summary: "Admin create event",
+          summary: "Admin create event with optional registration + imported team schedule",
           responses: {
             "201": { description: "Event created" },
             "403": { description: "Admin access required" },
@@ -260,7 +331,7 @@ export function buildOpenApiSpec() {
       },
       "/admin/v1/team/members": {
         get: {
-          summary: "Admin list team members",
+          summary: "Admin list team members with team identity + registration links",
           responses: {
             "200": { description: "Members list" },
             "400": { description: "teamId required" },
@@ -281,7 +352,7 @@ export function buildOpenApiSpec() {
       },
       "/admin/v1/audit": {
         get: {
-          summary: "Admin audit timeline",
+          summary: "Admin audit timeline with registration/schedule flow stages",
           responses: {
             "200": { description: "Audit list" },
             "403": { description: "Admin access required" },

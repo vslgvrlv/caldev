@@ -32,11 +32,19 @@ Auth v2 env block is mandatory for both files:
 - `AUTH_OIDC_ENABLED`
 - `AUTH_OIDC_FALLBACK_ENABLED`
 - `AUTH_OIDC_ADMIN_REQUIRED`
+- `AUTH_OIDC_CANARY_PERCENT`
+- `AUTH_OIDC_CANARY_COOKIE`
+- `AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC`
 - `TELEGRAM_OIDC_CLIENT_ID`
 - `TELEGRAM_OIDC_CLIENT_SECRET`
 - `TELEGRAM_OIDC_REDIRECT_URI`
 - `TELEGRAM_OIDC_ISSUER`
 - `TELEGRAM_OIDC_JWKS_URL`
+- `AUTH_SLO_ENABLED`
+- `AUTH_SLO_WINDOW_MINUTES`
+- `AUTH_SLO_MIN_ATTEMPTS`
+- `AUTH_SLO_MAX_ERROR_RATE`
+- `AUTH_SLO_TOKEN` (optional)
 
 ## How to release (copy-paste flow)
 
@@ -70,6 +78,11 @@ curl -fsS https://staging.pbthub.ru/api/v1/release/version
 ```
 
 Also verify key product flows in Telegram Mini App on staging.
+And run auth error-budget check:
+
+```bash
+./scripts/release/auth-slo-check.sh --base-url https://staging.pbthub.ru --window-minutes 60
+```
 
 ### 5) Promote same artifact to prod
 
