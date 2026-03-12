@@ -336,8 +336,8 @@ async function replaceImportedSchedule(
          $5::timestamptz,
          $6,
          $7,
-         $8::event_game_pit_zone,
-         $9::event_game_pair,
+         $8,
+         $9,
          $10::event_source_kind,
          $11,
          $12,
@@ -1007,7 +1007,7 @@ adminRouter.post(
         for (const game of payload.schedule) {
           await client.query(
             `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES ($1, $2, $3, $4, $5::event_game_pit_zone, $6::event_game_pair)`,
+             VALUES ($1, $2, $3, $4, $5, $6)`,
             [created.id, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null]
           );
         }
@@ -1213,7 +1213,7 @@ adminRouter.patch(
         for (const game of payload.schedule) {
           await client.query(
             `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES ($1, $2, $3, $4, $5::event_game_pit_zone, $6::event_game_pair)`,
+             VALUES ($1, $2, $3, $4, $5, $6)`,
             [eventId, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null]
           );
         }
