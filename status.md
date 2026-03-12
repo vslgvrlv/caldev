@@ -1,12 +1,20 @@
 # PBTH Execution Status
 
 Date: 2026-03-12
-Branch: `codex/fix-019-staging-deploy`
+Branch: `codex/fix-deploy-workflow-checkout`
 
 ## Current Task
-`N3 HOTFIX IN REVIEW` — устраняем staging deploy blocker для миграции `019` после merge N3.
+`N3 HOTFIX IN REVIEW` — устраняем deploy workflow blocker после фикса миграции `019`.
 
 ## Progress Log
+- [x] PR `#15` (migration `019` hotfix) смёржен в `main`:
+  - merge commit: `e6c2879b18313703c3af4fc2b00c68f3be750efd`.
+- [x] Новый релиз `v2026.03.12-n3-hotfix1` собран успешно (workflow run `23009178605`).
+- [x] Повторный `Deploy Staging` (run `23009199734`) упал с `exit 127` на шаге `Check auth SLO/error budget`:
+  - root cause: в `deploy-staging.yml`/`deploy-prod.yml` вызывался `./scripts/release/auth-slo-check.sh` без `actions/checkout`, поэтому скрипт недоступен на runner.
+- [x] Подготовлен второй hotfix для deploy workflows:
+  - добавлен шаг `Checkout repository` (`actions/checkout@v4`) в `.github/workflows/deploy-staging.yml`;
+  - добавлен шаг `Checkout repository` (`actions/checkout@v4`) в `.github/workflows/deploy-prod.yml`.
 - [x] Подтверждён root cause падения `Deploy Staging` (run `23008781548`):
   - ошибка в миграции `019`: `type "event_game_pit_zone" does not exist`;
   - staging падал на шаге `node dist/db/migrate.js` при применении `019_event_domain_external_owners.sql`.
