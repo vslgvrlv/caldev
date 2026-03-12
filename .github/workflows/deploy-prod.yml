@@ -43,6 +43,11 @@ jobs:
           [[ -n "${DEPLOY_HOST}" ]] || { echo "Missing secret: DEPLOY_HOST" >&2; exit 1; }
           [[ -n "${DEPLOY_SSH_KEY}" ]] || { echo "Missing secret: DEPLOY_SSH_KEY" >&2; exit 1; }
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Validate staging release before prod deploy
         if: inputs.require_staging_match
         env:

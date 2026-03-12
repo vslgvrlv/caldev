@@ -44,4 +44,5 @@ Rule: every task is atomic and deployable.
   - [x] N3-B3. Upgrade Admin Audit UX to trace registration confirmation -> schedule publish flow.
   - [x] N3-B4. Run full verification (`backend check/unit/integration`, `frontend typecheck/unit/build`) and finalize docs/status.
   - [ ] N3-H1. Hotfix staging deploy for migration `019` (remove non-existent enum casts/types; keep TEXT+CHECK contract).
+  - [ ] N3-H2. Hotfix deploy workflows to checkout repo before `auth-slo-check.sh` (staging+prod).
 - [ ] N4. Phase 5 Admin metrics pack.
