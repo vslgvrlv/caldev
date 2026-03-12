@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ShieldCheck, Send } from 'lucide-react';
 import { api, type AuthMeResponse } from '../../api';
-import { extractAuthError, normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../../lib/auth-ux';
+import {
+  extractAuthError,
+  normalizeAuthErrorCode,
+  resolveAuthErrorMessage,
+  resolveTelegramLoginTransport,
+  sendAuthTelemetry,
+} from '../../lib/auth-ux';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -91,15 +97,16 @@ export const AdminLoginView: React.FC = () => {
       setStartingLogin(true);
       setError('');
       try {
-        const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+        const tg = (window as any).Telegram?.WebApp;
+        const hasTelegramWebApp = Boolean(tg);
         sendAuthTelemetry({
           scope: 'ADMIN',
-          flow: isMiniApp ? 'MINIAPP' : 'OIDC',
+          flow: hasTelegramWebApp ? 'MINIAPP' : 'OIDC',
           event: 'login_start',
           path: '/admin/login',
         });
-        if (isMiniApp) {
-          const tg = (window as any).Telegram?.WebApp;
+        let initData = '';
+        if (hasTelegramWebApp) {
           try {
             tg?.ready?.();
             tg?.expand?.();
@@ -107,26 +114,20 @@ export const AdminLoginView: React.FC = () => {
             // ignore telegram webapp readiness errors
           }
 
-          let initData = '';
           const started = Date.now();
           while (Date.now() - started < 1200) {
             initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
             if (initData) break;
             await new Promise((resolve) => setTimeout(resolve, 80));
           }
+        }
 
-          if (!initData) {
-            setError('Не удалось получить Telegram initData. Откройте Mini App заново из бота.');
-            sendAuthTelemetry({
-              scope: 'ADMIN',
-              flow: 'MINIAPP',
-              event: 'login_error',
-              code: 'INITDATA_MISSING',
-              path: '/admin/login',
-            });
-            return;
-          }
+        const transport = resolveTelegramLoginTransport({
+          hasTelegramWebApp,
+          initData,
+        });
 
+        if (transport === 'WEBAPP') {
           await api.authTelegramWebApp(initData, true);
           const me = await api.getAuthMe();
           if (me.authenticated) {
@@ -164,6 +165,16 @@ export const AdminLoginView: React.FC = () => {
             path: '/admin/login',
           });
           return;
+        }
+
+        if (hasTelegramWebApp && !String(initData || '').trim()) {
+          sendAuthTelemetry({
+            scope: 'ADMIN',
+            flow: 'OIDC',
+            event: 'webapp_initdata_missing_fallback_oidc',
+            code: 'INITDATA_MISSING',
+            path: '/admin/login',
+          });
         }
 
         sendAuthTelemetry({

@@ -26,6 +26,16 @@ export function buildOpenApiSpec() {
             adminScope: { type: "string", enum: ["NONE", "TEAM", "PLATFORM"] },
             capabilities: { type: "array", items: { type: "string" } },
             managedTeamIds: { type: "array", items: { type: "string", format: "uuid" } },
+            managedTeams: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  name: { type: "string" },
+                },
+              },
+            },
           },
         },
         AuthSloResponse: {

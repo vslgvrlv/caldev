@@ -3,6 +3,7 @@ import {
   detectAuthPlatform,
   extractAuthError,
   normalizeAuthErrorCode,
+  resolveTelegramLoginTransport,
   resolveAuthErrorMessage,
 } from "../../lib/auth-ux";
 
@@ -55,5 +56,34 @@ describe("auth platform detection", () => {
         userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
       })
     ).toBe("desktop");
+  });
+});
+
+describe("telegram login transport selection", () => {
+  it("uses webapp transport only when initData is present", () => {
+    expect(
+      resolveTelegramLoginTransport({
+        hasTelegramWebApp: true,
+        initData: "query_id=abc123",
+      })
+    ).toBe("WEBAPP");
+  });
+
+  it("falls back to oidc when webapp object exists but initData is empty", () => {
+    expect(
+      resolveTelegramLoginTransport({
+        hasTelegramWebApp: true,
+        initData: "   ",
+      })
+    ).toBe("OIDC");
+  });
+
+  it("uses oidc when telegram webapp object is missing", () => {
+    expect(
+      resolveTelegramLoginTransport({
+        hasTelegramWebApp: false,
+        initData: "",
+      })
+    ).toBe("OIDC");
   });
 });

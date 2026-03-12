@@ -11,6 +11,7 @@ import {
 } from '../../api';
 import { EventType } from '../../types';
 import { Loader2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
+import { resolveManagedTeamOptions } from '../../lib/admin-managed-teams';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -39,17 +40,6 @@ const REGISTRATION_STATUS_OPTIONS: EventRegistrationStatus[] = [
   'CANCELLED',
 ];
 
-const extractManagedTeamIds = (auth: AuthenticatedMe): string[] => {
-  if (Array.isArray(auth.managedTeamIds) && auth.managedTeamIds.length > 0) {
-    return auth.managedTeamIds;
-  }
-  const fromCaptainRoles = (auth.availableRoles || [])
-    .filter((role) => role.role === 'CAPTAIN')
-    .map((role) => role.teamId)
-    .filter((teamId): teamId is string => Boolean(teamId));
-  return Array.from(new Set(fromCaptainRoles));
-};
-
 export const AdminConsoleView: React.FC = () => {
   const navigate = useNavigate();
   const [me, setMe] = useState<AuthenticatedMe | null>(null);
@@ -77,10 +67,11 @@ export const AdminConsoleView: React.FC = () => {
   const [createRegistrationStatus, setCreateRegistrationStatus] = useState<EventRegistrationStatus>('REQUESTED');
   const [eventRegistrationDrafts, setEventRegistrationDrafts] = useState<Record<string, EventRegistrationStatus>>({});
 
-  const managedTeams = useMemo(() => {
+  const managedTeamOptions = useMemo(() => {
     if (!me) return [];
-    return extractManagedTeamIds(me);
+    return resolveManagedTeamOptions(me);
   }, [me]);
+  const managedTeamIds = useMemo(() => managedTeamOptions.map((team) => team.id), [managedTeamOptions]);
   const adminScopeLabel = me?.adminScope || 'NONE';
 
   const loadAuth = async () => {
@@ -104,7 +95,7 @@ export const AdminConsoleView: React.FC = () => {
       const auth = (await loadAuth()) || me;
       if (!auth || auth.adminScope === 'NONE') return;
 
-      const safeManagedTeamIds = extractManagedTeamIds(auth);
+      const safeManagedTeamIds = resolveManagedTeamOptions(auth).map((team) => team.id);
       const fallbackTeam = safeManagedTeamIds[0] ?? '';
       const currentTeam = teamIdOverride || selectedTeamId || fallbackTeam;
       if (currentTeam && currentTeam !== selectedTeamId) {
@@ -369,7 +360,7 @@ export const AdminConsoleView: React.FC = () => {
 
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
           <label className="text-sm text-pb-subtext block mb-2">Рабочая команда</label>
-          {managedTeams.length === 0 && (
+          {managedTeamIds.length === 0 && (
             <div className="mb-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
               Для текущей сессии не получен список управляемых команд. Проверь роль (ADMIN/CAPTAIN) и перезайди в админку.
             </div>
@@ -382,11 +373,11 @@ export const AdminConsoleView: React.FC = () => {
               loadData(next);
             }}
             className="bg-black/40 border border-white/20 rounded-lg px-3 py-2 text-white min-w-[280px]"
-            disabled={managedTeams.length === 0}
+            disabled={managedTeamIds.length === 0}
           >
-            {managedTeams.map((id) => (
-              <option key={id} value={id}>
-                {id}
+            {managedTeamOptions.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
               </option>
             ))}
           </select>

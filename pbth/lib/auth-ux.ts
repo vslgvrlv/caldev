@@ -1,6 +1,7 @@
 export type AuthScope = "USER" | "ADMIN" | "INVITE";
 export type AuthPlatform = "android" | "ios" | "desktop" | "unknown";
 export type AuthFlow = "MINIAPP" | "OIDC" | "UNKNOWN";
+export type AuthLoginTransport = "WEBAPP" | "OIDC";
 
 type AuthErrorMessageMap = {
   user: string;
@@ -94,6 +95,16 @@ export function resolveAuthErrorMessage(params: {
     return "Не удалось пройти авторизацию для инвайта. Повторите попытку.";
   }
   return "Не удалось завершить вход. Повторите попытку.";
+}
+
+export function resolveTelegramLoginTransport(params: {
+  hasTelegramWebApp: boolean;
+  initData: string;
+}): AuthLoginTransport {
+  if (params.hasTelegramWebApp && String(params.initData || "").trim()) {
+    return "WEBAPP";
+  }
+  return "OIDC";
 }
 
 export function detectAuthPlatform(input?: {

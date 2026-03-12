@@ -3,7 +3,13 @@ import { UserRoleOption, Role } from '../types';
 import { Send, Shield, User as UserIcon, ArrowLeft } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { extractAuthError, normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
+import {
+  extractAuthError,
+  normalizeAuthErrorCode,
+  resolveAuthErrorMessage,
+  resolveTelegramLoginTransport,
+  sendAuthTelemetry,
+} from '../lib/auth-ux';
 
 interface LoginViewProps {
   onLogin: () => void;
@@ -73,13 +79,26 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       sessionStorage.removeItem('pbth:skip-auto-auth-after-logout');
       sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
       localStorage.removeItem('pbth:skip-auto-auth-after-logout');
-      const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+      const hasTelegramWebApp = Boolean((window as any).Telegram?.WebApp);
       sendAuthTelemetry({
         scope: 'USER',
-        flow: isMiniApp ? 'MINIAPP' : 'OIDC',
+        flow: hasTelegramWebApp ? 'MINIAPP' : 'OIDC',
         event: 'login_start',
       });
-      if (!isMiniApp) {
+      const initData = hasTelegramWebApp ? await waitMiniAppInitData() : '';
+      const transport = resolveTelegramLoginTransport({
+        hasTelegramWebApp,
+        initData,
+      });
+      if (transport === 'OIDC') {
+        if (hasTelegramWebApp && !String(initData || '').trim()) {
+          sendAuthTelemetry({
+            scope: 'USER',
+            flow: 'OIDC',
+            event: 'webapp_initdata_missing_fallback_oidc',
+            code: 'INITDATA_MISSING',
+          });
+        }
         sendAuthTelemetry({
           scope: 'USER',
           flow: 'OIDC',
@@ -88,52 +107,39 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
         api.startTelegramDirect('/app');
         return;
       }
-      const initData = await waitMiniAppInitData();
-      if (!initData) {
-        setAuthError('Не удалось получить Telegram initData. Закройте и заново откройте Mini App из бота.');
+      try {
+        await api.authTelegramWebApp(initData, true);
+        const authenticated = await checkAuthenticated();
+        if (authenticated) {
+          sendAuthTelemetry({
+            scope: 'USER',
+            flow: 'MINIAPP',
+            event: 'login_success',
+          });
+          onLogin();
+          return;
+        }
+        console.warn('Telegram WebApp auth returned 200 but session is still anonymous');
+        setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
         sendAuthTelemetry({
           scope: 'USER',
           flow: 'MINIAPP',
           event: 'login_error',
-          code: 'INITDATA_MISSING',
+          code: 'SESSION_ANONYMOUS',
         });
         return;
-      }
-      if (initData) {
-        try {
-          await api.authTelegramWebApp(initData, true);
-          const authenticated = await checkAuthenticated();
-          if (authenticated) {
-            sendAuthTelemetry({
-              scope: 'USER',
-              flow: 'MINIAPP',
-              event: 'login_success',
-            });
-            onLogin();
-            return;
-          }
-          console.warn('Telegram WebApp auth returned 200 but session is still anonymous');
-          setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
-          sendAuthTelemetry({
-            scope: 'USER',
-            flow: 'MINIAPP',
-            event: 'login_error',
-            code: 'SESSION_ANONYMOUS',
-          });
-          return;
-        } catch (err) {
-          console.warn('Telegram WebApp auth from login screen failed', err);
-          const authErr = extractAuthError(err);
-          setAuthError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'USER' }));
-          sendAuthTelemetry({
-            scope: 'USER',
-            flow: 'MINIAPP',
-            event: 'login_error',
-            code: authErr.code || 'WEBAPP_AUTH_FAILED',
-            detail: authErr.detail,
-          });
-          return;
-        }
+      } catch (err) {
+        console.warn('Telegram WebApp auth from login screen failed', err);
+        const authErr = extractAuthError(err);
+        setAuthError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'USER' }));
+        sendAuthTelemetry({
+          scope: 'USER',
+          flow: 'MINIAPP',
+          event: 'login_error',
+          code: authErr.code || 'WEBAPP_AUTH_FAILED',
+          detail: authErr.detail,
+        });
+        return;
       }
     } finally {
       setIsLoading(false);

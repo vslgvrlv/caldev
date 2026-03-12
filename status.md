@@ -1,12 +1,39 @@
 # PBTH Execution Status
 
 Date: 2026-03-12
-Branch: `codex/fix-deploy-workflow-checkout`
+Branch: `codex/fix-admin-team-labels-web-login`
 
 ## Current Task
-`N3 HOTFIX COMPLETE` — staging deploy восстановлен после двух блокеров (`019` migration type + deploy workflow checkout).
+`PLAN 100%` — закрыты N3 follow-up blocker'ы (team labels + web login fallback), план выполнен полностью.
 
 ## Progress Log
+- [x] Закрыт `N3-H3` (Admin UX team labels):
+  - backend `/auth/me` теперь возвращает `managedTeams: [{ id, name }]` вместе с `managedTeamIds`;
+  - frontend admin selector переключён на человекочитаемые labels из `managedTeams` (с fallback через `availableRoles` и `managedTeamIds`).
+- [x] Закрыт `N3-H4` (Admin website login fallback):
+  - добавлен явный выбор login transport (`WEBAPP` vs `OIDC`) на основе наличия непустого `initData`;
+  - при пустом `initData` flow уходит в OIDC redirect вместо показа ошибки про Mini App.
+- [x] Добавлены/обновлены unit tests frontend:
+  - `pbth/__tests__/unit/admin-managed-teams.test.ts` (labels resolution),
+  - `pbth/__tests__/unit/auth-ux.test.ts` (telegram login transport fallback).
+- [x] Верификация после фиксов:
+  - `pbth`: `npm run test:unit` (green),
+  - `pbth`: `npm run typecheck` (green),
+  - `pbth`: `npm run build` (green),
+  - `backend`: `npm run check` (green),
+  - `backend`: `npm run test:unit` (green),
+  - `backend`: `npm run build` (green).
+- [x] `N4` отмечен как complete:
+  - Admin metrics pack уже реализован через `/api/v1/admin/v1/overview` и блок `Overview` в Admin Console (teams/members/events/RSVP/reminder success).
+- [x] Зафиксированы 2 фактических blocker'а после ручной проверки staging:
+  - Admin team selector показывает UUID вместо названий команд (плохая UX-идентификация).
+  - Вход в admin через сайт (`/admin`) часто падает с `Не удалось получить Telegram initData...` при открытии вне Mini App.
+- [x] Root cause (team selector labels):
+  - frontend рендерит `managedTeamIds` как текст option (`AdminConsoleView`, `managedTeams.map((id) => <option>{id}</option>)`);
+  - backend `/auth/me` для `adminScope=PLATFORM` отдает только массив `managedTeamIds` без `teamName`.
+- [x] Root cause (admin website login):
+  - `AdminLoginView` определяет Mini App как `Boolean(window.Telegram?.WebApp)`;
+  - telegram web script подключен и в обычном браузере, поэтому flow ошибочно уходит в WebApp auth и требует `initData`, которого нет.
 - [x] PR `#16` (deploy workflow checkout hotfix) смёржен в `main`:
   - merge commit: `a16877945b4c807ec4c1d2cc2ea7f3eb1981f955`.
 - [x] Повторный `Deploy Staging` успешен:
