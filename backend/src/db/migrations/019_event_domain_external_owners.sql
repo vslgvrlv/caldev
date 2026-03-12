@@ -79,14 +79,18 @@ CREATE TABLE IF NOT EXISTS event_team_schedule_items (
   starts_at TIMESTAMPTZ,
   opponent TEXT NOT NULL,
   score TEXT,
-  pit_zone event_game_pit_zone,
-  game_pair event_game_pair,
+  pit_zone TEXT,
+  game_pair TEXT,
   source_kind event_source_kind NOT NULL DEFAULT 'MANUAL',
   source_provider TEXT,
   source_external_game_id TEXT,
   published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT event_team_schedule_items_pit_zone_check
+    CHECK (pit_zone IS NULL OR pit_zone IN ('NEAR', 'FAR')),
+  CONSTRAINT event_team_schedule_items_game_pair_check
+    CHECK (game_pair IS NULL OR game_pair IN ('FIRST', 'SECOND'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_event_team_schedule_items_dedupe
