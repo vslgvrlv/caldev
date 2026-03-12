@@ -1,12 +1,29 @@
 # PBTH Execution Status
 
-Date: 2026-03-11
-Branch: `codex/staging-auth-admin-fixes`
+Date: 2026-03-12
+Branch: `codex/fix-019-staging-deploy`
 
 ## Current Task
-`N3 COMPLETE` — Phase 4 Admin Console v1 (Event/Team/Audit UX + future-ready event domain) завершён.
+`N3 HOTFIX IN REVIEW` — устраняем staging deploy blocker для миграции `019` после merge N3.
 
 ## Progress Log
+- [x] Подтверждён root cause падения `Deploy Staging` (run `23008781548`):
+  - ошибка в миграции `019`: `type "event_game_pit_zone" does not exist`;
+  - staging падал на шаге `node dist/db/migrate.js` при применении `019_event_domain_external_owners.sql`.
+- [x] Подготовлен hotfix для совместимости с текущей БД моделью (`TEXT + CHECK`, без enum-типа):
+  - `backend/src/db/migrations/019_event_domain_external_owners.sql`:
+    - `pit_zone`/`game_pair` в `event_team_schedule_items` переведены на `TEXT`;
+    - добавлены CHECK constraints на `('NEAR','FAR')` и `('FIRST','SECOND')`;
+  - `backend/src/modules/admin/routes.ts`:
+    - удалены касты `::event_game_pit_zone` и `::event_game_pair` в insert-path для schedule данных.
+- [x] Верификация hotfix локально:
+  - `backend`: `npm run check` (green),
+  - `backend`: `npm run test:unit` (green),
+  - `backend`: `npm run test:integration` (blocked в sandbox: `listen EPERM 0.0.0.0`, не связано с логикой hotfix).
+- [x] Открыт PR hotfix в `main`:
+  - PR `#15`: https://github.com/vslgvrlv/caldev/pull/15
+  - ветка: `codex/fix-019-staging-deploy`
+  - commit: `434b13f`
 - [x] Created `plans.md` with atomic current-sprint tasks.
 - [x] Created `status.md` as live execution tracker.
 - [x] Подтвердил, что в коде уже реализованы OIDC start/callback, replay guard и расширение `/auth/me`.
