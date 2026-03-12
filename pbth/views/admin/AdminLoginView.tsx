@@ -1,17 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ShieldCheck, Send } from 'lucide-react';
 import { api, type AuthMeResponse } from '../../api';
+import { extractAuthError, normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../../lib/auth-ux';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
 export const AdminLoginView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const authQuery = searchParams.toString();
   const [checking, setChecking] = useState(true);
   const [authMe, setAuthMe] = useState<AuthenticatedMe | null>(null);
   const [error, setError] = useState<string>('');
   const [switchingRole, setSwitchingRole] = useState(false);
   const [startingLogin, setStartingLogin] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(authQuery);
+    const code = normalizeAuthErrorCode(params.get('auth_error') || params.get('code'));
+    const detail = params.get('detail');
+    if (!code && !detail) return;
+
+    const message = resolveAuthErrorMessage({ code, detail, scope: 'ADMIN' });
+    setError(message);
+    sendAuthTelemetry({
+      scope: 'ADMIN',
+      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+      event: 'error_page',
+      code,
+      detail,
+      path: '/admin/login',
+    });
+  }, [authQuery]);
 
   const bootstrap = async (cancelled = false) => {
     try {
@@ -29,7 +50,8 @@ export const AdminLoginView: React.FC = () => {
       setError('');
     } catch (err) {
       if (!cancelled) {
-        setError(err instanceof Error ? err.message : 'auth check failed');
+        const authErr = extractAuthError(err);
+        setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
       }
     } finally {
       if (!cancelled) setChecking(false);
@@ -40,7 +62,8 @@ export const AdminLoginView: React.FC = () => {
     let cancelled = false;
     void bootstrap().catch((err) => {
       if (!cancelled) {
-        setError(err instanceof Error ? err.message : 'auth check failed');
+        const authErr = extractAuthError(err);
+        setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
         setChecking(false);
       }
     });
@@ -56,7 +79,8 @@ export const AdminLoginView: React.FC = () => {
       await api.selectAccountRole('ADMIN');
       await bootstrap();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to switch role');
+      const authErr = extractAuthError(err);
+      setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
     } finally {
       setSwitchingRole(false);
     }
@@ -68,6 +92,12 @@ export const AdminLoginView: React.FC = () => {
       setError('');
       try {
         const isMiniApp = Boolean((window as any).Telegram?.WebApp);
+        sendAuthTelemetry({
+          scope: 'ADMIN',
+          flow: isMiniApp ? 'MINIAPP' : 'OIDC',
+          event: 'login_start',
+          path: '/admin/login',
+        });
         if (isMiniApp) {
           const tg = (window as any).Telegram?.WebApp;
           try {
@@ -87,6 +117,13 @@ export const AdminLoginView: React.FC = () => {
 
           if (!initData) {
             setError('Не удалось получить Telegram initData. Откройте Mini App заново из бота.');
+            sendAuthTelemetry({
+              scope: 'ADMIN',
+              flow: 'MINIAPP',
+              event: 'login_error',
+              code: 'INITDATA_MISSING',
+              path: '/admin/login',
+            });
             return;
           }
 
@@ -98,20 +135,55 @@ export const AdminLoginView: React.FC = () => {
             }
             const refreshed = await api.getAuthMe();
             if (refreshed.authenticated && refreshed.adminScope !== 'NONE') {
+              sendAuthTelemetry({
+                scope: 'ADMIN',
+                flow: 'MINIAPP',
+                event: 'login_success',
+                path: '/admin/login',
+              });
               navigate('/admin', { replace: true });
               return;
             }
-            setError('Для этого аккаунта сейчас нет доступа к админке.');
+            setError(resolveAuthErrorMessage({ code: 'ADMIN_SCOPE_NONE', scope: 'ADMIN' }));
+            sendAuthTelemetry({
+              scope: 'ADMIN',
+              flow: 'MINIAPP',
+              event: 'login_error',
+              code: 'ADMIN_SCOPE_NONE',
+              path: '/admin/login',
+            });
             return;
           }
 
           setError('Не удалось завершить вход. Повторите попытку.');
+          sendAuthTelemetry({
+            scope: 'ADMIN',
+            flow: 'MINIAPP',
+            event: 'login_error',
+            code: 'SESSION_ANONYMOUS',
+            path: '/admin/login',
+          });
           return;
         }
 
+        sendAuthTelemetry({
+          scope: 'ADMIN',
+          flow: 'OIDC',
+          event: 'oidc_redirect_start',
+          path: '/admin/login',
+        });
         api.startTelegramOidc('/admin');
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'failed to start admin login');
+        const authErr = extractAuthError(err);
+        setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
+        sendAuthTelemetry({
+          scope: 'ADMIN',
+          flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+          event: 'login_error',
+          code: authErr.code || 'ADMIN_LOGIN_START_FAILED',
+          detail: authErr.detail,
+          path: '/admin/login',
+        });
       } finally {
         setStartingLogin(false);
       }

@@ -123,3 +123,10 @@ jobs:
           VERSION_JSON="$(curl -fsS "${BASE_URL}/api/v1/release/version")"
           echo "${VERSION_JSON}"
           echo "${VERSION_JSON}" | grep -q "\"releaseId\":\"${RELEASE_ID}\""
+
+      - name: Check auth SLO/error budget (prod)
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          AUTH_SLO_TOKEN: ${{ secrets.AUTH_SLO_TOKEN }}
+        run: |
+          ./scripts/release/auth-slo-check.sh --base-url "${BASE_URL}"

@@ -4,6 +4,7 @@ import {
   api,
   type AdminAuditResponse,
   type AdminEventItem,
+  type EventRegistrationStatus,
   type AdminOverviewResponse,
   type AdminTeamMembersResponse,
   type AuthMeResponse,
@@ -28,6 +29,16 @@ const EVENT_TYPE_OPTIONS: EventType[] = [
   EventType.OTHER,
 ];
 
+const OWNER_KIND_OPTIONS: Array<'TEAM' | 'VENUE' | 'INTEGRATION'> = ['TEAM', 'VENUE', 'INTEGRATION'];
+const SOURCE_KIND_OPTIONS: Array<'MANUAL' | 'VENUE_API' | 'INTEGRATION_API'> = ['MANUAL', 'VENUE_API', 'INTEGRATION_API'];
+const REGISTRATION_STATUS_OPTIONS: EventRegistrationStatus[] = [
+  'REQUESTED',
+  'CONFIRMED',
+  'WAITLISTED',
+  'REJECTED',
+  'CANCELLED',
+];
+
 const extractManagedTeamIds = (auth: AuthenticatedMe): string[] => {
   if (Array.isArray(auth.managedTeamIds) && auth.managedTeamIds.length > 0) {
     return auth.managedTeamIds;
@@ -46,6 +57,8 @@ export const AdminConsoleView: React.FC = () => {
   const [overview, setOverview] = useState<AdminOverviewResponse | null>(null);
   const [events, setEvents] = useState<AdminEventItem[]>([]);
   const [members, setMembers] = useState<AdminTeamMembersResponse['items']>([]);
+  const [teamMeta, setTeamMeta] = useState<AdminTeamMembersResponse['team'] | null>(null);
+  const [registrationLinks, setRegistrationLinks] = useState<NonNullable<AdminTeamMembersResponse['registrationLinks']>>([]);
   const [audit, setAudit] = useState<AdminAuditResponse['items']>([]);
   const [memberDrafts, setMemberDrafts] = useState<Record<string, MemberDraft>>({});
   const [loading, setLoading] = useState(true);
@@ -56,6 +69,13 @@ export const AdminConsoleView: React.FC = () => {
   const [createType, setCreateType] = useState<EventType>(EventType.TRAINING);
   const [createStartAt, setCreateStartAt] = useState('');
   const [createLocation, setCreateLocation] = useState('');
+  const [createOwnerKind, setCreateOwnerKind] = useState<'TEAM' | 'VENUE' | 'INTEGRATION'>('TEAM');
+  const [createOwnerName, setCreateOwnerName] = useState('');
+  const [createSourceKind, setCreateSourceKind] = useState<'MANUAL' | 'VENUE_API' | 'INTEGRATION_API'>('MANUAL');
+  const [createSourceProvider, setCreateSourceProvider] = useState('');
+  const [createExternalEventId, setCreateExternalEventId] = useState('');
+  const [createRegistrationStatus, setCreateRegistrationStatus] = useState<EventRegistrationStatus>('REQUESTED');
+  const [eventRegistrationDrafts, setEventRegistrationDrafts] = useState<Record<string, EventRegistrationStatus>>({});
 
   const managedTeams = useMemo(() => {
     if (!me) return [];
@@ -98,7 +118,9 @@ export const AdminConsoleView: React.FC = () => {
           limit: 50,
           offset: 0,
         }),
-        currentTeam ? api.getAdminTeamMembers(currentTeam) : Promise.resolve({ teamId: '', items: [] }),
+        currentTeam
+          ? api.getAdminTeamMembers(currentTeam)
+          : Promise.resolve<AdminTeamMembersResponse>({ teamId: '', items: [], registrationLinks: [] }),
         api.getAdminAudit({
           teamId: currentTeam || undefined,
           limit: 60,
@@ -108,6 +130,8 @@ export const AdminConsoleView: React.FC = () => {
       setOverview(overviewRes);
       setEvents(eventsRes.items);
       setMembers(membersRes.items);
+      setTeamMeta(membersRes.team || null);
+      setRegistrationLinks(membersRes.registrationLinks || []);
       setAudit(auditRes.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to load admin data');
@@ -131,6 +155,14 @@ export const AdminConsoleView: React.FC = () => {
       ['Reminder success', `${Math.round(overview.summary.reminderDelivery.successRate * 100)}%`],
     ];
   }, [overview]);
+
+  const flowRows = useMemo(() => audit.filter((row) => Boolean(row.flow)), [audit]);
+
+  const registrationBadgeClass = (status: EventRegistrationStatus) => {
+    if (status === 'CONFIRMED') return 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40';
+    if (status === 'REQUESTED' || status === 'WAITLISTED') return 'bg-amber-500/20 text-amber-200 border-amber-500/40';
+    return 'bg-rose-500/20 text-rose-200 border-rose-500/40';
+  };
 
   const handleLogout = async () => {
     await fetch('/api/v1/auth/logout', {
@@ -161,9 +193,20 @@ export const AdminConsoleView: React.FC = () => {
         type: createType,
         startAt: new Date(createStartAt).toISOString(),
         location: createLocation.trim() || undefined,
+        ownerKind: createOwnerKind,
+        ownerName: createOwnerName.trim() || undefined,
+        sourceKind: createSourceKind,
+        sourceProvider: createSourceProvider.trim() || undefined,
+        sourceExternalEventId: createExternalEventId.trim() || undefined,
+        registration: {
+          status: createRegistrationStatus,
+        },
       });
       setCreateTitle('');
       setCreateLocation('');
+      setCreateOwnerName('');
+      setCreateSourceProvider('');
+      setCreateExternalEventId('');
       await loadData(selectedTeamId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to create event');
@@ -180,6 +223,57 @@ export const AdminConsoleView: React.FC = () => {
       await loadData(selectedTeamId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to update event');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveRegistrationStatus = async (event: AdminEventItem) => {
+    const nextStatus = eventRegistrationDrafts[event.id];
+    if (!nextStatus) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.patchAdminEvent(event.id, {
+        registrationStatus: nextStatus,
+      });
+      setEventRegistrationDrafts((prev) => {
+        const next = { ...prev };
+        delete next[event.id];
+        return next;
+      });
+      await loadData(selectedTeamId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to update registration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePublishSchedule = async (event: AdminEventItem) => {
+    const sourceKind = event.sourceKind || 'MANUAL';
+    const sourceProvider = event.sourceProvider || undefined;
+    const importedSchedule = (event.schedule || []).map((item) => ({
+      time: item.time,
+      opponent: item.opponent,
+      score: item.score,
+      pitZone: item.pitZone,
+      gamePair: item.gamePair,
+      sourceKind,
+      sourceProvider,
+      publishedAt: new Date().toISOString(),
+    }));
+
+    setSaving(true);
+    setError('');
+    try {
+      await api.patchAdminEvent(event.id, {
+        registrationStatus: event.registration?.status === 'CONFIRMED' ? 'CONFIRMED' : 'REQUESTED',
+        importedSchedule,
+      });
+      await loadData(selectedTeamId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to publish schedule');
     } finally {
       setSaving(false);
     }
@@ -312,7 +406,7 @@ export const AdminConsoleView: React.FC = () => {
 
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
           <h2 className="font-semibold mb-3">Event Ops</h2>
-          <form onSubmit={handleCreateEvent} className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4">
+          <form onSubmit={handleCreateEvent} className="grid grid-cols-1 md:grid-cols-8 gap-2 mb-4">
             <input
               value={createTitle}
               onChange={(e) => setCreateTitle(e.target.value)}
@@ -342,6 +436,57 @@ export const AdminConsoleView: React.FC = () => {
               placeholder="Локация"
               className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
             />
+            <select
+              value={createOwnerKind}
+              onChange={(e) => setCreateOwnerKind(e.target.value as 'TEAM' | 'VENUE' | 'INTEGRATION')}
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            >
+              {OWNER_KIND_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  owner:{value}
+                </option>
+              ))}
+            </select>
+            <input
+              value={createOwnerName}
+              onChange={(e) => setCreateOwnerName(e.target.value)}
+              placeholder="Owner name (AKM)"
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            />
+            <select
+              value={createSourceKind}
+              onChange={(e) => setCreateSourceKind(e.target.value as 'MANUAL' | 'VENUE_API' | 'INTEGRATION_API')}
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            >
+              {SOURCE_KIND_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  source:{value}
+                </option>
+              ))}
+            </select>
+            <input
+              value={createSourceProvider}
+              onChange={(e) => setCreateSourceProvider(e.target.value)}
+              placeholder="Provider (akm-api)"
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            />
+            <input
+              value={createExternalEventId}
+              onChange={(e) => setCreateExternalEventId(e.target.value)}
+              placeholder="External event ID"
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            />
+            <select
+              value={createRegistrationStatus}
+              onChange={(e) => setCreateRegistrationStatus(e.target.value as EventRegistrationStatus)}
+              className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+            >
+              {REGISTRATION_STATUS_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  reg:{value}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               disabled={saving}
@@ -353,22 +498,92 @@ export const AdminConsoleView: React.FC = () => {
 
           <div className="space-y-2">
             {events.map((event) => (
-              <div key={event.id} className="rounded-xl border border-white/10 bg-black/30 p-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold">
-                    {event.title} {event.isCancelled ? '(cancelled)' : ''}
+              <div key={event.id} className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">
+                      {event.title} {event.isCancelled ? '(cancelled)' : ''}
+                    </div>
+                    <div className="text-xs text-pb-subtext">
+                      {new Date(event.startAt).toLocaleString('ru-RU')} · {event.type}
+                    </div>
+                    <div className="text-xs text-pb-subtext mt-1">
+                      owner: {event.ownerKind}
+                      {event.ownerName ? ` (${event.ownerName})` : ''}
+                      {event.ownerTeamId ? ` · ownerTeamId: ${event.ownerTeamId}` : ''}
+                    </div>
+                    <div className="text-xs text-pb-subtext">
+                      source: {event.sourceKind}
+                      {event.sourceProvider ? ` · ${event.sourceProvider}` : ''}
+                      {event.sourceExternalEventId ? ` · ext:${event.sourceExternalEventId}` : ''}
+                    </div>
+                    <div className="text-xs text-pb-subtext">
+                      imported schedule items: {event.importedSchedule?.length || 0}
+                    </div>
                   </div>
-                  <div className="text-xs text-pb-subtext">
-                    {new Date(event.startAt).toLocaleString('ru-RU')} · {event.type}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleToggleCancel(event)}
+                      disabled={saving}
+                      className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-sm disabled:opacity-60"
+                    >
+                      {event.isCancelled ? 'Восстановить' : 'Отменить'}
+                    </button>
+                    <button
+                      onClick={() => handlePublishSchedule(event)}
+                      disabled={saving || (event.schedule || []).length === 0}
+                      className="px-3 py-1 rounded-lg bg-indigo-500/20 border border-indigo-400/40 hover:bg-indigo-500/30 text-sm disabled:opacity-60"
+                    >
+                      Publish team schedule
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleToggleCancel(event)}
-                  disabled={saving}
-                  className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-sm disabled:opacity-60"
-                >
-                  {event.isCancelled ? 'Восстановить' : 'Отменить'}
-                </button>
+
+                <div className="rounded-lg border border-white/10 bg-black/40 p-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs text-pb-subtext">
+                      registration:
+                      <span
+                        className={`ml-2 inline-flex px-2 py-0.5 rounded-md border ${registrationBadgeClass(
+                          event.registration?.status || 'REQUESTED'
+                        )}`}
+                      >
+                        {event.registration?.status || 'NOT_LINKED'}
+                      </span>
+                      {event.registration?.externalRegistrationId
+                        ? ` · ext:${event.registration.externalRegistrationId}`
+                        : ''}
+                    </div>
+                    <div className="text-xs text-pb-subtext">
+                      total:{event.registrationSummary?.total || 0} · confirmed:{event.registrationSummary?.confirmed || 0}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <select
+                      value={eventRegistrationDrafts[event.id] || event.registration?.status || 'REQUESTED'}
+                      onChange={(e) =>
+                        setEventRegistrationDrafts((prev) => ({
+                          ...prev,
+                          [event.id]: e.target.value as EventRegistrationStatus,
+                        }))
+                      }
+                      className="bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-sm"
+                    >
+                      {REGISTRATION_STATUS_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleSaveRegistrationStatus(event)}
+                      disabled={saving}
+                      className="px-3 py-1 rounded-lg bg-pb-primary text-pb-background text-sm font-semibold disabled:opacity-60"
+                    >
+                      Save registration
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -376,6 +591,62 @@ export const AdminConsoleView: React.FC = () => {
 
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
           <h2 className="font-semibold mb-3">Team Members</h2>
+          {selectedTeamId && (
+            <div className="mb-3 rounded-xl border border-white/10 bg-black/30 p-3">
+              <div className="text-sm">
+                Team ID: <span className="font-mono text-xs">{selectedTeamId}</span>
+              </div>
+              {members.length > 0 && (
+                <div className="text-xs text-pb-subtext mt-1">
+                  Участников в списке: {members.length}
+                </div>
+              )}
+              {((overview?.teamIds || []).includes(selectedTeamId) || false) && (
+                <div className="text-xs text-pb-subtext mt-1">
+                  Команда входит в текущий admin scope.
+                </div>
+              )}
+            </div>
+          )}
+
+          {teamMeta && (
+            <div className="mb-3 rounded-xl border border-white/10 bg-black/30 p-3">
+              <div className="text-sm font-semibold">{teamMeta.name}</div>
+              <div className="text-xs text-pb-subtext">
+                shortCode: {teamMeta.shortCode} · timezone: {teamMeta.timezone}
+              </div>
+              <div className="text-xs text-pb-subtext">
+                owner events: {teamMeta.ownerEventsCount}
+              </div>
+              <div className="text-xs text-pb-subtext">
+                registrations: total {teamMeta.registrationSummary.total} · confirmed {teamMeta.registrationSummary.confirmed} · requested{' '}
+                {teamMeta.registrationSummary.requested}
+              </div>
+            </div>
+          )}
+
+          {registrationLinks.length > 0 && (
+            <div className="mb-3 rounded-xl border border-white/10 bg-black/30 p-3">
+              <div className="text-sm font-semibold mb-2">Registration Links</div>
+              <div className="space-y-2 max-h-[220px] overflow-auto">
+                {registrationLinks.map((link) => (
+                  <div key={link.registrationId} className="rounded-lg border border-white/10 p-2">
+                    <div className="text-sm">{link.eventTitle}</div>
+                    <div className="text-xs text-pb-subtext">
+                      {link.status} · owner:{link.ownerKind}
+                      {link.ownerName ? ` (${link.ownerName})` : ''} · source:{link.sourceKind}
+                      {link.sourceProvider ? `/${link.sourceProvider}` : ''}
+                    </div>
+                    <div className="text-xs text-pb-subtext">
+                      imported items: {link.importedItemsCount}
+                      {link.lastPublishedAt ? ` · published ${new Date(link.lastPublishedAt).toLocaleString('ru-RU')}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             {members.map((member) => {
               const draft = memberDrafts[member.membershipId] || {};
@@ -440,6 +711,24 @@ export const AdminConsoleView: React.FC = () => {
 
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
           <h2 className="font-semibold mb-3">Audit</h2>
+          <div className="mb-3 rounded-xl border border-white/10 bg-black/30 p-3">
+            <div className="text-sm font-semibold mb-2">Registration/Schedule Flow</div>
+            {flowRows.length === 0 && <div className="text-xs text-pb-subtext">Flow-событий пока нет.</div>}
+            {flowRows.length > 0 && (
+              <div className="space-y-2 max-h-[180px] overflow-auto">
+                {flowRows.map((row) => (
+                  <div key={`flow-${row.id}`} className="rounded-lg border border-white/10 p-2">
+                    <div className="text-xs font-semibold">{row.flow?.stage}</div>
+                    <div className="text-xs text-pb-subtext">
+                      {new Date(row.createdAt).toLocaleString('ru-RU')}
+                      {row.flow?.eventId ? ` · event:${row.flow.eventId}` : ''}
+                      {row.flow?.teamId ? ` · team:${row.flow.teamId}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="space-y-2 max-h-[360px] overflow-auto">
             {audit.map((row) => (
               <div key={row.id} className="rounded-xl border border-white/10 bg-black/30 p-3">

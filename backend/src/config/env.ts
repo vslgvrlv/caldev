@@ -68,6 +68,12 @@ export const env = {
     enabled: asBoolean(process.env.AUTH_OIDC_ENABLED, false),
     fallbackEnabled: asBoolean(process.env.AUTH_OIDC_FALLBACK_ENABLED, true),
     adminRequired: asBoolean(process.env.AUTH_OIDC_ADMIN_REQUIRED, false),
+    canaryPercent: asNumber(process.env.AUTH_OIDC_CANARY_PERCENT || "100", "AUTH_OIDC_CANARY_PERCENT"),
+    canaryCookieName: process.env.AUTH_OIDC_CANARY_COOKIE || "pbth.oidc.canary",
+    canaryCookieMaxAgeSec: asNumber(
+      process.env.AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC || String(60 * 60 * 24 * 30),
+      "AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC"
+    ),
     clientId: process.env.TELEGRAM_OIDC_CLIENT_ID || "",
     clientSecret: process.env.TELEGRAM_OIDC_CLIENT_SECRET || "",
     redirectUri: process.env.TELEGRAM_OIDC_REDIRECT_URI || "",
@@ -115,6 +121,14 @@ export const env = {
     secret: process.env.DEV_AUTH_SECRET || "",
   },
 
+  authSlo: {
+    enabled: asBoolean(process.env.AUTH_SLO_ENABLED, true),
+    windowMinutes: asNumber(process.env.AUTH_SLO_WINDOW_MINUTES || "60", "AUTH_SLO_WINDOW_MINUTES"),
+    minAttempts: asNumber(process.env.AUTH_SLO_MIN_ATTEMPTS || "20", "AUTH_SLO_MIN_ATTEMPTS"),
+    maxErrorRate: asNumber(process.env.AUTH_SLO_MAX_ERROR_RATE || "0.1", "AUTH_SLO_MAX_ERROR_RATE"),
+    token: process.env.AUTH_SLO_TOKEN || "",
+  },
+
   release: {
     id: process.env.RELEASE_ID || "dev",
     commit: process.env.RELEASE_COMMIT || "unknown",
@@ -132,4 +146,24 @@ if (env.telegramOidc.enabled) {
   if (!env.telegramOidc.redirectUri) {
     throw new Error("Missing TELEGRAM_OIDC_REDIRECT_URI while AUTH_OIDC_ENABLED=true");
   }
+}
+
+if (env.telegramOidc.canaryPercent < 0 || env.telegramOidc.canaryPercent > 100) {
+  throw new Error("AUTH_OIDC_CANARY_PERCENT must be within [0,100]");
+}
+
+if (env.telegramOidc.canaryCookieMaxAgeSec < 60) {
+  throw new Error("AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC must be >= 60");
+}
+
+if (env.authSlo.windowMinutes < 1) {
+  throw new Error("AUTH_SLO_WINDOW_MINUTES must be >= 1");
+}
+
+if (env.authSlo.minAttempts < 1) {
+  throw new Error("AUTH_SLO_MIN_ATTEMPTS must be >= 1");
+}
+
+if (env.authSlo.maxErrorRate < 0 || env.authSlo.maxErrorRate > 1) {
+  throw new Error("AUTH_SLO_MAX_ERROR_RATE must be within [0,1]");
 }

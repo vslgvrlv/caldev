@@ -33,7 +33,14 @@ Rule: every task is atomic and deployable.
 - [x] D6. Deploy to staging and verify `/health` + `/release/version`.
 
 ## Next Queue (After Current Sprint)
-- [ ] N1. Phase 2 Auth v2 Frontend hardening (error states + Android/iOS telemetry breakdown).
-- [ ] N2. Phase 3 canary controls and auth SLO/error-budget alerts.
-- [ ] N3. Phase 4 Admin Console v1 functional completion (Event/Team/Audit UX).
+- [x] N1. Phase 2 Auth v2 Frontend hardening (error states + Android/iOS telemetry breakdown).
+- [x] N2. Phase 3 canary controls and auth SLO/error-budget alerts.
+- [x] N3. Phase 4 Admin Console v1 functional completion (Event/Team/Audit UX).
+  - [x] N3-A1. Add domain schema for external event owners + organizer/team registrations + team schedule ingestion.
+  - [x] N3-A2. Extend backend admin/events/init APIs to expose source-owner-registration-schedule model.
+  - [x] N3-A3. Add backend tests for new event domain projections and role/scope access.
+  - [x] N3-B1. Upgrade Admin Event UX to show source/owner, registration status, and imported schedule context.
+  - [x] N3-B2. Upgrade Admin Team UX to show team identity and registration linkage.
+  - [x] N3-B3. Upgrade Admin Audit UX to trace registration confirmation -> schedule publish flow.
+  - [x] N3-B4. Run full verification (`backend check/unit/integration`, `frontend typecheck/unit/build`) and finalize docs/status.
 - [ ] N4. Phase 5 Admin metrics pack.

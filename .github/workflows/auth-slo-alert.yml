@@ -1,0 +1,71 @@
+name: Auth SLO Watch
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Override target URL (optional)"
+        required: false
+        type: string
+      environment:
+        description: "Target environment for manual run"
+        required: false
+        type: choice
+        options:
+          - prod
+          - staging
+        default: prod
+      window_minutes:
+        description: "SLO window in minutes"
+        required: false
+        type: string
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  watch-scheduled:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: prod
+            base_url: https://pbthub.ru
+          - target: staging
+            base_url: https://staging.pbthub.ru
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run auth SLO check (${{ matrix.target }})
+        env:
+          BASE_URL: ${{ matrix.base_url }}
+          AUTH_SLO_TOKEN: ${{ secrets.AUTH_SLO_TOKEN }}
+        run: |
+          ./scripts/release/auth-slo-check.sh --base-url "${BASE_URL}" --window-minutes "60"
+
+  watch-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve base URL
+        id: base
+        run: |
+          if [[ -n "${{ inputs.base_url }}" ]]; then
+            echo "value=${{ inputs.base_url }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ inputs.environment }}" == "staging" ]]; then
+            echo "value=https://staging.pbthub.ru" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=https://pbthub.ru" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run auth SLO check (manual)
+        env:
+          BASE_URL: ${{ steps.base.outputs.value }}
+          AUTH_SLO_TOKEN: ${{ secrets.AUTH_SLO_TOKEN }}
+          WINDOW_MINUTES: ${{ inputs.window_minutes }}
+        run: |
+          ./scripts/release/auth-slo-check.sh --base-url "${BASE_URL}" --window-minutes "${WINDOW_MINUTES:-60}"

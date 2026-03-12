@@ -4,6 +4,13 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getUserMemberships } from "../../lib/permissions.js";
+import {
+  mergeTeamEventSchedule,
+  selectImportedScheduleForTeam,
+  selectRegistrationForTeam,
+  type EventRegistrationProjection,
+  type ImportedTeamScheduleProjection,
+} from "../../lib/event-domain.js";
 
 type RawEvent = {
   id: string;
@@ -21,6 +28,12 @@ type RawEvent = {
   cost: string | null;
   cost_status: "UNKNOWN" | "ESTIMATED" | "FINAL";
   finance_state: "NOT_CALCULATED" | "COLLECTING" | "CLOSED";
+  owner_kind: "TEAM" | "VENUE" | "INTEGRATION";
+  owner_team_id: string | null;
+  owner_name: string | null;
+  source_kind: "MANUAL" | "VENUE_API" | "INTEGRATION_API";
+  source_provider: string | null;
+  source_external_event_id: string | null;
   is_cancelled: boolean;
   viewer_role: "CAPTAIN" | "TRAINER" | "PLAYER";
   my_rsvp: "PENDING" | "CONFIRMED" | "DECLINED" | null;
@@ -132,6 +145,12 @@ initRouter.get(
               e.cost::text,
               e.cost_status::text,
               e.finance_state::text,
+              e.owner_kind::text,
+              e.owner_team_id,
+              e.owner_name,
+              e.source_kind::text,
+              e.source_provider,
+              e.source_external_event_id,
               e.is_cancelled,
               tm.role AS viewer_role,
               r.status AS my_rsvp,
@@ -170,6 +189,12 @@ initRouter.get(
               e.cost::text,
               e.cost_status::text,
               e.finance_state::text,
+              e.owner_kind::text,
+              e.owner_team_id,
+              e.owner_name,
+              e.source_kind::text,
+              e.source_provider,
+              e.source_external_event_id,
               e.is_cancelled,
               tm.role AS viewer_role,
               NULL::rsvp_status AS my_rsvp,
@@ -224,6 +249,102 @@ initRouter.get(
           gamePair: g.game_pair ?? undefined,
         });
         gamesMap.set(g.event_id, list);
+      }
+    }
+
+    const registrationsMap = new Map<string, EventRegistrationProjection[]>();
+    const importedTeamScheduleMap = new Map<string, ImportedTeamScheduleProjection[]>();
+    if (eventIds.length > 0) {
+      const registrationsResult = await query<{
+        id: string;
+        event_id: string;
+        team_id: string;
+        status: "REQUESTED" | "CONFIRMED" | "WAITLISTED" | "REJECTED" | "CANCELLED";
+        requested_at: string;
+        confirmed_at: string | null;
+        external_registration_id: string | null;
+        confirmed_by_user_id: string | null;
+      }>(
+        `SELECT
+           id,
+           event_id,
+           team_id,
+           status::text,
+           requested_at,
+           confirmed_at,
+           external_registration_id,
+           confirmed_by_user_id
+         FROM event_team_registrations
+         WHERE event_id = ANY($1::uuid[])
+           AND team_id = $2`,
+        [eventIds, activeMembership.team_id]
+      );
+      for (const row of registrationsResult.rows) {
+        const list = registrationsMap.get(row.event_id) || [];
+        list.push({
+          id: row.id,
+          teamId: row.team_id,
+          status: row.status,
+          requestedAt: row.requested_at,
+          confirmedAt: row.confirmed_at,
+          externalRegistrationId: row.external_registration_id,
+          confirmedByUserId: row.confirmed_by_user_id,
+        });
+        registrationsMap.set(row.event_id, list);
+      }
+
+      const importedScheduleResult = await query<{
+        id: string;
+        event_id: string;
+        team_id: string;
+        time_label: string;
+        starts_at: string | null;
+        opponent: string;
+        score: string | null;
+        pit_zone: "NEAR" | "FAR" | null;
+        game_pair: "FIRST" | "SECOND" | null;
+        source_kind: "MANUAL" | "VENUE_API" | "INTEGRATION_API";
+        source_provider: string | null;
+        source_external_game_id: string | null;
+        published_at: string;
+      }>(
+        `SELECT
+           id,
+           event_id,
+           team_id,
+           time_label,
+           starts_at,
+           opponent,
+           score,
+           pit_zone::text,
+           game_pair::text,
+           source_kind::text,
+           source_provider,
+           source_external_game_id,
+           published_at
+         FROM event_team_schedule_items
+         WHERE event_id = ANY($1::uuid[])
+           AND team_id = $2
+         ORDER BY COALESCE(starts_at, published_at) ASC, time_label ASC`,
+        [eventIds, activeMembership.team_id]
+      );
+      for (const row of importedScheduleResult.rows) {
+        const list = importedTeamScheduleMap.get(row.event_id) || [];
+        list.push({
+          id: row.id,
+          teamId: row.team_id,
+          time: row.time_label,
+          startAt: row.starts_at,
+          opponent: row.opponent,
+          score: row.score ?? undefined,
+          pitZone: row.pit_zone ?? undefined,
+          gamePair: row.game_pair ?? undefined,
+          sourceKind: row.source_kind,
+          sourceProvider: row.source_provider,
+          sourceExternalGameId: row.source_external_game_id,
+          publishedAt: row.published_at,
+        });
+        importedTeamScheduleMap.set(row.event_id, list);
       }
     }
 
@@ -302,6 +423,46 @@ initRouter.get(
       }
     }
 
+    const mapEventForFeed = (e: RawEvent, rsvpStatus: "UNANSWERED" | "PENDING" | "CONFIRMED" | "DECLINED") => {
+      const registration = selectRegistrationForTeam(registrationsMap.get(e.id) || [], activeMembership.team_id);
+      const importedSchedule = selectImportedScheduleForTeam(importedTeamScheduleMap.get(e.id) || [], activeMembership.team_id);
+      const mergedSchedule = mergeTeamEventSchedule(gamesMap.get(e.id) || [], importedSchedule);
+      return {
+        id: e.id,
+        teamId: e.team_id,
+        seriesId: e.series_id || undefined,
+        isRecurring: Boolean(e.series_id),
+        viewerRole: e.viewer_role,
+        teamName: e.team_name,
+        teamShortCode: e.team_short_code,
+        teamTimezone: e.team_timezone,
+        type: e.type,
+        title: e.title,
+        description: e.description || undefined,
+        startAt: e.start_at,
+        endAt: e.end_at || undefined,
+        startDate: e.start_at,
+        endDate: e.end_at || undefined,
+        location: e.location || undefined,
+        cost: e.cost !== null ? Number(e.cost) : undefined,
+        costStatus: e.cost_status,
+        financeState: e.finance_state,
+        ownerKind: e.owner_kind,
+        ownerTeamId: e.owner_team_id || undefined,
+        ownerName: e.owner_name || undefined,
+        sourceKind: e.source_kind,
+        sourceProvider: e.source_provider || undefined,
+        sourceExternalEventId: e.source_external_event_id || undefined,
+        registration: registration || undefined,
+        importedSchedule: importedSchedule.length > 0 ? importedSchedule : undefined,
+        rsvpStatus,
+        attendeesCount: Number(e.attendees_count),
+        attendeePreview: attendeePreviewMap.get(e.id) || [],
+        isConflict: false,
+        schedule: mergedSchedule.length > 0 ? mergedSchedule : undefined,
+      };
+    };
+
     return res.json({
       user: {
         id: user.id,
@@ -346,58 +507,8 @@ initRouter.get(
         role: m.role,
         membershipId: m.id,
       })),
-      events: eventsResult.rows.map((e) => ({
-        id: e.id,
-        teamId: e.team_id,
-        seriesId: e.series_id || undefined,
-        isRecurring: Boolean(e.series_id),
-        viewerRole: e.viewer_role,
-        teamName: e.team_name,
-        teamShortCode: e.team_short_code,
-        teamTimezone: e.team_timezone,
-        type: e.type,
-        title: e.title,
-        description: e.description || undefined,
-        startAt: e.start_at,
-        endAt: e.end_at || undefined,
-        startDate: e.start_at,
-        endDate: e.end_at || undefined,
-        location: e.location || undefined,
-        cost: e.cost !== null ? Number(e.cost) : undefined,
-        costStatus: e.cost_status,
-        financeState: e.finance_state,
-        rsvpStatus: e.my_rsvp || "UNANSWERED",
-        attendeesCount: Number(e.attendees_count),
-        attendeePreview: attendeePreviewMap.get(e.id) || [],
-        isConflict: false,
-        schedule: gamesMap.get(e.id) || undefined,
-      })),
-      actionRequiredEvents: actionRequiredResult.rows.map((e) => ({
-        id: e.id,
-        teamId: e.team_id,
-        seriesId: e.series_id || undefined,
-        isRecurring: Boolean(e.series_id),
-        viewerRole: e.viewer_role,
-        teamName: e.team_name,
-        teamShortCode: e.team_short_code,
-        teamTimezone: e.team_timezone,
-        type: e.type,
-        title: e.title,
-        description: e.description || undefined,
-        startAt: e.start_at,
-        endAt: e.end_at || undefined,
-        startDate: e.start_at,
-        endDate: e.end_at || undefined,
-        location: e.location || undefined,
-        cost: e.cost !== null ? Number(e.cost) : undefined,
-        costStatus: e.cost_status,
-        financeState: e.finance_state,
-        rsvpStatus: "UNANSWERED",
-        attendeesCount: Number(e.attendees_count),
-        attendeePreview: attendeePreviewMap.get(e.id) || [],
-        isConflict: false,
-        schedule: gamesMap.get(e.id) || undefined,
-      })),
+      events: eventsResult.rows.map((e) => mapEventForFeed(e, e.my_rsvp || "UNANSWERED")),
+      actionRequiredEvents: actionRequiredResult.rows.map((e) => mapEventForFeed(e, "UNANSWERED")),
       transactions: transactionsResult.rows.map((t) => ({
         id: t.id,
         type: t.type,
