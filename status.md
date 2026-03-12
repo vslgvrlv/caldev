@@ -4,9 +4,16 @@ Date: 2026-03-12
 Branch: `codex/fix-deploy-workflow-checkout`
 
 ## Current Task
-`N3 HOTFIX IN REVIEW` — устраняем deploy workflow blocker после фикса миграции `019`.
+`N3 HOTFIX COMPLETE` — staging deploy восстановлен после двух блокеров (`019` migration type + deploy workflow checkout).
 
 ## Progress Log
+- [x] PR `#16` (deploy workflow checkout hotfix) смёржен в `main`:
+  - merge commit: `a16877945b4c807ec4c1d2cc2ea7f3eb1981f955`.
+- [x] Повторный `Deploy Staging` успешен:
+  - run: `23009406096`
+  - release_id: `v2026.03.12-n3-hotfix1`
+  - `GET /api/v1/health` -> `{"status":"ok"}`
+  - `GET /api/v1/release/version` -> `{"releaseId":"v2026.03.12-n3-hotfix1","commit":"e6c2879..."}`
 - [x] PR `#15` (migration `019` hotfix) смёржен в `main`:
   - merge commit: `e6c2879b18313703c3af4fc2b00c68f3be750efd`.
 - [x] Новый релиз `v2026.03.12-n3-hotfix1` собран успешно (workflow run `23009178605`).
