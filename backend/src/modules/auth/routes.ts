@@ -1123,24 +1123,30 @@ authRouter.get(
     const effectiveRole = getEffectiveEntryRole(req, user);
     const memberships = await getUserMemberships(user.id);
     const allowAdminChoice = canChooseAdminRole(user);
-    const captainedTeamIds = Array.from(
-      new Set(memberships.filter((m) => m.role === "CAPTAIN").map((m) => m.team_id))
+    const captainedTeamsRaw = Array.from(
+      new Map(
+        memberships
+          .filter((m) => m.role === "CAPTAIN")
+          .map((m) => [m.team_id, { id: m.team_id, name: m.team_name }])
+      ).values()
     );
-    const platformTeamIdsRaw =
+    const platformTeamsRaw =
       effectiveRole === "ADMIN" && allowAdminChoice
         ? (
-            await query<{ id: string }>(
-              `SELECT id FROM teams ORDER BY name ASC`
+            await query<{ id: string; name: string }>(
+              `SELECT id, name FROM teams ORDER BY name ASC`
             )
-          ).rows.map((r) => r.id)
+          ).rows
         : [];
     const oidcAdminReady = !env.telegramOidc.adminRequired || req.session.authMethod === "OIDC";
-    const platformTeamIds = oidcAdminReady ? platformTeamIdsRaw : [];
-    const teamAdminTeamIds = oidcAdminReady ? captainedTeamIds : [];
+    const platformTeams = oidcAdminReady ? platformTeamsRaw : [];
+    const teamAdminTeams = oidcAdminReady ? captainedTeamsRaw : [];
     const adminScope: AdminScope =
-      platformTeamIds.length > 0 ? "PLATFORM" : teamAdminTeamIds.length > 0 ? "TEAM" : "NONE";
+      platformTeams.length > 0 ? "PLATFORM" : teamAdminTeams.length > 0 ? "TEAM" : "NONE";
+    const managedTeams =
+      adminScope === "PLATFORM" ? platformTeams : adminScope === "TEAM" ? teamAdminTeams : [];
     const managedTeamIds =
-      adminScope === "PLATFORM" ? platformTeamIds : adminScope === "TEAM" ? teamAdminTeamIds : [];
+      managedTeams.map((team) => team.id);
     const capabilities = buildCapabilities({
       effectiveRole,
       memberships,
@@ -1167,6 +1173,7 @@ authRouter.get(
       capabilities,
       adminScope,
       managedTeamIds,
+      managedTeams,
       availableRoles: memberships.map((m) => ({
         membershipId: m.id,
         teamId: m.team_id,

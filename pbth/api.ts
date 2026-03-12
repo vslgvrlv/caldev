@@ -62,6 +62,10 @@ export type AuthMeResponse =
       capabilities: string[];
       adminScope: AdminScope;
       managedTeamIds: string[];
+      managedTeams?: Array<{
+        id: string;
+        name: string;
+      }>;
       availableRoles: Array<{
         membershipId: string;
         teamId: string;
