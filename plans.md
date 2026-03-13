@@ -47,4 +47,5 @@ Rule: every task is atomic and deployable.
   - [x] N3-H2. Hotfix deploy workflows to checkout repo before `auth-slo-check.sh` (staging+prod).
   - [x] N3-H3. Admin UX: показывать человекочитаемые названия команд (не UUID) в selector/filters.
   - [x] N3-H4. Admin/Web login: корректный fallback в OIDC при открытии `/admin` вне Telegram Mini App (без ложной ошибки `initData`).
+  - [x] N3-H5. Stabilize deploy auth SLO check: run it server-side (SSH) to avoid runner DNS false-failures.
 - [x] N4. Phase 5 Admin metrics pack.
