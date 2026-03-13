@@ -7,6 +7,10 @@ Branch: `codex/fix-slo-check-runtime-path`
 `N3-H5` — стабилизировать deploy SLO-check (убрать ложные падения workflow из-за DNS на GitHub runner).
 
 ## Progress Log
+- [x] `N3-H5` follow-up #2 (final hardening):
+  - run `23045971523` выявил ещё один root cause: `node: command not found` при server-side запуске `auth-slo-check.sh` (на host-машине нет Node runtime);
+  - `scripts/release/auth-slo-check.sh` расширен параметром `--resolve-host`, чтобы выполнять check на runner, но без DNS-зависимости (`curl --resolve host:port:DEPLOY_HOST`);
+  - deploy workflows (staging/prod) возвращены к runner execution SLO-check с `--resolve-host "${DEPLOY_HOST}"`.
 - [x] `N3-H5` follow-up fix после первой попытки:
   - run `23045806961` показал новый root cause: `./scripts/release/auth-slo-check.sh: No such file or directory` (в `${DEPLOY_PATH}` на сервере нет скрипта);
   - workflow обновлён на запуск SLO-check из runtime-путей релиза: `/opt/pbth/current-staging` и `/opt/pbth/current-prod`.
