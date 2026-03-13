@@ -118,13 +118,5 @@ jobs:
           BASE_URL: ${{ inputs.base_url }}
           AUTH_SLO_TOKEN: ${{ secrets.AUTH_SLO_TOKEN }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          USER_NAME="${DEPLOY_USER:-root}"
-          PORT="${DEPLOY_PORT:-22}"
-          REMOTE_APP_PATH="/opt/pbth/current-staging"
-          ESCAPED_BASE_URL="$(printf '%q' "${BASE_URL}")"
-          ESCAPED_AUTH_SLO_TOKEN="$(printf '%q' "${AUTH_SLO_TOKEN}")"
-          ssh -p "${PORT}" -i ~/.ssh/id_ed25519 "${USER_NAME}@${DEPLOY_HOST}" \
-            "cd ${REMOTE_APP_PATH} && AUTH_SLO_TOKEN=${ESCAPED_AUTH_SLO_TOKEN} ./scripts/release/auth-slo-check.sh --base-url ${ESCAPED_BASE_URL}"
+          ./scripts/release/auth-slo-check.sh --base-url "${BASE_URL}" --resolve-host "${DEPLOY_HOST}"
