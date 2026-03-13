@@ -1,15 +1,18 @@
 # PBTH Execution Status
 
 Date: 2026-03-13
-Branch: `codex/fix-deploy-slo-check-server-side`
+Branch: `codex/fix-slo-check-runtime-path`
 
 ## Current Task
 `N3-H5` — стабилизировать deploy SLO-check (убрать ложные падения workflow из-за DNS на GitHub runner).
 
 ## Progress Log
+- [x] `N3-H5` follow-up fix после первой попытки:
+  - run `23045806961` показал новый root cause: `./scripts/release/auth-slo-check.sh: No such file or directory` (в `${DEPLOY_PATH}` на сервере нет скрипта);
+  - workflow обновлён на запуск SLO-check из runtime-путей релиза: `/opt/pbth/current-staging` и `/opt/pbth/current-prod`.
 - [x] Закрыт `N3-H5` (deploy SLO-check stability):
   - подтверждён root cause по run logs (`23020095736`, `23020143276`): `curl: (6) Could not resolve host: staging.pbthub.ru` только на шаге `Check auth SLO/error budget`;
-  - `deploy-staging.yml` и `deploy-prod.yml`: SLO-check переведён на выполнение по SSH на целевом сервере (`/root/caldev/scripts/release/auth-slo-check.sh`) вместо запуска на runner.
+  - `deploy-staging.yml` и `deploy-prod.yml`: SLO-check переведён на выполнение по SSH на целевом сервере (runtime release paths) вместо запуска на runner.
 - [x] План сохранён в состоянии `100%`: функциональные задачи N3/N4 закрыты, выполнен дополнительный ops-hotfix для стабильности pipeline.
 - [x] Закрыт `N3-H3` (Admin UX team labels):
   - backend `/auth/me` теперь возвращает `managedTeams: [{ id, name }]` вместе с `managedTeamIds`;
