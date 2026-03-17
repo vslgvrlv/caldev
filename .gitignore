@@ -20,3 +20,4 @@ PBTH_backup_*/
 ap.txt
 .git_pbth_backup_*/
 .git_backend_backup_*/
+.worktrees/
