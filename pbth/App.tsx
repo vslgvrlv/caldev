@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [authBootstrapDone, setAuthBootstrapDone] = useState(false);
   const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM' | 'ADMIN_MODE'>('READY');
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
   
   // Data State
   const [user, setUser] = useState<User | null>(null);
@@ -293,6 +294,7 @@ const App: React.FC = () => {
 
         if (!payload?.authenticated || cancelled) return;
         clearLogoutGuard();
+        setOnboardingRequired(Boolean(payload.onboardingRequired));
 
         if (payload?.user) {
           setUser((prev) => {
@@ -386,6 +388,7 @@ const App: React.FC = () => {
     setSelectedMember(null);
     setSelectedEvent(null);
     setCalendarLink('');
+    setOnboardingRequired(false);
     navigate(redirectTo, { replace: true });
 
     void fetch('/api/v1/auth/logout', {
@@ -896,6 +899,11 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-pb-background flex items-center justify-center text-white px-6">
           <div className="text-center max-w-sm">
             <div className="text-2xl font-bold mb-3">Вы авторизованы</div>
+            {onboardingRequired && (
+              <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left text-sm text-amber-100">
+                Профиль создан автоматически по Telegram. Следующий шаг: вступить в команду по invite-ссылке.
+              </div>
+            )}
             <p className="text-pb-subtext mb-3">
               {user?.name ? `${user.name},` : 'Пользователь,'} вы пока не состоите ни в одной команде.
             </p>
@@ -978,6 +986,11 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>
 
         <main className="max-w-md mx-auto min-h-screen relative shadow-2xl shadow-black overflow-hidden flex flex-col">
+          {onboardingRequired && (
+            <div className="mx-4 mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              Аккаунт создан автоматически из Telegram. Базовый onboarding пока мягкий: данные уже доступны, дальше можно просто работать в приложении.
+            </div>
+          )}
           <div className="flex-1">
                {renderContent()}
           </div>

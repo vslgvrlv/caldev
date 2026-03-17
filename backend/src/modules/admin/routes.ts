@@ -9,6 +9,7 @@ import { writeAudit } from "../../lib/audit.js";
 import { getUserMemberships } from "../../lib/permissions.js";
 import { env } from "../../config/env.js";
 import { type AdminAccess, resolveRequestedTeams } from "../../lib/admin-access.js";
+import { isTrustedAdminAuthMethod } from "../../lib/auth-telegram-handoff.js";
 import {
   mergeTeamEventSchedule,
   normalizeEventDomainFields,
@@ -148,8 +149,8 @@ async function resolveAdminAccess(req: Parameters<typeof requireAuth>[0]): Promi
   const memberships = await getUserMemberships(user.id);
   const captainedTeamIds = Array.from(new Set(memberships.filter((m) => m.role === "CAPTAIN").map((m) => m.team_id)));
 
-  const oidcReady = !env.telegramOidc.adminRequired || req.session.authMethod === "OIDC";
-  if (!oidcReady) return null;
+  const trustedAdminReady = !env.telegramOidc.adminRequired || isTrustedAdminAuthMethod(req.session.authMethod);
+  if (!trustedAdminReady) return null;
 
   if (effectiveRole === "ADMIN" && canChooseAdminRole(user)) {
     const teams = await query<{ id: string }>(`SELECT id FROM teams ORDER BY name ASC`);
@@ -384,7 +385,8 @@ async function replaceImportedSchedule(
 function ensureOwnerAdmin(req: Parameters<typeof requireAuth>[0]) {
   const user = req.authUser!;
   const effectiveRole = getEffectiveEntryRole(req, user);
-  if (effectiveRole !== "ADMIN" || !canChooseAdminRole(user)) {
+  const trustedAdminReady = !env.telegramOidc.adminRequired || isTrustedAdminAuthMethod(req.session.authMethod);
+  if (effectiveRole !== "ADMIN" || !canChooseAdminRole(user) || !trustedAdminReady) {
     return false;
   }
   return true;

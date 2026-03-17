@@ -12,6 +12,14 @@ import { env } from "../../config/env.js";
 import { pruneExpiredAuthArtifacts, registerReplayPayload, sha256Hex } from "../../lib/replay-guard.js";
 import { decideOidcCanary, newCanaryBucket, normalizeForceOverride, parseCanaryBucket } from "../../lib/auth-canary.js";
 import { getAuthSloSummary, recordAuthMetric } from "../../lib/auth-slo.js";
+import {
+  buildTelegramHandoffAttemptKey,
+  buildTelegramHandoffDeepLink,
+  hashTelegramHandoffCompletionToken,
+  isTrustedAdminAuthMethod,
+  resolveTelegramHandoffRedirect,
+  type TelegramHandoffScope,
+} from "../../lib/auth-telegram-handoff.js";
 
 const contextSchema = z.object({
   membershipId: z.string().uuid(),
@@ -34,13 +42,22 @@ const oidcCallbackSchema = z.object({
   state: z.string().min(1),
 });
 
+const handoffStartSchema = z.object({
+  scope: z.enum(["USER", "ADMIN"]),
+  redirectTo: z.string().optional(),
+});
+
+const handoffCompleteSchema = z.object({
+  token: z.string().min(1),
+});
+
 const authSloQuerySchema = z.object({
   windowMinutes: z.coerce.number().int().min(1).max(24 * 60).optional(),
 });
 
 const clientAuthTelemetrySchema = z.object({
   scope: z.enum(["USER", "ADMIN", "INVITE"]),
-  flow: z.enum(["MINIAPP", "OIDC", "UNKNOWN"]).optional(),
+  flow: z.enum(["MINIAPP", "OIDC", "BOT_HANDOFF", "UNKNOWN"]).optional(),
   event: z.string().min(1).max(64),
   platform: z.enum(["android", "ios", "desktop", "unknown"]),
   code: z.string().min(1).max(80).optional(),
@@ -162,6 +179,10 @@ function normalizeLoginPath(redirectTo: string | undefined): string {
   return "/login";
 }
 
+function isTrustedAdminReady(authMethod: Parameters<typeof isTrustedAdminAuthMethod>[0]) {
+  return !env.telegramOidc.adminRequired || isTrustedAdminAuthMethod(authMethod);
+}
+
 function buildAuthErrorRedirectPath(params: {
   redirectTo?: string;
   code: string;
@@ -214,35 +235,53 @@ async function completeTelegramLogin(
     username?: string;
     photo_url?: string;
   },
-  options?: { authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" }
+  options?: {
+    authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF";
+    entryRoleOverride?: "ADMIN" | "USER";
+  }
 ) {
   const name = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim() || payload.username || `tg-${payload.id}`;
   const nickname = payload.username || `tg_${payload.id}`;
+  const onboardingCompletedAt = options?.authMethod === "BOT_HANDOFF" ? null : new Date().toISOString();
 
   const upsert = await query<{
     id: string;
     telegram_id: string;
     username: string | null;
     account_role: "ADMIN" | "USER" | null;
+    onboarding_completed_at: string | null;
   }>(
-    `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at)
-     VALUES ($1, $2, $3, $4, $5, NULL, NULL)
+    `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at, onboarding_completed_at)
+     VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6::timestamptz)
      ON CONFLICT (telegram_id)
      DO UPDATE SET
        username = COALESCE(EXCLUDED.username, users.username),
        name = EXCLUDED.name,
        nickname = EXCLUDED.nickname,
        avatar = EXCLUDED.avatar,
+       onboarding_completed_at = COALESCE(users.onboarding_completed_at, EXCLUDED.onboarding_completed_at),
        updated_at = NOW()
-     RETURNING id, telegram_id::text, username, account_role`,
-    [payload.id, payload.username ?? null, name, nickname, payload.photo_url ?? null]
+     RETURNING id, telegram_id::text, username, account_role, onboarding_completed_at`,
+    [payload.id, payload.username ?? null, name, nickname, payload.photo_url ?? null, onboardingCompletedAt]
   );
 
   const userRow = upsert.rows[0];
   const userId = userRow.id;
   const allowAdminChoice = canChooseAdminRole({ telegram_id: userRow.telegram_id, username: userRow.username });
-
-  if (!allowAdminChoice && !userRow.account_role) {
+  if (options?.entryRoleOverride === "ADMIN" && !allowAdminChoice) {
+    throw new Error("ADMIN_SCOPE_NONE");
+  }
+  const targetEntryRole = options?.entryRoleOverride ?? (allowAdminChoice ? null : "USER");
+  if (targetEntryRole && userRow.account_role !== targetEntryRole) {
+    await query(
+      `UPDATE users
+       SET account_role = $2::account_role,
+           role_selected_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId, targetEntryRole]
+    );
+  } else if (!targetEntryRole && !allowAdminChoice && !userRow.account_role) {
     await query(
       `UPDATE users
        SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW()
@@ -260,11 +299,8 @@ async function completeTelegramLogin(
 
   req.session.userId = userId;
   req.session.authMethod = options?.authMethod ?? "WEBAPP";
-  if (allowAdminChoice) {
-    delete req.session.entryRole;
-  } else {
-    req.session.entryRole = "USER";
-  }
+  if (targetEntryRole) req.session.entryRole = targetEntryRole;
+  else delete req.session.entryRole;
 
   const accountRole = req.session.entryRole ?? null;
 
@@ -398,6 +434,23 @@ async function resolveDevLoginPayload(parsed: DevLoginParsed) {
 
 type AdminScope = "NONE" | "TEAM" | "PLATFORM";
 
+type TelegramHandoffAttemptRow = {
+  id: string;
+  scope: TelegramHandoffScope;
+  redirect_to: string;
+  status: "PENDING" | "LINK_SENT" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+  telegram_user_id: string | null;
+  telegram_profile: {
+    id?: string;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    photo_url?: string;
+  } | null;
+  completion_token_expires_at: string | null;
+  expires_at: string;
+};
+
 function buildCapabilities(params: {
   effectiveRole: "ADMIN" | "USER" | null;
   memberships: Array<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>;
@@ -462,6 +515,8 @@ authRouter.post(
     const method =
       flow === "OIDC"
         ? "OIDC"
+        : flow === "BOT_HANDOFF"
+          ? "BOT_HANDOFF"
         : flow === "MINIAPP"
           ? "WEBAPP"
           : "UNKNOWN";
@@ -519,6 +574,204 @@ authRouter.get(
   asyncHandler(async (_req, res) => {
     const urls = getAuthPublicUrls(_req);
     res.type("html").send(buildTelegramStartHtml({ callback: urls.callbackUrl, fallback: urls.fallbackUrl }));
+  })
+);
+
+authRouter.post(
+  "/telegram/handoff/start",
+  asyncHandler(async (req, res) => {
+    if (!env.telegramHandoff.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+
+    const parsed = handoffStartSchema.parse(req.body ?? {});
+    const redirectTo = resolveTelegramHandoffRedirect({
+      scope: parsed.scope,
+      redirectTo: parsed.redirectTo,
+    });
+    const attemptKey = buildTelegramHandoffAttemptKey();
+    const attemptInsert = await query<{ expires_at: string }>(
+      `INSERT INTO auth_telegram_handoff_attempts (
+         attempt_key,
+         scope,
+         status,
+         redirect_to,
+         requested_ip_hash,
+         requested_ua_hash,
+         expires_at
+       )
+       VALUES ($1, $2, 'PENDING', $3, $4, $5, NOW() + make_interval(secs => $6))
+       RETURNING expires_at`,
+      [
+        attemptKey,
+        parsed.scope,
+        redirectTo,
+        hashRequestSide(req.ip),
+        hashRequestSide(req.get("user-agent") || ""),
+        env.telegramHandoff.attemptTtlSeconds,
+      ]
+    );
+
+    recordAuthMetric({
+      method: "BOT_HANDOFF",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
+    return res.json({
+      botUrl: buildTelegramHandoffDeepLink(env.telegram.botUsername, attemptKey),
+      expiresAt: attemptInsert.rows[0].expires_at,
+    });
+  })
+);
+
+authRouter.get(
+  "/telegram/handoff/complete",
+  asyncHandler(async (req, res) => {
+    if (!env.telegramHandoff.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+
+    const parsed = handoffCompleteSchema.parse(req.query ?? {});
+    const tokenHash = hashTelegramHandoffCompletionToken(parsed.token);
+    const attemptResult = await query<TelegramHandoffAttemptRow>(
+      `SELECT
+         id,
+         scope::text,
+         redirect_to,
+         status::text,
+         telegram_user_id,
+         telegram_profile,
+         completion_token_expires_at,
+         expires_at
+       FROM auth_telegram_handoff_attempts
+       WHERE completion_token_hash = $1
+       LIMIT 1`,
+      [tokenHash]
+    );
+    const attempt = attemptResult.rows[0];
+    if (!attempt) {
+      recordAuthMetric({
+        method: "BOT_HANDOFF",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "HANDOFF_TOKEN_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          code: "HANDOFF_TOKEN_EXPIRED",
+        })
+      );
+    }
+
+    const now = Date.now();
+    const tokenExpiresAt = attempt.completion_token_expires_at ? new Date(attempt.completion_token_expires_at).getTime() : 0;
+    const attemptExpiresAt = new Date(attempt.expires_at).getTime();
+    if (
+      attempt.status === "COMPLETED" ||
+      attempt.status === "CANCELLED" ||
+      !attempt.telegram_profile?.id ||
+      tokenExpiresAt <= now ||
+      attemptExpiresAt <= now
+    ) {
+      await query(
+        `UPDATE auth_telegram_handoff_attempts
+         SET status = CASE
+           WHEN status IN ('COMPLETED', 'CANCELLED') THEN status
+           ELSE 'EXPIRED'
+         END,
+         completion_token_hash = NULL,
+         completion_token_expires_at = NULL
+         WHERE id = $1`,
+        [attempt.id]
+      );
+      recordAuthMetric({
+        method: "BOT_HANDOFF",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "HANDOFF_TOKEN_EXPIRED",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: attempt.redirect_to,
+          code: "HANDOFF_TOKEN_EXPIRED",
+        })
+      );
+    }
+
+    let adminCandidateUsername = attempt.telegram_profile.username ?? null;
+    if (attempt.scope === "ADMIN" && !adminCandidateUsername) {
+      const existingUser = await query<{ username: string | null }>(
+        `SELECT username
+         FROM users
+         WHERE telegram_id = $1::bigint
+         LIMIT 1`,
+        [String(attempt.telegram_profile.id)]
+      );
+      adminCandidateUsername = existingUser.rows[0]?.username ?? null;
+    }
+
+    if (attempt.scope === "ADMIN" && !canChooseAdminRole({
+      telegram_id: String(attempt.telegram_profile.id),
+      username: adminCandidateUsername,
+    })) {
+      await query(
+        `UPDATE auth_telegram_handoff_attempts
+         SET status = 'CANCELLED',
+             completion_token_hash = NULL,
+             completion_token_expires_at = NULL
+         WHERE id = $1`,
+        [attempt.id]
+      );
+      recordAuthMetric({
+        method: "BOT_HANDOFF",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "ADMIN_SCOPE_NONE",
+      });
+      return res.redirect(
+        302,
+        buildAuthErrorRedirectPath({
+          redirectTo: attempt.redirect_to,
+          code: "ADMIN_SCOPE_NONE",
+        })
+      );
+    }
+
+    await completeTelegramLogin(
+      req,
+      res,
+      {
+        id: String(attempt.telegram_profile.id),
+        first_name: attempt.telegram_profile.first_name,
+        last_name: attempt.telegram_profile.last_name,
+        username: attempt.telegram_profile.username,
+        photo_url: attempt.telegram_profile.photo_url,
+      },
+      {
+        authMethod: "BOT_HANDOFF",
+        entryRoleOverride: attempt.scope === "ADMIN" ? "ADMIN" : "USER",
+      }
+    );
+
+    await query(
+      `UPDATE auth_telegram_handoff_attempts
+       SET status = 'COMPLETED',
+           completion_token_hash = NULL,
+           completion_token_expires_at = NULL,
+           completed_at = NOW()
+       WHERE id = $1`,
+      [attempt.id]
+    );
+    recordAuthMetric({
+      method: "BOT_HANDOFF",
+      platform: detectRequestPlatform(req),
+      outcome: "SUCCESS",
+    });
+
+    const { origin } = getAuthPublicUrls(req);
+    return res.redirect(302, new URL(attempt.redirect_to, origin).toString());
   })
 );
 
@@ -1138,9 +1391,9 @@ authRouter.get(
             )
           ).rows
         : [];
-    const oidcAdminReady = !env.telegramOidc.adminRequired || req.session.authMethod === "OIDC";
-    const platformTeams = oidcAdminReady ? platformTeamsRaw : [];
-    const teamAdminTeams = oidcAdminReady ? captainedTeamsRaw : [];
+    const trustedAdminReady = isTrustedAdminReady(req.session.authMethod);
+    const platformTeams = trustedAdminReady ? platformTeamsRaw : [];
+    const teamAdminTeams = trustedAdminReady ? captainedTeamsRaw : [];
     const adminScope: AdminScope =
       platformTeams.length > 0 ? "PLATFORM" : teamAdminTeams.length > 0 ? "TEAM" : "NONE";
     const managedTeams =
@@ -1170,6 +1423,7 @@ authRouter.get(
       activeMembershipId: req.session.activeMembershipId || null,
       activeTeamId: req.session.activeTeamId || null,
       authMethod: req.session.authMethod ?? null,
+      onboardingRequired: !user.onboarding_completed_at,
       capabilities,
       adminScope,
       managedTeamIds,

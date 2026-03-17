@@ -6,7 +6,14 @@ type TelegramSendMessageResponse = {
   error_code?: number;
 };
 
-export async function sendTelegramBotMessage(chatId: string, text: string): Promise<void> {
+export async function sendTelegramBotMessage(
+  chatId: string,
+  text: string,
+  options?: {
+    parseMode?: "HTML" | "MarkdownV2";
+    replyMarkup?: Record<string, unknown>;
+  }
+): Promise<void> {
   const url = `https://api.telegram.org/bot${env.telegram.botToken}/sendMessage`;
   const response = await fetch(url, {
     method: "POST",
@@ -14,6 +21,8 @@ export async function sendTelegramBotMessage(chatId: string, text: string): Prom
     body: JSON.stringify({
       chat_id: chatId,
       text,
+      parse_mode: options?.parseMode,
+      reply_markup: options?.replyMarkup,
       disable_web_page_preview: true,
     }),
   });
@@ -29,4 +38,3 @@ export async function sendTelegramBotMessage(chatId: string, text: string): Prom
     throw new Error(payload?.description || `Telegram sendMessage failed (${response.status})`);
   }
 }
-

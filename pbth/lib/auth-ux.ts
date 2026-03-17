@@ -1,6 +1,6 @@
 export type AuthScope = "USER" | "ADMIN" | "INVITE";
 export type AuthPlatform = "android" | "ios" | "desktop" | "unknown";
-export type AuthFlow = "MINIAPP" | "OIDC" | "UNKNOWN";
+export type AuthFlow = "MINIAPP" | "OIDC" | "BOT_HANDOFF" | "UNKNOWN";
 export type AuthLoginTransport = "WEBAPP" | "OIDC";
 
 type AuthErrorMessageMap = {
@@ -18,6 +18,10 @@ const AUTH_ERROR_MESSAGES: Record<string, AuthErrorMessageMap> = {
   },
   AUTH_REPLAY_DETECTED: {
     user: "Код входа уже использован. Запустите вход ещё раз.",
+  },
+  HANDOFF_TOKEN_EXPIRED: {
+    user: "Ссылка входа устарела или уже использована. Запустите вход через Telegram ещё раз.",
+    admin: "Ссылка входа в админку устарела или уже использована. Запустите вход заново.",
   },
   TELEGRAM_MISSING_FIELDS: {
     user: "Telegram не передал обязательные поля входа. Откройте Mini App заново.",

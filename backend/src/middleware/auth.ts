@@ -10,6 +10,7 @@ export type AuthUser = {
   avatar: string | null;
   is_active: boolean;
   account_role: "ADMIN" | "USER" | null;
+  onboarding_completed_at: string | null;
 };
 
 export async function attachAuthUser(req: Request): Promise<AuthUser | null> {
@@ -17,7 +18,7 @@ export async function attachAuthUser(req: Request): Promise<AuthUser | null> {
     return null;
   }
   const result = await query<AuthUser>(
-    `SELECT id, telegram_id::text, username, name, nickname, avatar, is_active, account_role
+    `SELECT id, telegram_id::text, username, name, nickname, avatar, is_active, account_role, onboarding_completed_at
      FROM users
      WHERE id = $1 AND is_active = TRUE`,
     [req.session.userId]

@@ -23,6 +23,11 @@ describe("auth error mapping", () => {
     expect(message).toContain("админ");
   });
 
+  it("returns explicit message for expired handoff link", () => {
+    const message = resolveAuthErrorMessage({ code: "HANDOFF_TOKEN_EXPIRED", scope: "USER" });
+    expect(message.toLowerCase()).toContain("ссылка");
+  });
+
   it("falls back to backend detail for unknown code", () => {
     const detail = "HTTP 401";
     expect(resolveAuthErrorMessage({ code: "SOMETHING_ELSE", detail, scope: "USER" })).toContain(detail);
