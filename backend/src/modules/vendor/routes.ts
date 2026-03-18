@@ -8,7 +8,7 @@ import {
   hashTelegramHandoffCompletionToken,
   parseTelegramHandoffWebhookStart,
 } from "../../lib/auth-telegram-handoff.js";
-import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
+import { buildTelegramWebhookSendMessagePayload } from "../../lib/telegram-bot.js";
 
 const vendorRouter = Router();
 
@@ -120,6 +120,18 @@ function sendFallback(res: Response, name: string) {
   );
 }
 
+function sendTelegramWebhookMessage(
+  res: Response,
+  chatId: string,
+  text: string,
+  options?: {
+    parseMode?: "HTML" | "MarkdownV2";
+    replyMarkup?: Record<string, unknown>;
+  }
+) {
+  return res.status(200).json(buildTelegramWebhookSendMessagePayload(chatId, text, options));
+}
+
 vendorRouter.get(
   "/tailwindcss.js",
   asyncHandler(async (_req, res) => {
@@ -172,13 +184,11 @@ vendorRouter.post(
     );
     const attempt = attemptResult.rows[0];
     if (!attempt) {
-      await sendTelegramBotMessage(
+      return sendTelegramWebhookMessage(
+        res,
         start.telegramChatId,
         "Ссылка входа не найдена. Вернитесь на сайт и начните вход заново."
-      ).catch((error) => {
-        console.warn("[telegram] failed to send missing-attempt message", error);
-      });
-      return res.status(200).json({ ok: true });
+      );
     }
 
     if (new Date(attempt.expires_at).getTime() <= Date.now() || attempt.status === "EXPIRED") {
@@ -190,33 +200,27 @@ vendorRouter.post(
          WHERE id = $1`,
         [attempt.id]
       );
-      await sendTelegramBotMessage(
+      return sendTelegramWebhookMessage(
+        res,
         start.telegramChatId,
         "Ссылка входа уже истекла. Вернитесь на сайт и запросите новую."
-      ).catch((error) => {
-        console.warn("[telegram] failed to send expired-attempt message", error);
-      });
-      return res.status(200).json({ ok: true });
+      );
     }
 
     if (attempt.status === "COMPLETED" || attempt.status === "CANCELLED") {
-      await sendTelegramBotMessage(
+      return sendTelegramWebhookMessage(
+        res,
         start.telegramChatId,
         "Этот запрос входа уже завершён. Если нужен новый вход, откройте сайт и начните заново."
-      ).catch((error) => {
-        console.warn("[telegram] failed to send closed-attempt message", error);
-      });
-      return res.status(200).json({ ok: true });
+      );
     }
 
     if (attempt.telegram_user_id && attempt.telegram_user_id !== start.telegramUserId) {
-      await sendTelegramBotMessage(
+      return sendTelegramWebhookMessage(
+        res,
         start.telegramChatId,
         "Этот запрос входа уже привязан к другому Telegram-аккаунту."
-      ).catch((error) => {
-        console.warn("[telegram] failed to send user-mismatch message", error);
-      });
-      return res.status(200).json({ ok: true });
+      );
     }
 
     const completionToken = buildTelegramHandoffCompletionToken();
@@ -243,7 +247,8 @@ vendorRouter.post(
 
     const buttonText = attempt.scope === "ADMIN" ? "Войти в admin" : "Войти в PBTH";
     const accessLabel = attempt.scope === "ADMIN" ? "в админку" : "на сайт";
-    await sendTelegramBotMessage(
+    return sendTelegramWebhookMessage(
+      res,
       start.telegramChatId,
       `${start.profile.first_name || "Пользователь"}, вход готов. Нажмите кнопку ниже, чтобы вернуться ${accessLabel}. Ссылка одноразовая и действует 10 минут.`,
       {
@@ -252,8 +257,6 @@ vendorRouter.post(
         },
       }
     );
-
-    return res.status(200).json({ ok: true });
   })
 );
 

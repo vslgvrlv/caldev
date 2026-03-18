@@ -7,6 +7,18 @@ Branch: `codex/telegram-bot-handoff-auth`
 `N5` — completed: Telegram bot handoff реализован как основной web login для `/login` и `/admin/login`, с auto-create + soft onboarding и сохранением Mini App fast-path.
 
 ## Progress Log
+- [x] `N5` staging follow-up #2 root cause found and hotfix prepared:
+  - после `Start` бот молчал не из-за deep-link или `start` payload, а потому что Telegram webhook зависал до таймаута;
+  - `getWebhookInfo` для staging-бота показал `pending_update_count > 0` и `last_error_message: "Read timeout expired"`;
+  - проверка staging-хоста подтвердила, что исходящие запросы к `https://api.telegram.org` зависают, хотя сам webhook до backend доходит;
+  - root cause в коде: [backend/src/modules/vendor/routes.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/modules/vendor/routes.ts) синхронно ждал `sendTelegramBotMessage(...)` внутри webhook, то есть ответ Telegram зависел от отдельного server->Telegram roundtrip;
+  - hotfix подготовлен локально: webhook handoff теперь отвечает `sendMessage` payload напрямую в HTTP response по Bot API webhook contract, без отдельного внешнего `fetch` на критическом пути;
+  - добавлен unit test [backend/src/__tests__/unit/telegram-bot.test.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/__tests__/unit/telegram-bot.test.ts), локально `backend test:unit`, `backend check`, `backend build`, `backend test:integration` — green (`integration` повторно запускался вне sandbox, потому что sandbox режет `supertest` через `listen EPERM`).
+- [x] `N5` staging follow-up root cause found:
+  - 18 марта 2026 Telegram webhook реально попадал в `POST /api/v1/vendor/telegram/webhook`, но backend отвечал `503`;
+  - проверка `pbth-staging-backend-1` показала пустые runtime env: `TELEGRAM_WEBHOOK_SECRET=` и `AUTH_TELEGRAM_HANDOFF_ENABLED=`;
+  - root cause: [docker-compose.release.yml](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/docker-compose.release.yml) не прокидывал `TELEGRAM_WEBHOOK_SECRET`/handoff/OIDC/Auth SLO env-переменные в backend container, даже если они уже были в `/opt/pbth/shared/env/staging.env`;
+  - hotfix подготовлен локально: compose env mapping расширен для Telegram webhook, handoff, OIDC, dev auth и Auth SLO переменных.
 - [x] N5 complete:
   - `N5-A1`: добавлена миграция `020_auth_telegram_handoff.sql` с `auth_telegram_handoff_attempts` и `users.onboarding_completed_at`;
   - env/contracts обновлены: `BOT_HANDOFF` добавлен в session/auth contracts, OpenAPI, frontend API types, release env examples.
