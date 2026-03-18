@@ -6,9 +6,11 @@ import {
   buildTelegramHandoffCompletionToken,
   buildTelegramHandoffCompletionUrl,
   hashTelegramHandoffCompletionToken,
+  isTelegramStartCommandText,
   parseTelegramHandoffWebhookStart,
 } from "../../lib/auth-telegram-handoff.js";
 import { buildTelegramWebhookSendMessagePayload } from "../../lib/telegram-bot.js";
+import { logger } from "../../lib/logger.js";
 
 const vendorRouter = Router();
 
@@ -132,6 +134,10 @@ function sendTelegramWebhookMessage(
   return res.status(200).json(buildTelegramWebhookSendMessagePayload(chatId, text, options));
 }
 
+function buildAbsoluteFrontendUrl(path: string) {
+  return new URL(path, env.frontendUrl).toString();
+}
+
 vendorRouter.get(
   "/tailwindcss.js",
   asyncHandler(async (_req, res) => {
@@ -170,8 +176,32 @@ vendorRouter.post(
       return res.status(401).json({ detail: "Invalid Telegram webhook secret", code: "AUTH_REQUIRED" });
     }
 
+    const rawMessageText = String(req.body?.message?.text || "").trim();
     const start = parseTelegramHandoffWebhookStart(req.body ?? {});
+    logger.info("telegram.webhook.received", {
+      correlationId: req.correlationId,
+      text: rawMessageText.slice(0, 160),
+      parsedAttemptKey: start?.attemptKey ?? null,
+      chatId: req.body?.message?.chat?.id ? String(req.body.message.chat.id) : null,
+      userId: req.body?.message?.from?.id ? String(req.body.message.from.id) : null,
+    });
+
     if (!start) {
+      if (isTelegramStartCommandText(rawMessageText) && req.body?.message?.chat?.id !== undefined) {
+        return sendTelegramWebhookMessage(
+          res,
+          String(req.body.message.chat.id),
+          "Чтобы войти, откройте сайт и нажмите кнопку входа. Я жду одноразовый код входа от сайта, без него я не смогу пустить внутрь.",
+          {
+            replyMarkup: {
+              inline_keyboard: [
+                [{ text: "Открыть PBTH", url: buildAbsoluteFrontendUrl("/login") }],
+                [{ text: "Открыть admin", url: buildAbsoluteFrontendUrl("/admin/login") }],
+              ],
+            },
+          }
+        );
+      }
       return res.status(200).json({ ok: true, ignored: true });
     }
 
