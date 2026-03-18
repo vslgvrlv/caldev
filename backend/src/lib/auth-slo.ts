@@ -1,4 +1,4 @@
-export type AuthMetricMethod = "OIDC" | "WEBAPP" | "LEGACY_WIDGET" | "DEV" | "UNKNOWN";
+export type AuthMetricMethod = "OIDC" | "WEBAPP" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "UNKNOWN";
 export type AuthMetricPlatform = "android" | "ios" | "desktop" | "unknown";
 export type AuthMetricOutcome = "ATTEMPT" | "SUCCESS" | "ERROR";
 

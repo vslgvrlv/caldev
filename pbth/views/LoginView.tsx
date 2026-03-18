@@ -38,7 +38,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     setAuthError(message);
     sendAuthTelemetry({
       scope: 'USER',
-      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'BOT_HANDOFF',
       event: 'error_page',
       code,
       detail,
@@ -82,7 +82,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       const hasTelegramWebApp = Boolean((window as any).Telegram?.WebApp);
       sendAuthTelemetry({
         scope: 'USER',
-        flow: hasTelegramWebApp ? 'MINIAPP' : 'OIDC',
+        flow: hasTelegramWebApp ? 'MINIAPP' : 'BOT_HANDOFF',
         event: 'login_start',
       });
       const initData = hasTelegramWebApp ? await waitMiniAppInitData() : '';
@@ -94,17 +94,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
         if (hasTelegramWebApp && !String(initData || '').trim()) {
           sendAuthTelemetry({
             scope: 'USER',
-            flow: 'OIDC',
-            event: 'webapp_initdata_missing_fallback_oidc',
+            flow: 'BOT_HANDOFF',
+            event: 'webapp_initdata_missing_fallback_handoff',
             code: 'INITDATA_MISSING',
           });
         }
-        sendAuthTelemetry({
-          scope: 'USER',
-          flow: 'OIDC',
-          event: 'oidc_redirect_start',
-        });
-        api.startTelegramDirect('/app');
+        const handoff = await api.startTelegramHandoff('USER', '/app');
+        window.location.assign(handoff.botUrl);
         return;
       }
       try {

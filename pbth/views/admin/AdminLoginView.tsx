@@ -32,7 +32,7 @@ export const AdminLoginView: React.FC = () => {
     setError(message);
     sendAuthTelemetry({
       scope: 'ADMIN',
-      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'BOT_HANDOFF',
       event: 'error_page',
       code,
       detail,
@@ -101,7 +101,7 @@ export const AdminLoginView: React.FC = () => {
         const hasTelegramWebApp = Boolean(tg);
         sendAuthTelemetry({
           scope: 'ADMIN',
-          flow: hasTelegramWebApp ? 'MINIAPP' : 'OIDC',
+          flow: hasTelegramWebApp ? 'MINIAPP' : 'BOT_HANDOFF',
           event: 'login_start',
           path: '/admin/login',
         });
@@ -170,26 +170,21 @@ export const AdminLoginView: React.FC = () => {
         if (hasTelegramWebApp && !String(initData || '').trim()) {
           sendAuthTelemetry({
             scope: 'ADMIN',
-            flow: 'OIDC',
-            event: 'webapp_initdata_missing_fallback_oidc',
+            flow: 'BOT_HANDOFF',
+            event: 'webapp_initdata_missing_fallback_handoff',
             code: 'INITDATA_MISSING',
             path: '/admin/login',
           });
         }
 
-        sendAuthTelemetry({
-          scope: 'ADMIN',
-          flow: 'OIDC',
-          event: 'oidc_redirect_start',
-          path: '/admin/login',
-        });
-        api.startTelegramOidc('/admin');
+        const handoff = await api.startTelegramHandoff('ADMIN', '/admin');
+        window.location.assign(handoff.botUrl);
       } catch (err) {
         const authErr = extractAuthError(err);
         setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
         sendAuthTelemetry({
           scope: 'ADMIN',
-          flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'OIDC',
+          flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'BOT_HANDOFF',
           event: 'login_error',
           code: authErr.code || 'ADMIN_LOGIN_START_FAILED',
           detail: authErr.detail,
@@ -220,7 +215,7 @@ export const AdminLoginView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold">PBTH Admin Console</h1>
-            <p className="text-pb-subtext text-sm">Вход только через Telegram OIDC</p>
+            <p className="text-pb-subtext text-sm">Вход через Telegram Mini App или через бота из браузера</p>
           </div>
         </div>
 
@@ -248,7 +243,7 @@ export const AdminLoginView: React.FC = () => {
           className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
         >
           <Send size={18} />
-          {startingLogin ? 'Переходим в Telegram...' : 'Войти в Admin через Telegram'}
+          {startingLogin ? 'Переходим в Telegram...' : 'Войти в Admin через Telegram-бот'}
         </button>
         <button
           onClick={() => navigate('/login', { replace: true })}

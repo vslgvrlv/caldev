@@ -1,7 +1,7 @@
 # Paintball Team Hub (pbth)
 
 Frontend: `pbth/` (React + Vite)
-Backend: `backend/` (Node + Express + Postgres + session auth + Telegram OAuth)
+Backend: `backend/` (Node + Express + Postgres + session auth + Telegram auth: Mini App, OIDC, bot handoff)
 
 ## GitHub Lite Release Model
 
@@ -85,10 +85,13 @@ docker compose up --build
 - `GET /api/v1/openapi.json`
 - `GET /api/v1/auth/telegram/start`
 - `GET /api/v1/auth/telegram/callback`
+- `POST /api/v1/auth/telegram/handoff/start`
+- `GET /api/v1/auth/telegram/handoff/complete`
 - `GET /api/v1/auth/me`
 - `GET /api/v1/auth/slo`
 - `POST /api/v1/auth/context`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/vendor/telegram/webhook`
 - `GET /api/v1/init`
 - `POST /api/v1/events`
 - `POST /api/v1/rsvp`
@@ -209,5 +212,6 @@ What it verifies:
 
 Then do manual checks in Telegram:
 1. Open from bot `Menu Button` and verify auto-login.
-2. Create event as captain/admin.
-3. Open invite link and ensure new user joins team after auth.
+2. Open `/login` from a regular browser, confirm redirect to `t.me/<bot>?start=login_<attempt>`, press `Start`, receive one-time return link, and land back on the same site authenticated.
+3. Create event as captain/admin.
+4. Open invite link and ensure new user joins team after auth.

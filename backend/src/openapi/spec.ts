@@ -22,9 +22,10 @@ export function buildOpenApiSpec() {
           type: "object",
           properties: {
             authenticated: { type: "boolean" },
-            authMethod: { type: "string", enum: ["WEBAPP", "OIDC", "LEGACY_WIDGET", "DEV", null] },
+            authMethod: { type: "string", enum: ["WEBAPP", "OIDC", "LEGACY_WIDGET", "DEV", "BOT_HANDOFF", null] },
             adminScope: { type: "string", enum: ["NONE", "TEAM", "PLATFORM"] },
             capabilities: { type: "array", items: { type: "string" } },
+            onboardingRequired: { type: "boolean" },
             managedTeamIds: { type: "array", items: { type: "string", format: "uuid" } },
             managedTeams: {
               type: "array",
@@ -203,6 +204,43 @@ export function buildOpenApiSpec() {
           responses: {
             "302": { description: "Redirect back to application after successful login" },
             "401": { description: "Invalid/expired OIDC state or token" },
+          },
+        },
+      },
+      "/auth/telegram/handoff/start": {
+        post: {
+          summary: "Start Telegram bot handoff login for web browser",
+          responses: {
+            "200": { description: "Bot deep-link created" },
+            "400": { description: "Invalid request" },
+            "404": { description: "Telegram handoff disabled" },
+          },
+        },
+      },
+      "/auth/telegram/handoff/complete": {
+        get: {
+          summary: "Complete Telegram bot handoff login and establish site session",
+          parameters: [
+            {
+              name: "token",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "302": { description: "Redirect back to site after session creation" },
+            "401": { description: "Invalid or expired handoff token" },
+          },
+        },
+      },
+      "/vendor/telegram/webhook": {
+        post: {
+          summary: "Receive Telegram Bot API webhook updates for bot handoff login",
+          responses: {
+            "200": { description: "Webhook accepted" },
+            "401": { description: "Invalid webhook secret" },
+            "503": { description: "Webhook not configured" },
           },
         },
       },

@@ -49,3 +49,11 @@ Rule: every task is atomic and deployable.
   - [x] N3-H4. Admin/Web login: корректный fallback в OIDC при открытии `/admin` вне Telegram Mini App (без ложной ошибки `initData`).
   - [x] N3-H5. Stabilize deploy auth SLO check: run it server-side (SSH) to avoid runner DNS false-failures.
 - [x] N4. Phase 5 Admin metrics pack.
+- [x] N5. Phase 6 Telegram bot handoff web auth.
+  - [x] N5-A1. Add auth migration/env/contracts for Telegram handoff attempts, onboarding flag, and `BOT_HANDOFF` auth method.
+  - [x] N5-A2. Add backend handoff start/complete flow with shared session finalizer and admin trusted-auth updates.
+  - [x] N5-A3. Add Telegram webhook ingress for `/start login_<attempt>` and bot message delivery with one-time completion links.
+  - [x] N5-B1. Switch browser login UX (`/login`, `/admin/login`) from OIDC-first to bot handoff while preserving Telegram WebApp fast-path.
+  - [x] N5-B2. Add soft onboarding signal/UX for first-login auto-created users.
+  - [x] N5-C1. Update docs/env/runbooks for webhook setup and new web login canonical flow.
+  - [x] N5-C2. Run full verification (`backend check/unit/integration`, `frontend typecheck/unit/build`) and finalize status.

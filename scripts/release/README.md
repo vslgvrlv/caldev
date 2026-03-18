@@ -42,3 +42,26 @@ Optional token auth:
 ```bash
 AUTH_SLO_TOKEN=<token> ./scripts/release/auth-slo-check.sh --base-url https://pbthub.ru
 ```
+
+## Telegram Bot Webhook
+
+Configure webhook for bot handoff login:
+
+```bash
+TELEGRAM_BOT_TOKEN=<token> \
+TELEGRAM_WEBHOOK_URL=https://staging.pbthub.ru/api/v1/vendor/telegram/webhook \
+TELEGRAM_WEBHOOK_SECRET=<secret> \
+./scripts/release/telegram-webhook.sh set
+```
+
+Inspect current webhook:
+
+```bash
+TELEGRAM_BOT_TOKEN=<token> ./scripts/release/telegram-webhook.sh info
+```
+
+Delete webhook:
+
+```bash
+TELEGRAM_BOT_TOKEN=<token> ./scripts/release/telegram-webhook.sh delete
+```

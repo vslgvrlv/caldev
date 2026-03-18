@@ -1,5 +1,14 @@
 import { Router, type Response } from "express";
 import { asyncHandler } from "../../middleware/async-handler.js";
+import { env } from "../../config/env.js";
+import { query } from "../../db/pool.js";
+import {
+  buildTelegramHandoffCompletionToken,
+  buildTelegramHandoffCompletionUrl,
+  hashTelegramHandoffCompletionToken,
+  parseTelegramHandoffWebhookStart,
+} from "../../lib/auth-telegram-handoff.js";
+import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
 
 const vendorRouter = Router();
 
@@ -17,6 +26,15 @@ type CacheEntry = {
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const cache = new Map<VendorName, CacheEntry>();
+
+type TelegramHandoffAttemptRow = {
+  id: string;
+  scope: "USER" | "ADMIN";
+  status: "PENDING" | "LINK_SENT" | "COMPLETED" | "EXPIRED" | "CANCELLED";
+  redirect_to: string;
+  telegram_user_id: string | null;
+  expires_at: string;
+};
 
 async function fetchVendor(name: VendorName): Promise<string> {
   const controller = new AbortController();
@@ -125,6 +143,117 @@ vendorRouter.get(
       console.error("[vendor] telegram-web-app fetch error", error);
       sendFallback(res, "telegram-web-app");
     }
+  })
+);
+
+vendorRouter.post(
+  "/telegram/webhook",
+  asyncHandler(async (req, res) => {
+    if (!env.telegram.webhookSecret) {
+      return res.status(503).json({ detail: "Telegram webhook is not configured", code: "WEBHOOK_DISABLED" });
+    }
+
+    const providedSecret = String(req.get("x-telegram-bot-api-secret-token") || "");
+    if (providedSecret !== env.telegram.webhookSecret) {
+      return res.status(401).json({ detail: "Invalid Telegram webhook secret", code: "AUTH_REQUIRED" });
+    }
+
+    const start = parseTelegramHandoffWebhookStart(req.body ?? {});
+    if (!start) {
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    const attemptResult = await query<TelegramHandoffAttemptRow>(
+      `SELECT id, scope::text, status::text, redirect_to, telegram_user_id, expires_at
+       FROM auth_telegram_handoff_attempts
+       WHERE attempt_key = $1
+       LIMIT 1`,
+      [start.attemptKey]
+    );
+    const attempt = attemptResult.rows[0];
+    if (!attempt) {
+      await sendTelegramBotMessage(
+        start.telegramChatId,
+        "Ссылка входа не найдена. Вернитесь на сайт и начните вход заново."
+      ).catch((error) => {
+        console.warn("[telegram] failed to send missing-attempt message", error);
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (new Date(attempt.expires_at).getTime() <= Date.now() || attempt.status === "EXPIRED") {
+      await query(
+        `UPDATE auth_telegram_handoff_attempts
+         SET status = 'EXPIRED',
+             completion_token_hash = NULL,
+             completion_token_expires_at = NULL
+         WHERE id = $1`,
+        [attempt.id]
+      );
+      await sendTelegramBotMessage(
+        start.telegramChatId,
+        "Ссылка входа уже истекла. Вернитесь на сайт и запросите новую."
+      ).catch((error) => {
+        console.warn("[telegram] failed to send expired-attempt message", error);
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (attempt.status === "COMPLETED" || attempt.status === "CANCELLED") {
+      await sendTelegramBotMessage(
+        start.telegramChatId,
+        "Этот запрос входа уже завершён. Если нужен новый вход, откройте сайт и начните заново."
+      ).catch((error) => {
+        console.warn("[telegram] failed to send closed-attempt message", error);
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (attempt.telegram_user_id && attempt.telegram_user_id !== start.telegramUserId) {
+      await sendTelegramBotMessage(
+        start.telegramChatId,
+        "Этот запрос входа уже привязан к другому Telegram-аккаунту."
+      ).catch((error) => {
+        console.warn("[telegram] failed to send user-mismatch message", error);
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    const completionToken = buildTelegramHandoffCompletionToken();
+    const completionUrl = buildTelegramHandoffCompletionUrl(env.frontendUrl, completionToken);
+    await query(
+      `UPDATE auth_telegram_handoff_attempts
+       SET status = 'LINK_SENT',
+           telegram_user_id = $2,
+           telegram_chat_id = $3,
+           telegram_profile = $4::jsonb,
+           completion_token_hash = $5,
+           completion_token_expires_at = NOW() + make_interval(secs => $6),
+           last_sent_at = NOW()
+       WHERE id = $1`,
+      [
+        attempt.id,
+        start.telegramUserId,
+        start.telegramChatId,
+        JSON.stringify(start.profile),
+        hashTelegramHandoffCompletionToken(completionToken),
+        env.telegramHandoff.tokenTtlSeconds,
+      ]
+    );
+
+    const buttonText = attempt.scope === "ADMIN" ? "Войти в admin" : "Войти в PBTH";
+    const accessLabel = attempt.scope === "ADMIN" ? "в админку" : "на сайт";
+    await sendTelegramBotMessage(
+      start.telegramChatId,
+      `${start.profile.first_name || "Пользователь"}, вход готов. Нажмите кнопку ниже, чтобы вернуться ${accessLabel}. Ссылка одноразовая и действует 10 минут.`,
+      {
+        replyMarkup: {
+          inline_keyboard: [[{ text: buttonText, url: completionUrl }]],
+        },
+      }
+    );
+
+    return res.status(200).json({ ok: true });
   })
 );
 

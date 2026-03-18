@@ -62,6 +62,19 @@ export const env = {
     allowedMaxAuthAgeSec: asNumber(process.env.TELEGRAM_MAX_AUTH_AGE_SEC || "600", "TELEGRAM_MAX_AUTH_AGE_SEC"),
     callbackUrl: required("TELEGRAM_CALLBACK_URL", "http://127.0.0.1:8000/api/v1/auth/telegram/callback"),
     botUsername: required("TELEGRAM_BOT_USERNAME", ""),
+    webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
+  },
+
+  telegramHandoff: {
+    enabled: asBoolean(process.env.AUTH_TELEGRAM_HANDOFF_ENABLED, true),
+    attemptTtlSeconds: asNumber(
+      process.env.AUTH_TELEGRAM_HANDOFF_ATTEMPT_TTL_SEC || "1800",
+      "AUTH_TELEGRAM_HANDOFF_ATTEMPT_TTL_SEC"
+    ),
+    tokenTtlSeconds: asNumber(
+      process.env.AUTH_TELEGRAM_HANDOFF_TOKEN_TTL_SEC || "600",
+      "AUTH_TELEGRAM_HANDOFF_TOKEN_TTL_SEC"
+    ),
   },
 
   telegramOidc: {
@@ -154,6 +167,14 @@ if (env.telegramOidc.canaryPercent < 0 || env.telegramOidc.canaryPercent > 100) 
 
 if (env.telegramOidc.canaryCookieMaxAgeSec < 60) {
   throw new Error("AUTH_OIDC_CANARY_COOKIE_MAX_AGE_SEC must be >= 60");
+}
+
+if (env.telegramHandoff.attemptTtlSeconds < 60) {
+  throw new Error("AUTH_TELEGRAM_HANDOFF_ATTEMPT_TTL_SEC must be >= 60");
+}
+
+if (env.telegramHandoff.tokenTtlSeconds < 60) {
+  throw new Error("AUTH_TELEGRAM_HANDOFF_TOKEN_TTL_SEC must be >= 60");
 }
 
 if (env.authSlo.windowMinutes < 1) {

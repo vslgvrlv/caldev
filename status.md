@@ -1,12 +1,45 @@
 # PBTH Execution Status
 
-Date: 2026-03-13
-Branch: `codex/fix-slo-check-runtime-path`
+Date: 2026-03-17
+Branch: `codex/telegram-bot-handoff-auth`
 
 ## Current Task
-`N3-H5` — стабилизировать deploy SLO-check (убрать ложные падения workflow из-за DNS на GitHub runner).
+`N5` — completed: Telegram bot handoff реализован как основной web login для `/login` и `/admin/login`, с auto-create + soft onboarding и сохранением Mini App fast-path.
 
 ## Progress Log
+- [x] N5 complete:
+  - `N5-A1`: добавлена миграция `020_auth_telegram_handoff.sql` с `auth_telegram_handoff_attempts` и `users.onboarding_completed_at`;
+  - env/contracts обновлены: `BOT_HANDOFF` добавлен в session/auth contracts, OpenAPI, frontend API types, release env examples.
+- [x] `N5-A2`/`N5-A3` complete:
+  - backend добавил `POST /api/v1/auth/telegram/handoff/start` и `GET /api/v1/auth/telegram/handoff/complete`;
+  - `completeTelegramLogin()` расширен до shared finalizer для `BOT_HANDOFF` и умеет принудительно выставлять `USER`/`ADMIN` entry role;
+  - `/auth/me` теперь отдаёт `onboardingRequired` и считает trusted admin auth через `OIDC | BOT_HANDOFF`;
+  - `POST /api/v1/vendor/telegram/webhook` принимает `/start login_<attempt>`, валидирует `X-Telegram-Bot-Api-Secret-Token`, связывает attempt с Telegram user и шлёт one-time completion link через inline button.
+- [x] `N5-B1`/`N5-B2` complete:
+  - browser login UX для `/login` и `/admin/login` переведён на bot handoff (`api.startTelegramHandoff(...)` + redirect в `t.me/...`);
+  - Telegram Mini App fast-path через `initData` сохранён без изменений;
+  - soft onboarding показан как non-blocking banner в user app (`/app`) и в `Admin Console`.
+- [x] `N5-C1` complete:
+  - обновлены `README.md`, `scripts/release/README.md`, env examples;
+  - добавлен ops script `scripts/release/telegram-webhook.sh` (`set|info|delete`) для Telegram webhook.
+- [x] `N5-C2` verification complete:
+  - `backend`: `npm run check` (green),
+  - `backend`: `npm run test:unit` (green),
+  - `backend`: `npm run build` (green),
+  - `backend`: `npm run test:integration` (green after escalated re-run; initial sandbox run падал на `listen EPERM 0.0.0.0`, не на логике приложения),
+  - `pbth`: `npm run typecheck` (green),
+  - `pbth`: `npm run test:unit` (green),
+  - `pbth`: `npm run build` (green),
+  - `bash -n scripts/release/telegram-webhook.sh` (green).
+- [x] N5 kickoff:
+  - создан isolated worktree `.worktrees/telegram-bot-handoff-auth` на ветке `codex/telegram-bot-handoff-auth`;
+  - baseline подтверждён: `backend check` и `pbth typecheck` проходят в worktree после установки зависимостей.
+- [x] N5 design locked:
+  - выбран `Bot handoff` как canonical web login; Mini App/WebApp остаётся отдельным fast-path внутри Telegram;
+  - `USER + ADMIN` входят через один handoff-механизм с разным `scope`;
+  - completion link: one-time, TTL `10 min`; handoff attempt TTL `30 min`;
+  - first login: `auto-create + soft onboarding`;
+  - bot ingress: webhook, не polling.
 - [x] `N3-H5` follow-up #2 (final hardening):
   - run `23045971523` выявил ещё один root cause: `node: command not found` при server-side запуске `auth-slo-check.sh` (на host-машине нет Node runtime);
   - `scripts/release/auth-slo-check.sh` расширен параметром `--resolve-host`, чтобы выполнять check на runner, но без DNS-зависимости (`curl --resolve host:port:DEPLOY_HOST`);

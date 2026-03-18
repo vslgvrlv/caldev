@@ -352,6 +352,12 @@ export const AdminConsoleView: React.FC = () => {
           </div>
         </div>
 
+        {me.onboardingRequired && (
+          <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            Аккаунт создан автоматически из Telegram bot handoff. Soft onboarding включён: доступ уже открыт, а дополнительные данные можно дозаполнить позже.
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-200">
             {error}

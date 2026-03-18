@@ -37,7 +37,7 @@ export type TeamInviteInfoResponse = {
   isRevoked: boolean;
 };
 
-export type AuthMethod = 'WEBAPP' | 'OIDC' | 'LEGACY_WIDGET' | 'DEV' | null;
+export type AuthMethod = 'WEBAPP' | 'OIDC' | 'LEGACY_WIDGET' | 'DEV' | 'BOT_HANDOFF' | null;
 export type AdminScope = 'NONE' | 'TEAM' | 'PLATFORM';
 
 export type AuthMeResponse =
@@ -59,6 +59,7 @@ export type AuthMeResponse =
       activeMembershipId: string | null;
       activeTeamId: string | null;
       authMethod: AuthMethod;
+      onboardingRequired?: boolean;
       capabilities: string[];
       adminScope: AdminScope;
       managedTeamIds: string[];
@@ -309,6 +310,13 @@ export const api = {
     return request<{ ok: true; accountRole: 'ADMIN' | 'USER' }>('/auth/select-role', {
       method: 'POST',
       body: { accountRole },
+    });
+  },
+
+  async startTelegramHandoff(scope: 'USER' | 'ADMIN', redirectTo = '/app'): Promise<{ botUrl: string; expiresAt: string }> {
+    return request<{ botUrl: string; expiresAt: string }>('/auth/telegram/handoff/start', {
+      method: 'POST',
+      body: { scope, redirectTo },
     });
   },
 
