@@ -51,6 +51,10 @@ export function parseTelegramHandoffStartText(text: string): string | null {
   return match?.[1] || null;
 }
 
+export function isTelegramStartCommandText(text: string): boolean {
+  return /^\/start(?:@\w+)?(?:\s+login_[A-Za-z0-9_-]+)?$/.test(text.trim());
+}
+
 export function parseTelegramHandoffWebhookStart(update: Record<string, any>): TelegramHandoffWebhookStart | null {
   const message = update?.message;
   const attemptKey = parseTelegramHandoffStartText(String(message?.text || ""));

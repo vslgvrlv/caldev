@@ -7,6 +7,12 @@ Branch: `codex/telegram-bot-handoff-auth`
 `N5` — completed: Telegram bot handoff реализован как основной web login для `/login` и `/admin/login`, с auto-create + soft onboarding и сохранением Mini App fast-path.
 
 ## Progress Log
+- [x] `N5` staging follow-up #3 root cause found and hotfix prepared:
+  - после выкатки inline-webhook fix бот всё ещё мог молчать, если Telegram присылал обычный `/start` без `login_<attemptKey>`;
+  - root cause в UX/route contract: [backend/src/modules/vendor/routes.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/modules/vendor/routes.ts) при `!parseTelegramHandoffWebhookStart(...)` возвращал `{ ok: true, ignored: true }`, то есть plain `/start` был чёрной дырой;
+  - hotfix подготовлен локально: обычный `/start` теперь отвечает инструкцией с кнопками на `/login` и `/admin/login`, а webhook пишет structured log `telegram.webhook.received` c `text` и `parsedAttemptKey`;
+  - добавлен integration test [backend/src/__tests__/integration/telegram-webhook.test.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/__tests__/integration/telegram-webhook.test.ts);
+  - локально `backend test:unit`, `backend check`, `backend build`, `backend test:integration` — green.
 - [x] `N5` staging follow-up #2 root cause found and hotfix prepared:
   - после `Start` бот молчал не из-за deep-link или `start` payload, а потому что Telegram webhook зависал до таймаута;
   - `getWebhookInfo` для staging-бота показал `pending_update_count > 0` и `last_error_message: "Read timeout expired"`;
@@ -14,6 +20,13 @@ Branch: `codex/telegram-bot-handoff-auth`
   - root cause в коде: [backend/src/modules/vendor/routes.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/modules/vendor/routes.ts) синхронно ждал `sendTelegramBotMessage(...)` внутри webhook, то есть ответ Telegram зависел от отдельного server->Telegram roundtrip;
   - hotfix подготовлен локально: webhook handoff теперь отвечает `sendMessage` payload напрямую в HTTP response по Bot API webhook contract, без отдельного внешнего `fetch` на критическом пути;
   - добавлен unit test [backend/src/__tests__/unit/telegram-bot.test.ts](/Users/pk/Documents/CalDEV/.worktrees/telegram-bot-handoff-auth/backend/src/__tests__/unit/telegram-bot.test.ts), локально `backend test:unit`, `backend check`, `backend build`, `backend test:integration` — green (`integration` повторно запускался вне sandbox, потому что sandbox режет `supertest` через `listen EPERM`).
+- [x] `N5` staging rollout complete for webhook hotfix:
+  - PR `#24` смёржен в `main`, merge commit: `135e5b7874a53e33039907162723080769688edc`;
+  - Release Artifact run `23249270001` — success, `release_id=v2026.03.18-n5-hotfix2`;
+  - Deploy Staging run `23249302440` — success;
+  - `GET /api/v1/release/version` на staging -> `v2026.03.18-n5-hotfix2`;
+  - synthetic POST на `https://staging.pbthub.ru/api/v1/vendor/telegram/webhook` с валидным `X-Telegram-Bot-Api-Secret-Token` вернул Telegram-compatible inline response:
+    - `{"method":"sendMessage","chat_id":"99887766","text":"Ссылка входа не найдена..."}`.
 - [x] `N5` staging follow-up root cause found:
   - 18 марта 2026 Telegram webhook реально попадал в `POST /api/v1/vendor/telegram/webhook`, но backend отвечал `503`;
   - проверка `pbth-staging-backend-1` показала пустые runtime env: `TELEGRAM_WEBHOOK_SECRET=` и `AUTH_TELEGRAM_HANDOFF_ENABLED=`;

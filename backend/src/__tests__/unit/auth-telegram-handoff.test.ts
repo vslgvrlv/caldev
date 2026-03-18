@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTelegramHandoffCompletionUrl,
   buildTelegramHandoffDeepLink,
+  isTelegramStartCommandText,
   isTrustedAdminAuthMethod,
   parseTelegramHandoffWebhookStart,
   parseTelegramHandoffStartText,
@@ -20,6 +21,14 @@ describe("telegram bot handoff auth helpers", () => {
     expect(parseTelegramHandoffStartText("/start login_abc123attempt")).toBe("abc123attempt");
     expect(parseTelegramHandoffStartText("/start something_else")).toBeNull();
     expect(parseTelegramHandoffStartText("plain text")).toBeNull();
+  });
+
+  it("recognizes plain /start commands without handoff payload", () => {
+    expect(isTelegramStartCommandText("/start")).toBe(true);
+    expect(isTelegramStartCommandText("/start@pbth_staging_bot")).toBe(true);
+    expect(isTelegramStartCommandText("/start login_abc123attempt")).toBe(true);
+    expect(isTelegramStartCommandText("/help")).toBe(false);
+    expect(isTelegramStartCommandText("plain text")).toBe(false);
   });
 
   it("extracts webhook /start payload with telegram identity snapshot", () => {
