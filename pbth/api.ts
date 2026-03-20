@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, Transaction, User, RSVPStatus, EventType, TransactionType } from './types';
+import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType } from './types';
 
 const baseFromEnv = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 const API_URL = baseFromEnv ? `${baseFromEnv}/api/v1` : '/api/v1';
@@ -237,9 +237,19 @@ export type AdminAuditResponse = {
   limit: number;
 };
 
-type FinanceOverviewResponse = {
+export type FinanceOverviewResponse = {
+  team?: {
+    id: string;
+    name: string;
+    budget?: number;
+  };
   summary?: {
     balance?: number;
+    totalOutstanding?: number;
+    totalEventChargesOpen?: number;
+    overdueCount?: number;
+    pendingDeposits?: number;
+    pendingConfirmations?: number;
   };
   recentTransactions?: Array<{
     id: string;
@@ -248,17 +258,150 @@ type FinanceOverviewResponse = {
     title: string;
     date: string;
     userId?: string | null;
-    userName?: string | null;
+      userName?: string | null;
     status?: 'PENDING' | 'COMPLETED';
+  }>;
+  topDebtors?: Array<{
+    userId: string;
+    name: string;
+    nickname: string;
+    avatar?: string | null;
+    debt: number;
   }>;
 };
 
-type FinanceMembersResponse = {
+export type FinanceMembersResponse = {
   items?: Array<{
     userId: string;
+    name?: string;
+    nickname?: string;
+    avatar?: string | null;
+    role?: 'ADMIN' | 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+    memberStatus?: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+    totalDue?: number;
+    totalPaid?: number;
     outstanding?: number;
     overpaid?: number;
   }>;
+};
+
+export type FinanceEventsResponse = {
+  items?: Array<{
+    eventId: string;
+    title: string;
+    type: string;
+    startDate: string;
+    costStatus: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+    plannedTotal?: number;
+    expenseTotal?: number;
+    collectionTargetTotal?: number;
+    chargedTotal: number;
+    paidTotal: number;
+    outstandingTotal: number;
+    undistributedTotal?: number;
+    remainingToCollect?: number;
+    overpaidTotal?: number;
+    membersCharged: number;
+    membersPaid: number;
+    state: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';
+    collectionState?: 'EMPTY' | 'NEEDS_DISTRIBUTION' | 'COLLECTING' | 'COLLECTED' | 'OVERPAID';
+  }>;
+};
+
+export type FinanceEventDetailResponse = {
+  event: {
+    id: string;
+    title: string;
+    type: string;
+    startDate: string;
+    location?: string | null;
+    cost?: number;
+    costStatus: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
+    financeState: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';
+  };
+  summary: {
+    chargedTotal: number;
+    paidTotal: number;
+    outstandingTotal: number;
+    collectionRatePct: number;
+  };
+  collection?: {
+    expenseTotal: number;
+    targetTotal: number;
+    chargedTotal: number;
+    paidTotal: number;
+    undistributedTotal: number;
+    remainingToCollect: number;
+    overpaidTotal: number;
+    membersCharged: number;
+    membersPaid: number;
+    state: 'EMPTY' | 'NEEDS_DISTRIBUTION' | 'COLLECTING' | 'COLLECTED' | 'OVERPAID';
+  };
+  participants: Array<{
+    userId: string;
+    name: string;
+    nickname: string;
+    avatar?: string | null;
+    role?: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+    memberStatus?: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+    rsvpStatus?: 'UNANSWERED' | 'PENDING' | 'CONFIRMED' | 'DECLINED';
+    amountDue: number;
+    amountPaid: number;
+    amountOutstanding: number;
+    chargeStatus: 'PENDING' | 'PARTIAL' | 'PAID';
+  }>;
+  payments: Array<{
+    transactionId: string;
+    date: string;
+    type: TransactionType;
+    title: string;
+    amount: number;
+    payerUserId?: string;
+    payerName?: string;
+    status: 'PENDING' | 'COMPLETED';
+    allocations: Array<{ userId: string; amount: number }>;
+  }>;
+};
+
+export type FinanceMemberDetailResponse = {
+  member?: {
+    userId: string;
+    name: string;
+    nickname: string;
+    avatar?: string | null;
+    role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
+    status: 'ACTIVE' | 'INJURED' | 'RESERVE' | 'VACATION';
+    balance: number;
+  };
+  summary?: {
+    totalDue: number;
+    totalPaid: number;
+    outstanding: number;
+    eventsWithDebt: number;
+  };
+  eventDebts?: Array<{
+    eventId: string;
+    teamId?: string;
+    teamName?: string;
+    title: string;
+    date: string;
+    amountDue: number;
+    amountPaid: number;
+    outstanding: number;
+    chargeStatus: 'PENDING' | 'PARTIAL' | 'PAID';
+  }>;
+  payments?: Array<{
+    transactionId: string;
+    date: string;
+    amount: number;
+    title: string;
+    allocatedAmount: number;
+    unallocatedAmount: number;
+  }>;
+};
+
+export type FinanceTransferConfirmationsResponse = {
+  items?: TransferConfirmation[];
 };
 
 type RequestOptions = {
@@ -312,6 +455,13 @@ export const api = {
     });
   },
 
+  async switchTeamContext(membershipId: string): Promise<{ ok: true }> {
+    return request<{ ok: true }>('/auth/context', {
+      method: 'POST',
+      body: { membershipId },
+    });
+  },
+
   startTelegramOidc(redirectTo = '/app') {
     window.location.assign(`/api/v1/auth/telegram/oidc/start?redirectTo=${encodeURIComponent(redirectTo)}`);
   },
@@ -335,6 +485,7 @@ export const api = {
     const data = await res.json() as {
       user?: User;
       team?: Team;
+      teams?: TeamContext[];
       members?: TeamMember[];
       events?: any[];
       actionRequiredEvents?: any[];
@@ -366,6 +517,7 @@ export const api = {
       events: normalizedEvents,
       transactions: normalizedTransactions,
       members: data.members || [],
+      teams: (data.teams || []) as TeamContext[],
     };
   },
 
@@ -438,13 +590,26 @@ export const api = {
 
   async addTransaction(tx: Transaction) {
     const idempotencyKey = `legacy-tx-${tx.id}`.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128);
-    return request('/transactions', {
+    const qs = tx.teamId ? `?teamId=${encodeURIComponent(tx.teamId)}` : '';
+    return request(`/transactions${qs}`, {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
       body: {
         ...tx,
         date: tx.date.toISOString()
       },
+    });
+  },
+
+  async updateTransaction(payload: {
+    transactionId: string;
+    title?: string;
+    amount?: number;
+    eventId?: string | null;
+  }) {
+    return request<{ success: boolean; transaction: Transaction }>(`/transactions/${encodeURIComponent(payload.transactionId)}`, {
+      method: 'PATCH',
+      body: payload,
     });
   },
 
@@ -466,6 +631,55 @@ export const api = {
     return request<FinanceMembersResponse>(`/finance/members?teamId=${encodeURIComponent(teamId)}`);
   },
 
+  async getFinanceEvents(teamId: string): Promise<FinanceEventsResponse> {
+    return request<FinanceEventsResponse>(`/finance/events?teamId=${encodeURIComponent(teamId)}`);
+  },
+
+  async getFinanceEventDetail(eventId: string): Promise<FinanceEventDetailResponse> {
+    return request<FinanceEventDetailResponse>(`/finance/events/${encodeURIComponent(eventId)}`);
+  },
+
+  async getFinanceMember(teamId: string, userId: string): Promise<FinanceMemberDetailResponse> {
+    return request<FinanceMemberDetailResponse>(`/finance/members/${encodeURIComponent(userId)}?teamId=${encodeURIComponent(teamId)}`);
+  },
+
+  async getFinanceConfirmations(teamId: string): Promise<FinanceTransferConfirmationsResponse> {
+    return request<FinanceTransferConfirmationsResponse>(`/finance/confirmations?teamId=${encodeURIComponent(teamId)}`);
+  },
+
+  async createTransferConfirmation(payload: {
+    teamId: string;
+    userId?: string;
+    amount: number;
+    screenshotDataUrl: string;
+    note?: string;
+    submittedAt?: string;
+  }): Promise<{ success: boolean; confirmation: TransferConfirmation | null }> {
+    return request<{ success: boolean; confirmation: TransferConfirmation | null }>('/finance/confirmations', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async reviewTransferConfirmation(payload: {
+    confirmationId: string;
+    decision: 'APPROVE' | 'REJECT';
+    reviewNote?: string;
+    preferredEventId?: string;
+  }): Promise<{ success: boolean; confirmation: TransferConfirmation | null }> {
+    return request<{ success: boolean; confirmation: TransferConfirmation | null }>(
+      `/finance/confirmations/${encodeURIComponent(payload.confirmationId)}/review`,
+      {
+        method: 'POST',
+        body: {
+          decision: payload.decision,
+          reviewNote: payload.reviewNote,
+          preferredEventId: payload.preferredEventId,
+        },
+      }
+    );
+  },
+
   async createFinancePayment(payload: {
     teamId: string;
     amount: number;
@@ -479,6 +693,30 @@ export const api = {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },
       body: payload,
+    });
+  },
+
+  async generateEventCharges(payload: {
+    eventId: string;
+    mode?: 'CONFIRMED_ONLY' | 'CONFIRMED_AND_PENDING';
+    amountType: 'FIXED_PER_PERSON' | 'TOTAL_SPLIT' | 'UNDISTRIBUTED_SPLIT' | 'CUSTOM';
+    fixedAmount?: number;
+    totalAmount?: number;
+    overwriteExisting?: boolean;
+    custom?: Array<{ userId: string; amount: number }>;
+  }) {
+    const idempotencyKey = `event-charge-${payload.eventId}-${Date.now()}`.slice(0, 120);
+    return request(`/finance/events/${encodeURIComponent(payload.eventId)}/charges/generate`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: {
+        mode: payload.mode ?? 'CONFIRMED_ONLY',
+        amountType: payload.amountType,
+        fixedAmount: payload.fixedAmount,
+        totalAmount: payload.totalAmount,
+        overwriteExisting: payload.overwriteExisting ?? false,
+        custom: payload.custom,
+      },
     });
   },
 
@@ -501,6 +739,7 @@ export const api = {
   },
 
   async remindFinanceDebtors(payload?: {
+    teamId?: string;
     userIds?: string[];
     customText?: string;
   }): Promise<NotificationDeliveryResponse> {
@@ -511,12 +750,30 @@ export const api = {
   },
 
   async remindFinanceMemberDebt(payload: {
+    teamId?: string;
     userId: string;
     customText?: string;
   }): Promise<NotificationDeliveryResponse> {
     return request(`/notifications/finance/members/${payload.userId}/remind-debt`, {
       method: 'POST',
-      body: payload.customText ? { customText: payload.customText } : {},
+      body: {
+        ...(payload.customText ? { customText: payload.customText } : {}),
+        ...(payload.teamId ? { teamId: payload.teamId } : {}),
+      },
+    });
+  },
+
+  async remindEventDebtors(payload: {
+    eventId: string;
+    userIds?: string[];
+    customText?: string;
+  }): Promise<NotificationDeliveryResponse> {
+    return request(`/notifications/finance/events/${payload.eventId}/remind-debtors`, {
+      method: 'POST',
+      body: {
+        userIds: payload.userIds,
+        customText: payload.customText,
+      },
     });
   },
 

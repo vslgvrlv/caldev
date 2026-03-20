@@ -106,13 +106,50 @@ export enum TransactionType {
 
 export interface Transaction {
   id: string;
+  teamId?: string;
   type: TransactionType;
   amount: number;
   title: string;
   date: Date;
   userId?: string; // Who paid or was charged
   userName?: string;
+  eventId?: string;
   status: 'PENDING' | 'COMPLETED';
+}
+
+export interface TeamContext {
+  membershipId: string;
+  teamId: string;
+  teamName: string;
+  shortCode?: string;
+  role: Role;
+}
+
+export type TransferConfirmationStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+
+export interface TransferConfirmation {
+  id: string;
+  teamId: string;
+  teamName?: string;
+  userId: string;
+  userName: string;
+  userNickname?: string;
+  amount: number;
+  screenshotDataUrl: string;
+  note?: string;
+  reviewNote?: string;
+  status: TransferConfirmationStatus;
+  submittedAt: string;
+  reviewedAt?: string;
+  submittedBy: {
+    userId: string;
+    name?: string;
+  };
+  reviewedBy?: {
+    userId: string;
+    name?: string;
+  };
+  transactionId?: string;
 }
 
 // --- NEW STATS TYPES ---

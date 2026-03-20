@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LandingView } from './views/LandingView';
-import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game } from './types';
+import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, TeamContext, AuthStep, UserRoleOption, Transaction, TransactionType, TransferConfirmation, PlayerStatus, Game } from './types';
 import { BottomNav } from './components/BottomNav';
 import { Dashboard } from './views/Dashboard';
 import { CalendarView } from './views/CalendarView';
@@ -20,7 +20,15 @@ import { AdminLoginView } from './views/admin/AdminLoginView';
 import { AdminConsoleView } from './views/admin/AdminConsoleView';
 import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
-import { api, type NotificationDeliveryResponse } from './api'; // Import API
+import {
+  api,
+  type FinanceEventsResponse,
+  type FinanceMembersResponse,
+  type FinanceMemberDetailResponse,
+  type FinanceOverviewResponse,
+  type NotificationDeliveryResponse,
+} from './api';
+import { ALL_TEAMS_FINANCE_FILTER, mergePlayerFinanceSnapshots } from './lib/finance-view-model';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -37,10 +45,18 @@ const App: React.FC = () => {
   // Data State
   const [user, setUser] = useState<User | null>(null);
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+  const [teamContexts, setTeamContexts] = useState<TeamContext[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [financeSelectedTeamId, setFinanceSelectedTeamId] = useState<string>('');
+  const [financeMembers, setFinanceMembers] = useState<TeamMember[]>([]);
+  const [financeOverview, setFinanceOverview] = useState<FinanceOverviewResponse | null>(null);
+  const [financeEvents, setFinanceEvents] = useState<FinanceEventsResponse['items']>([]);
+  const [financeConfirmations, setFinanceConfirmations] = useState<TransferConfirmation[]>([]);
+  const [playerFinanceDetail, setPlayerFinanceDetail] = useState<FinanceMemberDetailResponse | null>(null);
   const [calendarLink, setCalendarLink] = useState<string>('');
+  const [isSwitchingTeam, setIsSwitchingTeam] = useState(false);
   
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
 
@@ -102,6 +118,157 @@ const App: React.FC = () => {
     }
   };
 
+  const canUseAllTeamsFinance = (contexts: TeamContext[]) =>
+    contexts.length > 1 && contexts.every((item) => item.role === Role.PLAYER);
+
+  const normalizeFinanceSelection = (contexts: TeamContext[], activeTeamId: string, requestedSelection?: string) => {
+    const allowAllTeams = canUseAllTeamsFinance(contexts);
+    if (allowAllTeams && requestedSelection === ALL_TEAMS_FINANCE_FILTER) {
+      return ALL_TEAMS_FINANCE_FILTER;
+    }
+    if (requestedSelection && contexts.some((item) => item.teamId === requestedSelection)) {
+      return requestedSelection;
+    }
+    return allowAllTeams ? ALL_TEAMS_FINANCE_FILTER : activeTeamId;
+  };
+
+  const mapTransactionsFromOverview = (overview: FinanceOverviewResponse | null): Transaction[] =>
+    Array.isArray(overview?.recentTransactions)
+      ? overview.recentTransactions.map((t: any) => ({
+          id: String(t.id),
+          type: t.type as TransactionType,
+          amount: Number(t.amount),
+          title: String(t.title),
+          date: new Date(t.date),
+          userId: t.userId || undefined,
+          userName: t.userName || undefined,
+          eventId: t.eventId || undefined,
+          status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
+        }))
+      : [];
+
+  const mapFinanceMembers = (items: FinanceMembersResponse['items'] | undefined): TeamMember[] =>
+    (items || []).map((item) => ({
+      id: String(item.userId),
+      name: String(item.name || ''),
+      nickname: String(item.nickname || ''),
+      avatar: item.avatar ? String(item.avatar) : undefined,
+      role: (item.role as Role) || Role.PLAYER,
+      status: (item.memberStatus as PlayerStatus) || PlayerStatus.ACTIVE,
+      balance: Number(item.overpaid || 0) - Number(item.outstanding || 0),
+    }));
+
+  const loadFinanceData = async (params: {
+    user: User;
+    activeTeam: Team;
+    teamContexts: TeamContext[];
+    selection: string;
+  }) => {
+    const selection = normalizeFinanceSelection(params.teamContexts, params.activeTeam.id, params.selection);
+    const selectedContext = params.teamContexts.find((item) => item.teamId === selection) || null;
+
+    if (selection === ALL_TEAMS_FINANCE_FILTER) {
+      const snapshots = await Promise.all(
+        params.teamContexts.map(async (context) => {
+          const [detail, confirmations] = await Promise.all([
+            api.getFinanceMember(context.teamId, params.user.id),
+            api.getFinanceConfirmations(context.teamId),
+          ]);
+
+          return {
+            teamId: context.teamId,
+            teamName: context.teamName,
+            summary: detail.summary || {
+              totalDue: 0,
+              totalPaid: 0,
+              outstanding: 0,
+              eventsWithDebt: 0,
+            },
+            eventDebts: (detail.eventDebts || []).map((item) => ({
+              ...item,
+              teamId: context.teamId,
+              teamName: context.teamName,
+            })),
+            confirmations: (confirmations.items || []).map((item) => ({
+              ...item,
+              teamName: context.teamName,
+            })),
+          };
+        })
+      );
+
+      const merged = mergePlayerFinanceSnapshots(snapshots);
+      setFinanceSelectedTeamId(selection);
+      setFinanceMembers([]);
+      setFinanceOverview({
+        summary: {
+          totalOutstanding: merged.summary.outstanding,
+          overdueCount: merged.summary.eventsWithDebt,
+          pendingConfirmations: merged.summary.pendingConfirmations,
+        },
+        recentTransactions: [],
+        topDebtors: [],
+      });
+      setFinanceEvents([]);
+      setFinanceConfirmations(merged.confirmations as TransferConfirmation[]);
+      setPlayerFinanceDetail({
+        summary: {
+          totalDue: merged.summary.totalDue,
+          totalPaid: merged.summary.totalPaid,
+          outstanding: merged.summary.outstanding,
+          eventsWithDebt: merged.summary.eventsWithDebt,
+        },
+        eventDebts: merged.eventDebts,
+        payments: [],
+      });
+      setTransactions([]);
+      return;
+    }
+
+    if (!selectedContext) {
+      throw new Error('Selected finance team is not available');
+    }
+
+    if (selectedContext.role === Role.CAPTAIN || selectedContext.role === Role.ADMIN || selectedContext.role === Role.TRAINER) {
+      const [overview, financeMembersResult, confirmations, eventsResult] = await Promise.all([
+        api.getFinanceOverview(selectedContext.teamId),
+        api.getFinanceMembers(selectedContext.teamId),
+        api.getFinanceConfirmations(selectedContext.teamId),
+        api.getFinanceEvents(selectedContext.teamId),
+      ]);
+
+      setFinanceSelectedTeamId(selection);
+      setFinanceOverview(overview);
+      setFinanceMembers(mapFinanceMembers(financeMembersResult.items));
+      setFinanceConfirmations((confirmations.items || []).map((item) => ({ ...item, teamName: selectedContext.teamName })));
+      setFinanceEvents(eventsResult.items || []);
+      setPlayerFinanceDetail(null);
+      setTransactions(mapTransactionsFromOverview(overview));
+      return;
+    }
+
+    const [overview, detail, confirmations] = await Promise.all([
+      api.getFinanceOverview(selectedContext.teamId),
+      api.getFinanceMember(selectedContext.teamId, params.user.id),
+      api.getFinanceConfirmations(selectedContext.teamId),
+    ]);
+
+    setFinanceSelectedTeamId(selection);
+    setFinanceOverview(overview);
+    setFinanceMembers([]);
+    setFinanceEvents([]);
+    setFinanceConfirmations((confirmations.items || []).map((item) => ({ ...item, teamName: selectedContext.teamName })));
+    setPlayerFinanceDetail({
+      ...detail,
+      eventDebts: (detail.eventDebts || []).map((item) => ({
+        ...item,
+        teamId: selectedContext.teamId,
+        teamName: selectedContext.teamName,
+      })),
+    });
+    setTransactions(mapTransactionsFromOverview(overview));
+  };
+
   // Initial Fetch
   const loadData = async (options?: { silent?: boolean }): Promise<InitLoadResult> => {
     setIsLoading(true);
@@ -120,56 +287,35 @@ const App: React.FC = () => {
 
         setUser(data.user);
         setActiveTeam(data.team);
+        setTeamContexts(Array.isArray(data.teams) ? data.teams : []);
         setEvents(data.events || []);
         setMembers(data.members || []);
-        setTransactions(data.transactions || []);
+        setFinanceOverview(null);
+        setFinanceMembers([]);
+        setFinanceEvents([]);
+        setFinanceConfirmations([]);
+        setPlayerFinanceDetail(null);
 
         try {
-          const [financeOverview, financeMembers] = await Promise.all([
-            api.getFinanceOverview(data.team.id),
-            api.getFinanceMembers(data.team.id),
-          ]);
-
-          const financeBalance = financeOverview?.summary?.balance;
-          if (financeBalance !== undefined) {
-            setActiveTeam((prev) =>
-              prev ? { ...prev, budget: Number(financeBalance) } : prev
-            );
-          }
-
-          if (Array.isArray(financeMembers?.items)) {
-            const financeByUserId = new Map<string, { outstanding: number; overpaid: number }>();
-            for (const item of financeMembers.items) {
-              financeByUserId.set(String(item.userId), {
-                outstanding: Number(item.outstanding || 0),
-                overpaid: Number(item.overpaid || 0),
-              });
-            }
-            setMembers((prev) =>
-              prev.map((m) => {
-                const s = financeByUserId.get(m.id);
-                if (!s) return m;
-                return { ...m, balance: s.overpaid - s.outstanding };
-              })
-            );
-          }
-
-          if (Array.isArray(financeOverview?.recentTransactions) && financeOverview.recentTransactions.length > 0) {
-            setTransactions(
-              financeOverview.recentTransactions.map((t: any) => ({
-                id: String(t.id),
-                type: t.type as TransactionType,
-                amount: Number(t.amount),
-                title: String(t.title),
-                date: new Date(t.date),
-                userId: t.userId || undefined,
-                userName: t.userName || undefined,
-                status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
-              }))
-            );
-          }
+          const nextSelection = normalizeFinanceSelection(
+            Array.isArray(data.teams) ? data.teams : [],
+            data.team.id,
+            financeSelectedTeamId
+          );
+          await loadFinanceData({
+            user: data.user,
+            activeTeam: data.team,
+            teamContexts: Array.isArray(data.teams) ? data.teams : [],
+            selection: nextSelection,
+          });
         } catch (financeErr) {
           console.warn('Finance bootstrap fallback to init payload', financeErr);
+          setFinanceOverview(null);
+          setFinanceMembers([]);
+          setFinanceEvents([]);
+          setFinanceConfirmations([]);
+          setPlayerFinanceDetail(null);
+          setTransactions(data.transactions || []);
         }
 
         try {
@@ -264,6 +410,41 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Failed to switch to USER mode', error);
       navigate('/login', { replace: true });
+    }
+  };
+
+  const handleSwitchTeamContext = async (membershipId: string) => {
+    const nextContext = teamContexts.find((item) => item.membershipId === membershipId);
+    if (!nextContext || nextContext.teamId === activeTeam?.id) return;
+
+    setIsSwitchingTeam(true);
+    try {
+      await api.switchTeamContext(membershipId);
+      await loadData({ silent: true });
+    } catch (error) {
+      console.error('Failed to switch team context', error);
+      alert(`Не удалось переключить команду: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSwitchingTeam(false);
+    }
+  };
+
+  const handleSwitchFinanceTeam = async (teamId: string) => {
+    if (!activeTeam || !user) return;
+
+    setIsSwitchingTeam(true);
+    try {
+      await loadFinanceData({
+        user,
+        activeTeam,
+        teamContexts,
+        selection: teamId,
+      });
+    } catch (error) {
+      console.error('Failed to switch finance team', error);
+      alert(`Не удалось переключить финансовый фильтр: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSwitchingTeam(false);
     }
   };
 
@@ -380,9 +561,14 @@ const App: React.FC = () => {
     setCurrentView('DASHBOARD');
     setUser(null);
     setActiveTeam(null);
+    setTeamContexts([]);
     setEvents([]);
     setMembers([]);
     setTransactions([]);
+    setFinanceOverview(null);
+    setFinanceEvents([]);
+    setFinanceConfirmations([]);
+    setPlayerFinanceDetail(null);
     setSelectedMember(null);
     setSelectedEvent(null);
     setCalendarLink('');
@@ -481,8 +667,16 @@ const App: React.FC = () => {
   };
 
   const handleRemindDebtor = async (userId: string, userName: string) => {
+    if (!activeTeam) return;
+    if (financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER) {
+      alert('Для напоминания выберите конкретную команду в фильтре Казны.');
+      return;
+    }
     try {
-      const result = await api.remindFinanceMemberDebt({ userId });
+      const result = await api.remindFinanceMemberDebt({
+        userId,
+        teamId: financeSelectedTeamId || activeTeam.id,
+      });
       const summary = parseReminderResult(result);
       if (summary.sent + summary.queued > 0) {
         alert(
@@ -504,8 +698,15 @@ const App: React.FC = () => {
   };
 
   const handleRemindAllDebtors = async () => {
+    if (!activeTeam) return;
+    if (financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER) {
+      alert('Для массового напоминания выберите конкретную команду в фильтре Казны.');
+      return;
+    }
     try {
-      const result = await api.remindFinanceDebtors();
+      const result = await api.remindFinanceDebtors({
+        teamId: financeSelectedTeamId || activeTeam.id,
+      });
       const summary = parseReminderResult(result);
       if (summary.attempted === 0) {
         alert('В команде нет должников для напоминания.');
@@ -528,32 +729,91 @@ const App: React.FC = () => {
   // --- FINANCE HANDLER ---
   const handleAddTransaction = async (t: Omit<Transaction, 'id' | 'date'>) => {
     if (!activeTeam) return;
+    if (financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER) {
+      alert('Для финансового действия выберите конкретную команду в фильтре Казны.');
+      return;
+    }
+    const teamId =
+      financeSelectedTeamId && financeSelectedTeamId !== ALL_TEAMS_FINANCE_FILTER
+        ? financeSelectedTeamId
+        : activeTeam.id;
     const newTx: Transaction = {
         id: `tx${Date.now()}`,
+        teamId,
         date: new Date(),
         ...t
     };
     
     // Optimistic Update
     setTransactions(prev => [newTx, ...prev]);
-    if (t.type === TransactionType.EXPENSE && activeTeam) {
+    if (t.type === TransactionType.EXPENSE && activeTeam && teamId === activeTeam.id) {
         setActiveTeam(prev => prev ? ({ ...prev, budget: prev.budget - t.amount }) : null);
-    } else if (t.type === TransactionType.DEPOSIT && activeTeam) {
+    } else if (t.type === TransactionType.DEPOSIT && activeTeam && teamId === activeTeam.id) {
         setActiveTeam(prev => prev ? ({ ...prev, budget: prev.budget + t.amount }) : null);
     }
 
     // Server Call
     if (t.type === TransactionType.DEPOSIT) {
       await api.createFinancePayment({
-        teamId: activeTeam.id,
+        teamId,
         amount: t.amount,
         title: t.title,
         payerUserId: t.userId,
         status: t.status,
       });
+      await loadData({ silent: true });
       return;
     }
     await api.addTransaction(newTx);
+    await loadData({ silent: true });
+  };
+
+  const handleCreateTransferConfirmation = async (payload: {
+    userId?: string;
+    amount: number;
+    screenshotDataUrl: string;
+    note?: string;
+    autoApprove?: boolean;
+    preferredEventId?: string;
+  }) => {
+    if (!activeTeam) return;
+    if (financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER) {
+      alert('Для подтверждения перевода выберите конкретную команду в фильтре Казны.');
+      return;
+    }
+    const teamId = financeSelectedTeamId || activeTeam.id;
+
+    const created = await api.createTransferConfirmation({
+      teamId,
+      userId: payload.userId,
+      amount: payload.amount,
+      screenshotDataUrl: payload.screenshotDataUrl,
+      note: payload.note,
+      submittedAt: new Date().toISOString(),
+    });
+
+    if (payload.autoApprove && created.confirmation?.id) {
+      await api.reviewTransferConfirmation({
+        confirmationId: created.confirmation.id,
+        decision: 'APPROVE',
+        preferredEventId: payload.preferredEventId,
+      });
+    }
+
+    await loadData({ silent: true });
+  };
+
+  const handleReviewTransferConfirmation = async (
+    confirmationId: string,
+    decision: 'APPROVE' | 'REJECT',
+    reviewNote?: string
+  ) => {
+    await api.reviewTransferConfirmation({
+      confirmationId,
+      decision,
+      reviewNote,
+    });
+    await loadData({ silent: true });
   };
 
   // --- APP HANDLERS ---
@@ -846,13 +1106,33 @@ const App: React.FC = () => {
       case 'FINANCE':
         return (
           <FinanceView 
-            team={activeTeam!}
+            selectedTeamId={financeSelectedTeamId || activeTeam!.id}
+            selectedTeamName={
+              financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER
+                ? 'Все команды'
+                : teamContexts.find((item) => item.teamId === (financeSelectedTeamId || activeTeam!.id))?.teamName || activeTeam!.name
+            }
+            allowAllTeamsFilter={canUseAllTeamsFinance(teamContexts)}
+            currentUser={user!}
+            availableTeams={teamContexts}
             transactions={transactions}
-            members={members}
-            currentUserRole={activeTeam!.role}
+            members={financeMembers}
+            currentUserRole={
+              financeSelectedTeamId === ALL_TEAMS_FINANCE_FILTER
+                ? Role.PLAYER
+                : teamContexts.find((item) => item.teamId === (financeSelectedTeamId || activeTeam!.id))?.role || activeTeam!.role
+            }
+            financeOverview={financeOverview}
+            financeEvents={financeEvents || []}
+            financeConfirmations={financeConfirmations}
+            playerFinanceDetail={playerFinanceDetail}
+            isSwitchingTeam={isSwitchingTeam}
+            onSwitchTeam={handleSwitchFinanceTeam}
             onAddTransaction={handleAddTransaction}
             onRemindDebtor={handleRemindDebtor}
             onRemindAllDebtors={handleRemindAllDebtors}
+            onCreateTransferConfirmation={handleCreateTransferConfirmation}
+            onReviewTransferConfirmation={handleReviewTransferConfirmation}
           />
         );
       case 'TEAM':

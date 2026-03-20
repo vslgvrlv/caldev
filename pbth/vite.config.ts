@@ -25,7 +25,7 @@ export default defineConfig({
     port: 3000,
     allowedHosts: ['pbthub.ru', 'www.pbthub.ru', 'localhost', '127.0.0.1'],
     proxy: {
-      '/api': {
+      '/api/v1': {
         target: apiTarget,
         changeOrigin: true,
       },

@@ -27,11 +27,13 @@ const eventReminderSchema = z.object({
 });
 
 const debtReminderSchema = z.object({
+  teamId: z.string().uuid().optional(),
   userIds: z.array(z.string().uuid()).optional(),
   customText: z.string().trim().max(2000).optional(),
 });
 
 const teamDebtReminderSchema = z.object({
+  teamId: z.string().uuid().optional(),
   userIds: z.array(z.string().uuid()).optional(),
   customText: z.string().trim().max(2000).optional(),
 });
@@ -269,11 +271,13 @@ notificationsRouter.post(
   asyncHandler(async (req, res) => {
     const payload = teamDebtReminderSchema.parse(req.body ?? {});
     const access = await resolveNotificationsAccess(req as any);
-    assertCanSendDebtReminder(access.actorRole);
 
     const ctx = await getActiveContext(req as any);
-    const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
+    const teamId = payload.teamId ?? ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
+    const actorRole = await resolveActorRoleForTeam(access, teamId);
+    if (!actorRole) return res.status(403).json({ detail: "No access to this team" });
+    assertCanSendDebtReminder(actorRole);
 
     const teamResult = await query<{ id: string; name: string }>(`SELECT id, name FROM teams WHERE id = $1`, [teamId]);
     const team = teamResult.rows[0];
@@ -315,6 +319,7 @@ notificationsRouter.post(
 
     await writeAudit(access.userId, "notifications.team_debt_reminder.send", {
       teamId,
+      actorRole,
       attempted: filtered.length,
       sent,
       queued,
@@ -533,11 +538,13 @@ notificationsRouter.post(
     const userId = z.string().uuid().parse(req.params.userId);
     const payload = debtReminderSchema.parse(req.body ?? {});
     const access = await resolveNotificationsAccess(req as any);
-    assertCanSendDebtReminder(access.actorRole);
 
     const ctx = await getActiveContext(req as any);
-    const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
+    const teamId = payload.teamId ?? ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
+    const actorRole = await resolveActorRoleForTeam(access, teamId);
+    if (!actorRole) return res.status(403).json({ detail: "No access to this team" });
+    assertCanSendDebtReminder(actorRole);
 
     const teamResult = await query<{ id: string; name: string }>(`SELECT id, name FROM teams WHERE id = $1`, [teamId]);
     const team = teamResult.rows[0];
