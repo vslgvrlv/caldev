@@ -11,6 +11,7 @@ import { FinanceTransactionModal } from '../components/FinanceTransactionModal';
 import { TransferConfirmationModal } from '../components/TransferConfirmationModal';
 import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
 import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
+import { buildEventChargeModalState } from '../lib/event-charge-modal';
 
 interface EventDetailAttendee {
   userId: string;
@@ -283,11 +284,17 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       })) || [];
   const hasExistingCharges = !!financeDetail?.participants.some((item) => item.amountDue > 0);
   const undistributedChargeAmount = Number(financeDetail?.collection?.undistributedTotal || 0);
-  const chargeAudienceCandidates = (financeDetail?.participants || []).filter((item) => {
-    if (item.role === 'CAPTAIN') return false;
-    return chargeAudience === 'CONFIRMED_ONLY'
-      ? item.rsvpStatus === 'CONFIRMED'
-      : item.rsvpStatus === 'CONFIRMED' || item.rsvpStatus === 'PENDING';
+  const chargeModalState = buildEventChargeModalState({
+    participants: (financeDetail?.participants || []).map((item) => ({
+      userId: item.userId,
+      role: item.role || 'PLAYER',
+      rsvpStatus: item.rsvpStatus || 'UNANSWERED',
+      amountDue: Number(item.amountDue || 0),
+    })),
+    audience: chargeAudience,
+    amountMode: chargeAmountMode,
+    undistributedAmount: undistributedChargeAmount,
+    fixedAmount: chargeAmount,
   });
   const suggestedChargeAmount = financeDetail?.participants.find((item) => Number(item.amountDue || 0) > 0)?.amountDue;
 
@@ -309,32 +316,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     setChargeAmount('');
   }, [hasExistingCharges, isChargeModalOpen, suggestedChargeAmount, undistributedChargeAmount]);
 
-  const chargePreview = (() => {
-    if (chargeAudienceCandidates.length === 0) return 'Нет подходящих участников для начисления.';
-    if (chargeAmountMode === 'FIXED_PER_PERSON') {
-      const numericAmount = Number(chargeAmount || 0);
-      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-        return `Будет начислено ${chargeAudienceCandidates.length} участникам.`;
-      }
-      return `Будет начислено ${chargeAudienceCandidates.length} участникам по ${numericAmount.toLocaleString('ru-RU')} ₽.`;
-    }
-
-    const numericAmount = undistributedChargeAmount;
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      return 'Сейчас по событию нет нераспределенных расходов.';
-    }
-    const totalCents = Math.round(numericAmount * 100);
-    const base = Math.floor(totalCents / chargeAudienceCandidates.length);
-    const remainder = totalCents - base * chargeAudienceCandidates.length;
-    const minShare = base / 100;
-    const maxShare = (base + (remainder > 0 ? 1 : 0)) / 100;
-    if (Math.abs(maxShare - minShare) < 0.0001) {
-      return `Будет начислено ${chargeAudienceCandidates.length} участникам по ${minShare.toLocaleString('ru-RU')} ₽.`;
-    }
-    return `Будет начислено ${chargeAudienceCandidates.length} участникам в диапазоне от ${minShare.toLocaleString(
-      'ru-RU'
-    )} ₽ до ${maxShare.toLocaleString('ru-RU')} ₽.`;
-  })();
+  const chargePreview = chargeModalState.preview;
 
   const reloadEventFinance = async () => {
     if (!canReadEventFinance) return;
@@ -369,6 +351,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
   const handleGenerateCharges = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!chargeModalState.canSubmit) {
+      alert(chargeModalState.blockingReason || 'Нет подходящих участников для начисления.');
+      return;
+    }
     setIsSubmittingCharges(true);
     try {
       await api.generateEventCharges({
@@ -958,6 +944,11 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               )}
 
               <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-pb-subtext">{chargePreview}</div>
+              {chargeModalState.blockingReason ? (
+                <div className="rounded-xl border border-pb-warning/30 bg-pb-warning/10 px-3 py-3 text-xs text-pb-subtext">
+                  {chargeModalState.blockingReason}
+                </div>
+              ) : null}
 
               <div className="flex gap-2 pt-2">
                 <button
@@ -969,7 +960,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingCharges}
+                  disabled={isSubmittingCharges || !chargeModalState.canSubmit}
                   className="flex-1 py-3 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
                 >
                   {isSubmittingCharges ? 'Сохраняем...' : chargeAmountMode === 'UNDISTRIBUTED_SPLIT' ? 'Распределить' : 'Доначислить'}
