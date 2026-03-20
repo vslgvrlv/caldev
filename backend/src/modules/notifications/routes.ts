@@ -8,6 +8,7 @@ import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getActiveContext } from "../teams/context.js";
 import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
 import { enqueueTelegramNotification, isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
+import { formatNotificationDateTime } from "../../lib/notification-timezone.js";
 
 type ActorRole = "ADMIN" | "CAPTAIN" | "TRAINER" | "PLAYER";
 type EventKind = "TRAINING" | "TOURNAMENT" | "CHAMPIONSHIP" | "FRIENDLY_MATCH" | "MEETING" | "MAINTENANCE" | "OTHER";
@@ -92,22 +93,9 @@ function classifyTelegramSendError(reason: string): "CHAT_NOT_FOUND" | "BOT_BLOC
   return "SEND_FAILED";
 }
 
-function formatDateTime(dateIso: string, location?: string | null) {
-  const dt = new Date(dateIso);
-  const date = dt.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return location ? `${date} • ${location}` : date;
-}
-
 function buildEventReminderText(params: {
   template: EventReminderTemplate;
-  event: { title: string; start_at: string; location: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; team_name: string; team_timezone?: string | null };
   game?: {
     id: string;
     time_label: string;
@@ -118,7 +106,7 @@ function buildEventReminderText(params: {
   customText?: string;
 }) {
   if (params.customText) return params.customText;
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location);
+  const whenWhere = formatNotificationDateTime(params.event.start_at, params.event.team_timezone, params.event.location);
   const game = params.game;
   const gamePairLabel = game?.game_pair === "FIRST" ? "Первая пара" : game?.game_pair === "SECOND" ? "Вторая пара" : "Пара не указана";
   const pitLabel = game?.pit_zone === "NEAR" ? "Ближняя пит-зона" : game?.pit_zone === "FAR" ? "Дальняя пит-зона" : "Пит-зона не указана";
@@ -171,12 +159,12 @@ function isGameReminderTemplate(template: EventReminderTemplate): boolean {
 }
 
 function buildDebtReminderText(params: {
-  event: { title: string; start_at: string; location: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; team_name: string; team_timezone?: string | null };
   amountOutstanding: number;
   customText?: string;
 }) {
   if (params.customText) return params.customText;
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location);
+  const whenWhere = formatNotificationDateTime(params.event.start_at, params.event.team_timezone, params.event.location);
   return [
     `Напоминание по оплате события`,
     `${params.event.title}`,
@@ -355,6 +343,7 @@ notificationsRouter.post(
       location: string | null;
       type: EventKind;
       team_name: string;
+      team_timezone: string | null;
     }>(
       `SELECT e.id,
               e.team_id,
@@ -362,7 +351,8 @@ notificationsRouter.post(
               e.start_at::text,
               e.location,
               e.type,
-              t.name AS team_name
+              t.name AS team_name,
+              t.timezone AS team_timezone
        FROM events e
        JOIN teams t ON t.id = e.team_id
        WHERE e.id = $1 AND e.is_cancelled = FALSE`,
@@ -610,8 +600,9 @@ notificationsRouter.post(
       start_at: string;
       location: string | null;
       team_name: string;
+      team_timezone: string | null;
     }>(
-      `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location, t.name AS team_name
+      `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location, t.name AS team_name, t.timezone AS team_timezone
        FROM events e
        JOIN teams t ON t.id = e.team_id
        WHERE e.id = $1 AND e.is_cancelled = FALSE`,
