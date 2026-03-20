@@ -33,18 +33,33 @@ export function buildEventChargeModalState(params: EventChargeModalStateParams) 
   }
 
   if (params.amountMode === "FIXED_PER_PERSON") {
+    const participantsWithExistingCharges = eligibleParticipants.filter((item) => Number(item.amountDue || 0) > 0);
+    const chargeTargets =
+      participantsWithExistingCharges.length > 0
+        ? eligibleParticipants.filter((item) => Number(item.amountDue || 0) <= 0)
+        : eligibleParticipants;
+
+    if (chargeTargets.length === 0) {
+      return {
+        eligibleParticipants,
+        preview: "У всех подходящих участников уже есть начисления.",
+        canSubmit: false,
+        blockingReason: "У всех подходящих участников уже есть начисления. Для изменения суммы используйте корректировку, а не доначисление.",
+      };
+    }
+
     const numericAmount = Number(params.fixedAmount || 0);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       return {
         eligibleParticipants,
-        preview: `Будет начислено ${eligibleParticipants.length} участникам.`,
+        preview: `Будет начислено ${chargeTargets.length} участникам.`,
         canSubmit: false,
         blockingReason: "Укажите корректную сумму на игрока.",
       };
     }
     return {
       eligibleParticipants,
-      preview: `Будет начислено ${eligibleParticipants.length} участникам по ${numericAmount.toLocaleString("ru-RU")} ₽.`,
+      preview: `Будет начислено ${chargeTargets.length} участникам по ${numericAmount.toLocaleString("ru-RU")} ₽.`,
       canSubmit: true,
       blockingReason: null,
     };
