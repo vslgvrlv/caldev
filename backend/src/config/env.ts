@@ -59,6 +59,8 @@ export const env = {
 
   telegram: {
     botToken: required("TELEGRAM_BOT_TOKEN", ""),
+    botApiBaseUrl: process.env.TELEGRAM_BOT_API_BASE_URL || "https://api.telegram.org",
+    relayToken: process.env.TELEGRAM_BOT_API_RELAY_TOKEN || "",
     allowedMaxAuthAgeSec: asNumber(process.env.TELEGRAM_MAX_AUTH_AGE_SEC || "600", "TELEGRAM_MAX_AUTH_AGE_SEC"),
     callbackUrl: required("TELEGRAM_CALLBACK_URL", "http://127.0.0.1:8000/api/v1/auth/telegram/callback"),
     botUsername: required("TELEGRAM_BOT_USERNAME", ""),

@@ -6,11 +6,23 @@ type TelegramSendMessageResponse = {
   error_code?: number;
 };
 
+export function buildTelegramBotApiUrl(botToken: string, method: string, baseUrl = env.telegram.botApiBaseUrl) {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  return `${normalizedBaseUrl}/bot${botToken}/${method}`;
+}
+
+export function buildTelegramBotHeaders(relayToken = env.telegram.relayToken) {
+  return {
+    "Content-Type": "application/json",
+    ...(relayToken ? { "X-Telegram-Relay-Token": relayToken } : {}),
+  };
+}
+
 export async function sendTelegramBotMessage(chatId: string, text: string): Promise<void> {
-  const url = `https://api.telegram.org/bot${env.telegram.botToken}/sendMessage`;
+  const url = buildTelegramBotApiUrl(env.telegram.botToken, "sendMessage");
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildTelegramBotHeaders(),
     body: JSON.stringify({
       chat_id: chatId,
       text,
@@ -29,4 +41,3 @@ export async function sendTelegramBotMessage(chatId: string, text: string): Prom
     throw new Error(payload?.description || `Telegram sendMessage failed (${response.status})`);
   }
 }
-
