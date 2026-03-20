@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ChevronDown, Receipt, Wallet } from 'lucide-react';
+import { getMobileBottomSheetLayout } from '../lib/mobile-bottom-sheet-layout';
 
 type EventExpenseItem = {
   transactionId: string;
@@ -45,12 +46,23 @@ export const EventExpensesSheet: React.FC<EventExpensesSheetProps> = ({
   onOpenCollection,
   onEditExpense,
 }) => {
+  const layout = getMobileBottomSheetLayout(107);
+
+  useEffect(() => {
+    if (!isOpen || !layout.lockBodyScroll || typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen, layout.lockBodyScroll]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[107] flex items-end justify-center">
+    <div className={layout.viewportClassName}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative max-h-[88vh] w-full overflow-hidden rounded-t-[32px] border border-white/10 bg-pb-background shadow-2xl">
+      <div className={layout.panelClassName}>
         <div className="sticky top-0 z-10 border-b border-white/10 bg-pb-background/95 px-5 pb-4 pt-3 backdrop-blur-md">
           <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-white/10" />
           <div className="flex items-start justify-between gap-3">
@@ -72,7 +84,7 @@ export const EventExpensesSheet: React.FC<EventExpensesSheetProps> = ({
           </div>
         </div>
 
-        <div className="space-y-6 overflow-y-auto px-5 pb-8 pt-5">
+        <div className={layout.bodyClassName}>
           <section className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-white/10 bg-pb-surface p-4">
               <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-pb-subtext">Потрачено</div>

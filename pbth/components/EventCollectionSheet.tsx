@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { CheckCircle2, ChevronDown, Clock3, Receipt, TrendingDown, Wallet } from 'lucide-react';
 import { TransactionType } from '../types';
+import { getMobileBottomSheetLayout } from '../lib/mobile-bottom-sheet-layout';
 
 type SummaryCard = {
   label: string;
@@ -70,6 +71,17 @@ export const EventCollectionSheet: React.FC<EventCollectionSheetProps> = ({
   onRemindDebtors,
   isRemindingDebtors = false,
 }) => {
+  const layout = getMobileBottomSheetLayout(108);
+
+  useEffect(() => {
+    if (!isOpen || !layout.lockBodyScroll || typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen, layout.lockBodyScroll]);
+
   if (!isOpen) return null;
 
   const chargedParticipants = participants
@@ -77,9 +89,9 @@ export const EventCollectionSheet: React.FC<EventCollectionSheetProps> = ({
     .sort((a, b) => b.amountOutstanding - a.amountOutstanding || a.name.localeCompare(b.name, 'ru'));
 
   return (
-    <div className="fixed inset-0 z-[108] flex items-end justify-center">
+    <div className={layout.viewportClassName}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative max-h-[88vh] w-full overflow-hidden rounded-t-[32px] border border-white/10 bg-pb-background shadow-2xl">
+      <div className={layout.panelClassName}>
         <div className="sticky top-0 z-10 border-b border-white/10 bg-pb-background/95 px-5 pb-4 pt-3 backdrop-blur-md">
           <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-white/10" />
           <div className="flex items-start justify-between gap-3">
@@ -101,7 +113,7 @@ export const EventCollectionSheet: React.FC<EventCollectionSheetProps> = ({
           </div>
         </div>
 
-        <div className="space-y-6 overflow-y-auto px-5 pb-8 pt-5">
+        <div className={layout.bodyClassName}>
           <section className="grid grid-cols-2 gap-3">
             {summaryCards.map((card) => (
               <div key={card.label} className="rounded-2xl border border-white/10 bg-pb-surface p-4">
