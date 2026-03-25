@@ -987,7 +987,10 @@ const App: React.FC = () => {
 
         <main className="max-w-md mx-auto min-h-screen relative shadow-2xl shadow-black overflow-hidden flex flex-col">
           {onboardingRequired && (
-            <div className="mx-4 mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            <div
+              className="mx-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+              style={{ marginTop: 'calc(var(--pb-safe-top) + 1rem)' }}
+            >
               Аккаунт создан автоматически из Telegram. Базовый onboarding пока мягкий: данные уже доступны, дальше можно просто работать в приложении.
             </div>
           )}

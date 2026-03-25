@@ -36,7 +36,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
   }, [heroEvent, heroEventIsOngoing, nowTs]);
 
   return (
-    <div className="pb-24 pt-4 px-4 space-y-6 animate-fade-in">
+    <div
+      className="pb-24 px-4 space-y-6 animate-fade-in"
+      style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
+    >
       {/* Header */}
       <header className="flex justify-between items-center">
         <div className="flex items-center space-x-3">

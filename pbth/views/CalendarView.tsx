@@ -35,7 +35,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onEventClick
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
   return (
-    <div className="pb-24 pt-4 px-4 h-full flex flex-col">
+    <div
+      className="pb-24 px-4 h-full flex flex-col"
+      style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
+    >
       <h1 className="text-2xl font-bold text-white mb-6">Календарь</h1>
 
       {/* Month Navigation */}
