@@ -38,7 +38,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   };
 
   return (
-    <div className="p-4 pt-8 pb-24 space-y-6 animate-fade-in">
+    <div
+      className="p-4 pb-24 space-y-6 animate-fade-in"
+      style={{ paddingTop: 'calc(var(--pb-safe-top) + 2rem)' }}
+    >
       <div className="text-center relative">
         <div className="w-28 h-28 mx-auto rounded-full bg-pb-surface p-1 border-2 border-pb-primary mb-3 relative group">
             <img src={user.avatar} className="w-full h-full rounded-full object-cover" alt="profile" />

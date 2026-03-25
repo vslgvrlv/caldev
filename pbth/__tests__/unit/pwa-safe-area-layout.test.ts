@@ -9,6 +9,11 @@ const createEventViewPath = fileURLToPath(new URL("../../views/CreateEventView.t
 const playerProfileViewPath = fileURLToPath(new URL("../../views/PlayerProfileView.tsx", import.meta.url));
 const eventExpensesSheetPath = fileURLToPath(new URL("../../components/EventExpensesSheet.tsx", import.meta.url));
 const eventCollectionSheetPath = fileURLToPath(new URL("../../components/EventCollectionSheet.tsx", import.meta.url));
+const dashboardViewPath = fileURLToPath(new URL("../../views/Dashboard.tsx", import.meta.url));
+const calendarViewPath = fileURLToPath(new URL("../../views/CalendarView.tsx", import.meta.url));
+const financeViewPath = fileURLToPath(new URL("../../views/FinanceView.tsx", import.meta.url));
+const teamViewPath = fileURLToPath(new URL("../../views/TeamView.tsx", import.meta.url));
+const profileViewPath = fileURLToPath(new URL("../../views/ProfileView.tsx", import.meta.url));
 const loginViewPath = fileURLToPath(new URL("../../views/LoginView.tsx", import.meta.url));
 const inviteViewPath = fileURLToPath(new URL("../../views/InviteView.tsx", import.meta.url));
 const adminLoginViewPath = fileURLToPath(new URL("../../views/admin/AdminLoginView.tsx", import.meta.url));
@@ -27,6 +32,13 @@ describe("pwa safe-area layouts", () => {
 
   it("keeps event finance sheet headers below the standalone status bar", () => {
     [eventExpensesSheetPath, eventCollectionSheetPath].forEach((path) => {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("calc(var(--pb-safe-top)");
+    });
+  });
+
+  it("pads primary app tabs below the standalone status bar", () => {
+    [dashboardViewPath, calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });

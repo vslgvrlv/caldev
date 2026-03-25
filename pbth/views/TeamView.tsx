@@ -251,10 +251,16 @@ export const TeamView: React.FC<TeamViewProps> = ({
   };
 
   return (
-    <div className="pb-24 pt-4 px-4 h-full flex flex-col animate-fade-in relative">
+    <div
+      className="pb-24 px-4 h-full flex flex-col animate-fade-in relative"
+      style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
+    >
       {/* Toast Notification */}
       {showCopied && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-pb-surface border border-pb-primary text-white px-4 py-2 rounded-full shadow-lg z-50 flex items-center animate-fade-in">
+          <div
+              className="absolute left-1/2 -translate-x-1/2 bg-pb-surface border border-pb-primary text-white px-4 py-2 rounded-full shadow-lg z-50 flex items-center animate-fade-in"
+              style={{ top: 'calc(var(--pb-safe-top) + 1rem)' }}
+          >
               <Check size={16} className="text-pb-primary mr-2" />
               <span className="text-xs font-bold">Ссылка скопирована!</span>
           </div>

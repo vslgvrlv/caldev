@@ -77,7 +77,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   };
 
   return (
-    <div className="pb-24 pt-4 px-4 h-full flex flex-col animate-fade-in relative">
+    <div
+      className="pb-24 px-4 h-full flex flex-col animate-fade-in relative"
+      style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
+    >
       <h1 className="text-2xl font-bold text-white mb-6">Казна</h1>
 
       {/* Balance Card */}
