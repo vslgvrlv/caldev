@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Event, RSVPStatus, EventType, Role, Game } from '../types';
+import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
-import { ChevronLeft, MapPin, Clock, Users, DollarSign, Check, X, HelpCircle, Swords, Plus } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { api } from '../api';
+import { api, type FinanceEventDetailResponse } from '../api';
+import { EventCollectionSheet } from '../components/EventCollectionSheet';
+import { EventExpensesSheet } from '../components/EventExpensesSheet';
+import { FinanceTransactionModal } from '../components/FinanceTransactionModal';
+import { TransferConfirmationModal } from '../components/TransferConfirmationModal';
+import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
+import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
+import { buildEventChargeModalState } from '../lib/event-charge-modal';
 
 interface EventDetailAttendee {
   userId: string;
@@ -83,9 +90,24 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
   const [attendees, setAttendees] = useState<EventDetailAttendee[]>([]);
   const [isAttendeesLoading, setIsAttendeesLoading] = useState(false);
+  const [financeDetail, setFinanceDetail] = useState<FinanceEventDetailResponse | null>(null);
+  const [isFinanceLoading, setIsFinanceLoading] = useState(false);
+  const [isExpensesSheetOpen, setIsExpensesSheetOpen] = useState(false);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<(Partial<Transaction> & { id?: string }) | null>(null);
+  const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
+  const [isCollectionSheetOpen, setIsCollectionSheetOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferDefaultUserId, setTransferDefaultUserId] = useState<string | undefined>(undefined);
+  const [chargeAmountMode, setChargeAmountMode] = useState<'UNDISTRIBUTED_SPLIT' | 'FIXED_PER_PERSON'>('UNDISTRIBUTED_SPLIT');
+  const [chargeAudience, setChargeAudience] = useState<'CONFIRMED_ONLY' | 'CONFIRMED_AND_PENDING'>('CONFIRMED_ONLY');
+  const [chargeAmount, setChargeAmount] = useState('');
+  const [isSubmittingCharges, setIsSubmittingCharges] = useState(false);
+  const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
+  const canReadEventFinance = currentUserRole !== Role.PLAYER;
   const isTournament = event.type === EventType.TOURNAMENT || event.type === EventType.CHAMPIONSHIP;
   const isGameReminderTemplate = reminderTemplate === 'GAME_GATHERING' || reminderTemplate === 'GAME_WARMUP';
 
@@ -120,6 +142,36 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       cancelled = true;
     };
   }, [event.id, event.attendeePreview]);
+
+  useEffect(() => {
+    if (!canReadEventFinance) {
+      setFinanceDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadFinance = async () => {
+      setIsFinanceLoading(true);
+      try {
+        const response = await api.getFinanceEventDetail(event.id);
+        if (!cancelled) {
+          setFinanceDetail(response);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load event finance detail', error);
+          setFinanceDetail(null);
+        }
+      } finally {
+        if (!cancelled) setIsFinanceLoading(false);
+      }
+    };
+
+    void loadFinance();
+    return () => {
+      cancelled = true;
+    };
+  }, [canReadEventFinance, event.id]);
 
   const confirmedAttendees = attendees;
   const trainerAttendees = confirmedAttendees.filter((item) => item.role === 'TRAINER');
@@ -199,6 +251,216 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   };
 
   const sortedSchedule = [...(event.schedule || [])].sort((a, b) => a.time.localeCompare(b.time));
+  const financeViewModel = financeDetail
+    ? buildEventFinanceViewModel({
+        currentUserRole,
+        detail: financeDetail,
+      })
+    : null;
+  const eventExpensesViewModel = financeDetail
+    ? buildEventExpensesViewModel({
+        currentUserRole,
+        detail: financeDetail,
+      })
+    : null;
+  const collectionParticipants =
+    financeDetail?.participants
+      .filter((item) => Number(item.amountDue || 0) > 0)
+      .map((item) => ({
+        id: item.userId,
+        name: item.name,
+        nickname: item.nickname,
+        avatar: item.avatar || undefined,
+        role: item.role === 'TRAINER' ? Role.TRAINER : item.role === 'CAPTAIN' ? Role.CAPTAIN : Role.PLAYER,
+        status:
+          item.memberStatus === 'INJURED'
+            ? PlayerStatus.INJURED
+            : item.memberStatus === 'RESERVE'
+              ? PlayerStatus.RESERVE
+              : item.memberStatus === 'VACATION'
+                ? PlayerStatus.VACATION
+                : PlayerStatus.ACTIVE,
+        balance: -Number(item.amountOutstanding || 0),
+      })) || [];
+  const hasExistingCharges = !!financeDetail?.participants.some((item) => item.amountDue > 0);
+  const undistributedChargeAmount = Number(financeDetail?.collection?.undistributedTotal || 0);
+  const chargeModalState = buildEventChargeModalState({
+    participants: (financeDetail?.participants || []).map((item) => ({
+      userId: item.userId,
+      role: item.role || 'PLAYER',
+      rsvpStatus: item.rsvpStatus || 'UNANSWERED',
+      amountDue: Number(item.amountDue || 0),
+    })),
+    audience: chargeAudience,
+    amountMode: chargeAmountMode,
+    undistributedAmount: undistributedChargeAmount,
+    fixedAmount: chargeAmount,
+  });
+  const suggestedChargeAmount = financeDetail?.participants.find((item) => Number(item.amountDue || 0) > 0)?.amountDue;
+
+  useEffect(() => {
+    if (!isChargeModalOpen) return;
+    if (undistributedChargeAmount > 0) {
+      setChargeAmountMode('UNDISTRIBUTED_SPLIT');
+      setChargeAmount('');
+      return;
+    }
+    if (hasExistingCharges) {
+      setChargeAmountMode('FIXED_PER_PERSON');
+      if (suggestedChargeAmount !== undefined) {
+        setChargeAmount(String(suggestedChargeAmount));
+      }
+      return;
+    }
+    setChargeAmountMode('UNDISTRIBUTED_SPLIT');
+    setChargeAmount('');
+  }, [hasExistingCharges, isChargeModalOpen, suggestedChargeAmount, undistributedChargeAmount]);
+
+  const chargePreview = chargeModalState.preview;
+
+  const reloadEventFinance = async () => {
+    if (!canReadEventFinance) return;
+    setIsFinanceLoading(true);
+    try {
+      const response = await api.getFinanceEventDetail(event.id);
+      setFinanceDetail(response);
+    } finally {
+      setIsFinanceLoading(false);
+    }
+  };
+
+  const handleSubmitEventExpense = async (payload: Omit<Transaction, 'id' | 'date'>) => {
+    if (editingExpense?.id) {
+      await api.updateTransaction({
+        transactionId: editingExpense.id,
+        title: payload.title,
+        amount: payload.amount,
+        eventId: payload.eventId ?? null,
+      });
+    } else {
+      await api.addTransaction({
+        id: `event-tx-${Date.now()}`,
+        teamId: event.teamId,
+        date: new Date(),
+        ...payload,
+        eventId: event.id,
+      });
+    }
+    await reloadEventFinance();
+  };
+
+  const handleGenerateCharges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chargeModalState.canSubmit) {
+      alert(chargeModalState.blockingReason || 'Нет подходящих участников для начисления.');
+      return;
+    }
+    setIsSubmittingCharges(true);
+    try {
+      await api.generateEventCharges({
+        eventId: event.id,
+        mode: chargeAudience,
+        amountType: chargeAmountMode,
+        totalAmount: undefined,
+        fixedAmount: chargeAmountMode === 'FIXED_PER_PERSON' ? Number(chargeAmount) : undefined,
+        overwriteExisting: false,
+      });
+      setIsChargeModalOpen(false);
+      setChargeAmount('');
+      await reloadEventFinance();
+    } catch (error) {
+      console.error('Failed to generate event charges', error);
+      alert(`Не удалось начислить участникам: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSubmittingCharges(false);
+    }
+  };
+
+  const handleRemindEventDebtors = async () => {
+    if (!financeDetail) return;
+    const debtorIds = financeDetail.participants
+      .filter((item) => item.amountOutstanding > 0)
+      .map((item) => item.userId);
+    if (debtorIds.length === 0) {
+      alert('По событию нет должников.');
+      return;
+    }
+    setIsRemindingDebtors(true);
+    try {
+      await api.remindEventDebtors({ eventId: event.id, userIds: debtorIds });
+    } catch (error) {
+      console.error('Failed to remind event debtors', error);
+      alert(`Не удалось напомнить должникам: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsRemindingDebtors(false);
+    }
+  };
+
+  const openTransferModal = (userId?: string) => {
+    setTransferDefaultUserId(userId);
+    setIsTransferModalOpen(true);
+  };
+
+  const openCreateExpenseModal = () => {
+    setEditingExpense(null);
+    setIsExpensesSheetOpen(false);
+    setIsExpenseModalOpen(true);
+  };
+
+  const openEditExpenseModal = (transactionId: string) => {
+    const sourceExpense = financeDetail?.payments.find(
+      (item) => item.transactionId === transactionId && item.type === TransactionType.EXPENSE
+    );
+    if (!sourceExpense) {
+      alert('Не удалось найти расход для редактирования.');
+      return;
+    }
+    setEditingExpense({
+      id: sourceExpense.transactionId,
+      title: sourceExpense.title,
+      amount: sourceExpense.amount,
+      eventId: event.id,
+      type: TransactionType.EXPENSE,
+      status: sourceExpense.status,
+      date: new Date(sourceExpense.date),
+    });
+    setIsExpensesSheetOpen(false);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleCloseExpenseModal = () => {
+    setIsExpenseModalOpen(false);
+    setEditingExpense(null);
+    setIsExpensesSheetOpen(true);
+  };
+
+  const handleCreateEventTransferConfirmation = async (payload: {
+    userId?: string;
+    amount: number;
+    screenshotDataUrl: string;
+    note?: string;
+    autoApprove?: boolean;
+    preferredEventId?: string;
+  }) => {
+    const created = await api.createTransferConfirmation({
+      teamId: event.teamId,
+      userId: payload.userId,
+      amount: payload.amount,
+      screenshotDataUrl: payload.screenshotDataUrl,
+      note: payload.note,
+      submittedAt: new Date().toISOString(),
+    });
+
+    if (payload.autoApprove && created.confirmation?.id) {
+      await api.reviewTransferConfirmation({
+        confirmationId: created.confirmation.id,
+        decision: 'APPROVE',
+        preferredEventId: payload.preferredEventId,
+      });
+    }
+
+    await reloadEventFinance();
+  };
 
   useEffect(() => {
     if (!isGameReminderTemplate) return;
@@ -360,11 +622,53 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
             <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
               <div className="flex items-center text-pb-subtext mb-1">
-                <DollarSign size={14} className="mr-1.5" /> Стоимость
+                <Users size={14} className="mr-1.5" /> Участники
               </div>
-              <div className="font-semibold text-white">{event.cost ? `${event.cost} ₽` : 'Бесплатно'}</div>
+              <div className="font-semibold text-white">{attendeesCount}</div>
+              <div className="mt-1 text-[11px] text-pb-subtext">Подтвержденные игроки и штаб</div>
             </div>
           </div>
+
+          {canReadEventFinance && (
+            <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-white font-bold uppercase text-sm tracking-wider">Сбор по событию</div>
+                  <div className="mt-1 text-xs text-pb-subtext">Итог по расходам, собранным деньгам и текущему сбору.</div>
+                </div>
+                <div className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-bold text-pb-subtext">
+                  {financeViewModel?.collectionStatusLabel || 'Сбор не создан'}
+                </div>
+              </div>
+
+              {isFinanceLoading && <div className="text-sm text-pb-subtext">Загрузка финансов события...</div>}
+
+              {!isFinanceLoading && financeViewModel && financeDetail && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {financeViewModel.summaryCards.map((card) => (
+                      <div key={card.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-pb-subtext">{card.label}</div>
+                        <div className="mt-2 text-lg font-black text-white">{card.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {financeViewModel.canManage && (
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsExpensesSheetOpen(true)}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-bold text-white"
+                      >
+                        Добавить расход
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
             <div className="mb-4 space-y-3">
@@ -491,6 +795,184 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
           </button>
         </div>
       </div>
+
+      {eventExpensesViewModel ? (
+        <EventExpensesSheet
+          isOpen={isExpensesSheetOpen}
+          title={`Расходы · ${event.title}`}
+          subtitle={format(event.startDate, 'd MMMM, HH:mm', { locale: ru })}
+          statusLabel={eventExpensesViewModel.collectionStatusLabel}
+          totalSpentLabel={eventExpensesViewModel.totalSpentLabel}
+          expenseCountLabel={eventExpensesViewModel.expenseCountLabel}
+          deltaHint={eventExpensesViewModel.deltaHint}
+          expenses={eventExpensesViewModel.expenses}
+          canManage={eventExpensesViewModel.canManage}
+          canOpenCollection={eventExpensesViewModel.canOpenCollection}
+          collectionActionLabel={eventExpensesViewModel.collectionActionLabel}
+          onClose={() => setIsExpensesSheetOpen(false)}
+          onAddExpense={openCreateExpenseModal}
+          onOpenCollection={() => {
+            setIsExpensesSheetOpen(false);
+            setIsCollectionSheetOpen(true);
+          }}
+          onEditExpense={openEditExpenseModal}
+        />
+      ) : null}
+
+      <FinanceTransactionModal
+        isOpen={isExpenseModalOpen}
+        type={TransactionType.EXPENSE}
+        members={[]}
+        eventOptions={[
+          {
+            eventId: event.id,
+            title: event.title,
+            startDate: event.startAt,
+          },
+        ]}
+        initialEventId={event.id}
+        initialTransaction={editingExpense ?? undefined}
+        lockEventId
+        onClose={handleCloseExpenseModal}
+        onSubmit={handleSubmitEventExpense}
+      />
+
+      {financeViewModel && financeDetail ? (
+        <EventCollectionSheet
+          isOpen={isCollectionSheetOpen}
+          title={event.title}
+          subtitle={`${format(event.startDate, 'd MMMM, HH:mm', { locale: ru })} · ${financeDetail.participants.filter((item) => item.amountDue > 0).length} в сборе`}
+          statusLabel={financeViewModel.collectionStatusLabel}
+          summaryCards={financeViewModel.collectionCards}
+          participants={financeDetail.participants}
+          expenses={financeViewModel.expenses}
+          recentOperations={financeViewModel.recentOperations}
+          canManage={financeViewModel.canManage}
+          onClose={() => setIsCollectionSheetOpen(false)}
+          onSettleTransfer={(userId) => openTransferModal(userId)}
+          onAddExpense={() => {
+            setIsCollectionSheetOpen(false);
+            setIsExpensesSheetOpen(true);
+          }}
+          onChargeParticipants={() => setIsChargeModalOpen(true)}
+          chargeActionLabel={undistributedChargeAmount > 0 || !hasExistingCharges ? 'Распределить' : 'Доначислить'}
+          onRemindDebtors={() => void handleRemindEventDebtors()}
+          isRemindingDebtors={isRemindingDebtors}
+        />
+      ) : null}
+
+      <TransferConfirmationModal
+        isOpen={isTransferModalOpen}
+        mode="CAPTAIN_SETTLE"
+        members={collectionParticipants}
+        defaultUserId={transferDefaultUserId}
+        preferredEventId={event.id}
+        loadMemberFinance={(userId) => api.getFinanceMember(event.teamId, userId)}
+        onClose={() => setIsTransferModalOpen(false)}
+        onSubmit={async (payload) => {
+          try {
+            await handleCreateEventTransferConfirmation(payload);
+            setIsTransferModalOpen(false);
+          } catch (error) {
+            console.error('Failed to settle transfer from event collection', error);
+            alert(`Не удалось зачесть перевод: ${error instanceof Error ? error.message : 'unknown error'}`);
+          }
+        }}
+      />
+
+      {isChargeModalOpen && (
+        <div className="fixed inset-0 z-[111] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsChargeModalOpen(false)}></div>
+          <div className="relative w-full max-w-sm bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
+            <h3 className="text-lg font-bold text-white mb-1">
+              {chargeAmountMode === 'UNDISTRIBUTED_SPLIT' ? 'Распределить расходы' : 'Доначислить участникам'}
+            </h3>
+            <p className="text-xs text-pb-subtext mb-4">
+              {chargeAmountMode === 'UNDISTRIBUTED_SPLIT'
+                ? 'Система возьмет нераспределенный остаток из расходов события и разнесет его по выбранным участникам.'
+                : 'Добавляем фиксированную сумму новым участникам, не переписывая уже идущий сбор.'}
+            </p>
+
+            <form onSubmit={handleGenerateCharges} className="space-y-4">
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Кого включить в сбор</label>
+                <select
+                  value={chargeAudience}
+                  onChange={(e) => setChargeAudience(e.target.value as 'CONFIRMED_ONLY' | 'CONFIRMED_AND_PENDING')}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none"
+                >
+                  <option value="CONFIRMED_ONLY">Только подтвердившие участие</option>
+                  <option value="CONFIRMED_AND_PENDING">Подтвердившие и думающие</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Как начислить</label>
+                <select
+                  value={chargeAmountMode}
+                  onChange={(e) => setChargeAmountMode(e.target.value as 'UNDISTRIBUTED_SPLIT' | 'FIXED_PER_PERSON')}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none"
+                >
+                  <option value="UNDISTRIBUTED_SPLIT" disabled={undistributedChargeAmount <= 0}>
+                    {undistributedChargeAmount > 0 ? 'Распределить нераскиданное' : 'Нераспределенных расходов нет'}
+                  </option>
+                  <option value="FIXED_PER_PERSON">Фиксированная сумма на игрока</option>
+                </select>
+              </div>
+
+              {hasExistingCharges && chargeAmountMode === 'FIXED_PER_PERSON' && (
+                <div className="rounded-xl border border-pb-warning/30 bg-pb-warning/10 px-3 py-3 text-xs text-pb-subtext">
+                  Сбор уже идет. Чтобы не сломать текущие начисления, новым участникам можно добавить только фиксированную сумму.
+                  {suggestedChargeAmount !== undefined ? ` Сейчас у существующих начислений ориентир ${suggestedChargeAmount.toLocaleString('ru-RU')} ₽.` : ''}
+                </div>
+              )}
+
+              {chargeAmountMode === 'FIXED_PER_PERSON' ? (
+                <div>
+                  <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Сумма на игрока</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={chargeAmount}
+                    onChange={(e) => setChargeAmount(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
+                  <div className="text-pb-subtext text-xs uppercase font-bold mb-1">Нераспределенный остаток</div>
+                  <div className="text-base font-black text-white">{undistributedChargeAmount.toLocaleString('ru-RU')} ₽</div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-pb-subtext">{chargePreview}</div>
+              {chargeModalState.blockingReason ? (
+                <div className="rounded-xl border border-pb-warning/30 bg-pb-warning/10 px-3 py-3 text-xs text-pb-subtext">
+                  {chargeModalState.blockingReason}
+                </div>
+              ) : null}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChargeModalOpen(false)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 text-pb-subtext hover:text-white transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCharges || !chargeModalState.canSubmit}
+                  className="flex-1 py-3 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+                >
+                  {isSubmittingCharges ? 'Сохраняем...' : chargeAmountMode === 'UNDISTRIBUTED_SPLIT' ? 'Распределить' : 'Доначислить'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isAddingGame && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

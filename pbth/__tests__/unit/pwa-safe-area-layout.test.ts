@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 const eventDetailViewPath = fileURLToPath(new URL("../../views/EventDetailView.tsx", import.meta.url));
 const createEventViewPath = fileURLToPath(new URL("../../views/CreateEventView.tsx", import.meta.url));
 const playerProfileViewPath = fileURLToPath(new URL("../../views/PlayerProfileView.tsx", import.meta.url));
+const eventExpensesSheetPath = fileURLToPath(new URL("../../components/EventExpensesSheet.tsx", import.meta.url));
+const eventCollectionSheetPath = fileURLToPath(new URL("../../components/EventCollectionSheet.tsx", import.meta.url));
 const loginViewPath = fileURLToPath(new URL("../../views/LoginView.tsx", import.meta.url));
 const inviteViewPath = fileURLToPath(new URL("../../views/InviteView.tsx", import.meta.url));
 const adminLoginViewPath = fileURLToPath(new URL("../../views/admin/AdminLoginView.tsx", import.meta.url));
@@ -20,6 +22,13 @@ describe("pwa safe-area layouts", () => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
       expect(source).not.toContain(" pb-safe-top");
+    });
+  });
+
+  it("keeps event finance sheet headers below the standalone status bar", () => {
+    [eventExpensesSheetPath, eventCollectionSheetPath].forEach((path) => {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("calc(var(--pb-safe-top)");
     });
   });
 
