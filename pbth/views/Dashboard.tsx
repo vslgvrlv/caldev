@@ -3,7 +3,7 @@ import { User, Event, Team, RSVPStatus } from '../types';
 import { EventCard } from '../components/EventCard';
 import { Bell, ChevronDown } from 'lucide-react';
 import { EVENT_COLORS, EVENT_LABELS } from '../constants';
-import { filterUpcomingAndOngoingEvents, getCountdownParts, getEventEndTimestamp, isEventOngoing } from '../lib/events';
+import { buildDashboardEventSections, getCountdownParts, getEventEndTimestamp } from '../lib/events';
 
 interface DashboardProps {
   user: User;
@@ -22,20 +22,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
     return () => window.clearInterval(id);
   }, []);
 
-  const activeTimelineEvents = React.useMemo(() => filterUpcomingAndOngoingEvents(events, nowTs), [events, nowTs]);
-
-  const nextEvent = activeTimelineEvents[0] || null;
-  const nextEventIsOngoing = nextEvent ? isEventOngoing(nextEvent, nowTs) : false;
-  const pendingEvents = activeTimelineEvents.filter((e) => e.rsvpStatus === RSVPStatus.PENDING || e.rsvpStatus === RSVPStatus.UNANSWERED);
-  const upcomingEvents = activeTimelineEvents
-    .filter((e) => e.rsvpStatus !== RSVPStatus.PENDING && e.rsvpStatus !== RSVPStatus.UNANSWERED)
-    .slice(0, 3);
+  const dashboardSections = React.useMemo(() => buildDashboardEventSections(events, nowTs), [events, nowTs]);
+  const heroEvent = dashboardSections.heroEvent;
+  const heroEventIsOngoing = dashboardSections.heroEventIsOngoing;
+  const heroEventNeedsResponse = dashboardSections.heroEventNeedsResponse;
+  const pendingEvents = dashboardSections.pendingEvents;
+  const upcomingEvents = dashboardSections.upcomingEvents;
 
   const timeLeft = React.useMemo(() => {
-    if (!nextEvent) return { days: '00', hours: '00', mins: '00' };
-    const targetDate = nextEventIsOngoing ? new Date(getEventEndTimestamp(nextEvent)) : nextEvent.startDate;
+    if (!heroEvent) return { days: '00', hours: '00', mins: '00' };
+    const targetDate = heroEventIsOngoing ? new Date(getEventEndTimestamp(heroEvent)) : heroEvent.startDate;
     return getCountdownParts(targetDate, nowTs);
-  }, [nextEvent, nextEventIsOngoing, nowTs]);
+  }, [heroEvent, heroEventIsOngoing, nowTs]);
 
   return (
     <div className="pb-24 pt-4 px-4 space-y-6 animate-fade-in">
@@ -67,25 +65,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
       </header>
 
       {/* Next Event Banner */}
-      {nextEvent && (
+      {heroEvent && (
         <section>
            <div 
-             onClick={() => onEventClick(nextEvent)}
+             onClick={() => onEventClick(heroEvent)}
              className="bg-gradient-to-r from-pb-surface to-[#16213E] rounded-3xl p-6 border border-white/5 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
            >
               <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-pb-primary/10 rounded-full blur-3xl"></div>
               
               <span className="text-pb-primary text-xs font-bold uppercase tracking-wider mb-2 block">
-                {nextEventIsOngoing ? 'Текущее событие' : 'Ближайшее событие'}
+                {heroEventIsOngoing ? 'Текущее событие' : 'Ближайшее событие'}
               </span>
               <span
                 className="inline-flex mb-2 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide bg-black/30 border border-white/10"
-                style={{ color: EVENT_COLORS[nextEvent.type] }}
+                style={{ color: EVENT_COLORS[heroEvent.type] }}
               >
-                {EVENT_LABELS[nextEvent.type]}
+                {EVENT_LABELS[heroEvent.type]}
               </span>
-              <h1 className="text-2xl font-black text-white mb-1 leading-tight">{nextEvent.title}</h1>
-              <p className="text-pb-subtext mb-4">{nextEvent.location || 'Место не указано'}</p>
+              <h1 className="text-2xl font-black text-white mb-1 leading-tight">{heroEvent.title}</h1>
+              <p className="text-pb-subtext mb-3">{heroEvent.location || 'Место не указано'}</p>
+
+              {heroEventNeedsResponse && (
+                <div className="inline-flex mb-4 px-3 py-1 rounded-full text-[11px] font-semibold text-pb-warning bg-pb-warning/10 border border-pb-warning/20">
+                  Ждет ответа
+                </div>
+              )}
 
               <div className="flex space-x-4 mb-4">
                 <div>
@@ -107,11 +111,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEventClick(nextEvent);
+                  onEventClick(heroEvent);
                 }}
                 className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl hover:bg-opacity-90 transition-colors"
               >
-                Подробнее
+                {heroEventNeedsResponse ? 'Открыть и ответить' : 'Подробнее'}
               </button>
            </div>
         </section>

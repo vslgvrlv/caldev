@@ -27,6 +27,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   const isLocalDev =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const safeAreaFrameStyle = {
+    paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
+    paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
+    paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
+    paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
+  } as const;
 
   useEffect(() => {
     const params = new URLSearchParams(authQuery);
@@ -149,7 +155,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
 
   if (step === 'SELECT') {
     return (
-      <div className="min-h-screen bg-pb-background flex flex-col items-center justify-center p-6 animate-fade-in relative overflow-hidden">
+      <div
+        className="min-h-screen bg-pb-background flex flex-col items-center justify-center animate-fade-in relative overflow-hidden"
+        style={safeAreaFrameStyle}
+      >
         {/* Decorative BG */}
         <div className="absolute top-0 left-0 w-full h-full bg-splatter opacity-20 pointer-events-none"></div>
         
@@ -183,9 +192,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   }
 
   return (
-    <div className="min-h-screen bg-pb-background flex flex-col items-center justify-center p-6 relative overflow-hidden animate-fade-in">
+    <div
+      className="min-h-screen bg-pb-background flex flex-col items-center justify-center relative overflow-hidden animate-fade-in"
+      style={safeAreaFrameStyle}
+    >
        {/* Back Link */}
-       <Link to="/" className="absolute top-8 left-8 text-pb-subtext hover:text-white flex items-center space-x-2 transition-colors z-20">
+       <Link to="/" className="absolute top-0 left-0 text-pb-subtext hover:text-white flex items-center space-x-2 transition-colors z-20">
          <ArrowLeft size={20} />
          <span className="font-medium">На главную</span>
        </Link>

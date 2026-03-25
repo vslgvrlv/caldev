@@ -151,9 +151,18 @@ export const InviteView: React.FC = () => {
 
   const title = inviteInfo?.teamName ? `Инвайт в команду ${inviteInfo.teamName}` : 'Приглашение в команду';
   const roleHint = inviteInfo?.role ? `Роль по инвайту: ${inviteInfo.role}` : 'Роль по умолчанию: PLAYER';
+  const safeAreaCardViewportStyle = {
+    paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
+    paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
+    paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
+    paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
+  } as const;
 
   return (
-    <div className="min-h-screen bg-pb-background flex items-center justify-center text-white p-6">
+    <div
+      className="min-h-screen bg-pb-background flex items-center justify-center text-white"
+      style={safeAreaCardViewportStyle}
+    >
       <div className="w-full max-w-sm bg-pb-surface border border-white/10 rounded-2xl p-5">
         <h1 className="text-xl font-bold mb-2">{title}</h1>
         <p className="text-pb-subtext text-sm mb-2">{roleHint}</p>

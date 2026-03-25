@@ -1,16 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDashboardEventSections,
   filterFutureEvents,
   filterUpcomingAndOngoingEvents,
   getCountdownParts,
   getEventEndTimestamp,
   isEventOngoing,
+  pickDashboardHeroEvent,
   sortEventsByStart,
 } from "../../lib/events";
 import type { Event } from "../../types";
 import { EventType, RSVPStatus } from "../../types";
 
-function makeEvent(id: string, iso: string, endIso?: string): Event {
+function makeEvent(
+  id: string,
+  iso: string,
+  endIso?: string,
+  overrides: Partial<Event> = {}
+): Event {
   const date = new Date(iso);
   return {
     id,
@@ -21,6 +28,7 @@ function makeEvent(id: string, iso: string, endIso?: string): Event {
     endDate: endIso ? new Date(endIso) : undefined,
     rsvpStatus: RSVPStatus.PENDING,
     attendeesCount: 0,
+    ...overrides,
   };
 }
 
@@ -56,6 +64,67 @@ describe("events helpers", () => {
       now
     );
     expect(visible.map((e) => e.id)).toEqual(["ongoing", "upcoming"]);
+  });
+
+  it("prefers an ongoing event over an upcoming one for the dashboard hero", () => {
+    const now = Date.parse("2026-03-01T10:30:00.000Z");
+    const hero = pickDashboardHeroEvent(
+      [
+        makeEvent("upcoming", "2026-03-01T11:00:00.000Z", "2026-03-01T12:00:00.000Z"),
+        makeEvent("ongoing", "2026-03-01T10:00:00.000Z", "2026-03-01T11:30:00.000Z"),
+      ],
+      now
+    );
+    expect(hero?.id).toBe("ongoing");
+  });
+
+  it("picks the ongoing event nearest to finishing for the dashboard hero", () => {
+    const now = Date.parse("2026-03-01T10:30:00.000Z");
+    const hero = pickDashboardHeroEvent(
+      [
+        makeEvent("later-end", "2026-03-01T09:30:00.000Z", "2026-03-01T12:00:00.000Z"),
+        makeEvent("sooner-end", "2026-03-01T10:00:00.000Z", "2026-03-01T10:45:00.000Z"),
+        makeEvent("future", "2026-03-01T11:00:00.000Z", "2026-03-01T12:00:00.000Z"),
+      ],
+      now
+    );
+    expect(hero?.id).toBe("sooner-end");
+  });
+
+  it("falls back to the nearest future event when nothing is ongoing", () => {
+    const now = Date.parse("2026-03-01T10:30:00.000Z");
+    const hero = pickDashboardHeroEvent(
+      [
+        makeEvent("later", "2026-03-01T12:00:00.000Z", "2026-03-01T13:00:00.000Z"),
+        makeEvent("nearest", "2026-03-01T10:45:00.000Z", "2026-03-01T11:45:00.000Z"),
+      ],
+      now
+    );
+    expect(hero?.id).toBe("nearest");
+  });
+
+  it("removes the hero event from dashboard secondary sections", () => {
+    const now = Date.parse("2026-03-01T10:30:00.000Z");
+    const sections = buildDashboardEventSections(
+      [
+        makeEvent("hero", "2026-03-01T10:00:00.000Z", "2026-03-01T10:45:00.000Z", {
+          rsvpStatus: RSVPStatus.UNANSWERED,
+        }),
+        makeEvent("pending-next", "2026-03-01T11:00:00.000Z", "2026-03-01T12:00:00.000Z", {
+          rsvpStatus: RSVPStatus.PENDING,
+        }),
+        makeEvent("confirmed-next", "2026-03-01T12:30:00.000Z", "2026-03-01T13:30:00.000Z", {
+          rsvpStatus: RSVPStatus.CONFIRMED,
+        }),
+      ],
+      now
+    );
+
+    expect(sections.heroEvent?.id).toBe("hero");
+    expect(sections.heroEventIsOngoing).toBe(true);
+    expect(sections.heroEventNeedsResponse).toBe(true);
+    expect(sections.pendingEvents.map((event) => event.id)).toEqual(["pending-next"]);
+    expect(sections.upcomingEvents.map((event) => event.id)).toEqual(["confirmed-next"]);
   });
 
   it("detects ongoing event by end timestamp", () => {

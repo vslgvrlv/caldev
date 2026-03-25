@@ -3,8 +3,15 @@ import { Link } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 
 export const TermsView: React.FC = () => {
+  const safeAreaDocumentStyle = {
+    paddingTop: 'var(--pb-safe-top)',
+    paddingRight: 'var(--pb-safe-right)',
+    paddingBottom: 'var(--pb-safe-bottom)',
+    paddingLeft: 'var(--pb-safe-left)',
+  } as const;
+
   return (
-    <div className="min-h-screen bg-pb-background text-white">
+    <div className="min-h-screen bg-pb-background text-white" style={safeAreaDocumentStyle}>
       <main className="max-w-3xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
         <Link to="/" className="inline-flex items-center text-pb-primary hover:text-pb-secondary transition-colors mb-8">
           На главную
