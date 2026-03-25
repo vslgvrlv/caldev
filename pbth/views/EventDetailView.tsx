@@ -249,7 +249,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
   return (
     <div className="min-h-screen bg-pb-background flex flex-col pb-safe animate-fade-in relative z-50">
-      <div className="sticky top-0 z-10 bg-pb-background/80 backdrop-blur-md px-4 py-3 flex items-center border-b border-white/5">
+      <div
+        className="sticky top-0 z-10 flex items-center border-b border-white/5 bg-pb-background/80 px-4 pb-3 backdrop-blur-md"
+        style={{ paddingTop: 'calc(var(--pb-safe-top) + 0.75rem)' }}
+      >
         <button onClick={onBack} className="p-2 -ml-2 text-white hover:bg-white/10 rounded-full">
           <ChevronLeft size={24} />
         </button>

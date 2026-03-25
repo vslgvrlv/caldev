@@ -1,4 +1,5 @@
 import type { Event } from "../types";
+import { RSVPStatus } from "../types";
 
 export function sortEventsByStart(events: Event[]): Event[] {
   return [...events].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
@@ -24,6 +25,47 @@ export function filterUpcomingAndOngoingEvents(events: Event[], nowTs: number): 
 
 export function filterFutureEvents(events: Event[], nowTs: number): Event[] {
   return sortEventsByStart(events).filter((event) => event.startDate.getTime() >= nowTs);
+}
+
+function isAwaitingResponse(event: Event): boolean {
+  return event.rsvpStatus === RSVPStatus.PENDING || event.rsvpStatus === RSVPStatus.UNANSWERED;
+}
+
+export function pickDashboardHeroEvent(events: Event[], nowTs: number): Event | null {
+  const visibleEvents = filterUpcomingAndOngoingEvents(events, nowTs);
+  const ongoingEvents = visibleEvents
+    .filter((event) => isEventOngoing(event, nowTs))
+    .sort((a, b) => getEventEndTimestamp(a) - getEventEndTimestamp(b));
+
+  if (ongoingEvents.length > 0) {
+    return ongoingEvents[0];
+  }
+
+  return visibleEvents[0] || null;
+}
+
+export interface DashboardEventSections {
+  heroEvent: Event | null;
+  heroEventIsOngoing: boolean;
+  heroEventNeedsResponse: boolean;
+  pendingEvents: Event[];
+  upcomingEvents: Event[];
+}
+
+export function buildDashboardEventSections(events: Event[], nowTs: number): DashboardEventSections {
+  const visibleEvents = filterUpcomingAndOngoingEvents(events, nowTs);
+  const heroEvent = pickDashboardHeroEvent(visibleEvents, nowTs);
+  const secondaryEvents = heroEvent
+    ? visibleEvents.filter((event) => event.id !== heroEvent.id)
+    : visibleEvents;
+
+  return {
+    heroEvent,
+    heroEventIsOngoing: heroEvent ? isEventOngoing(heroEvent, nowTs) : false,
+    heroEventNeedsResponse: heroEvent ? isAwaitingResponse(heroEvent) : false,
+    pendingEvents: secondaryEvents.filter((event) => isAwaitingResponse(event)),
+    upcomingEvents: secondaryEvents.filter((event) => !isAwaitingResponse(event)).slice(0, 3),
+  };
 }
 
 export function getCountdownParts(targetDate: Date, nowTs: number) {

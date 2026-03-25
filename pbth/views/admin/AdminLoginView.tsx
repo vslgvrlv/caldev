@@ -206,8 +206,18 @@ export const AdminLoginView: React.FC = () => {
     );
   }
 
+  const safeAreaCardViewportStyle = {
+    paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
+    paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
+    paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
+    paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
+  } as const;
+
   return (
-    <div className="min-h-screen bg-pb-background flex items-center justify-center text-white p-6">
+    <div
+      className="min-h-screen bg-pb-background flex items-center justify-center text-white"
+      style={safeAreaCardViewportStyle}
+    >
       <div className="w-full max-w-md bg-pb-surface border border-white/10 rounded-2xl p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-pb-primary/20 flex items-center justify-center">
