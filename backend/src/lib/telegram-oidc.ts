@@ -108,13 +108,14 @@ export async function exchangeOidcCode(params: {
   body.set("code", params.code);
   body.set("redirect_uri", params.redirectUri);
   body.set("client_id", env.telegramOidc.clientId);
-  body.set("client_secret", env.telegramOidc.clientSecret);
   body.set("code_verifier", params.codeVerifier);
+  const basicAuth = Buffer.from(`${env.telegramOidc.clientId}:${env.telegramOidc.clientSecret}`).toString("base64");
 
   const res = await fetch(env.telegramOidc.tokenUrl, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
+      authorization: `Basic ${basicAuth}`,
     },
     body: body.toString(),
   });
@@ -207,4 +208,3 @@ export async function verifyOidcIdToken(params: {
     },
   };
 }
-
