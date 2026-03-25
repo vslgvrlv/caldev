@@ -9,6 +9,7 @@ import { buildOidcAuthorizeUrl, createOidcChallenge, exchangeOidcCode, verifyOid
 import { getMembershipById, getUserMemberships } from "../../lib/permissions.js";
 import { canChooseAdminRole, getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { env } from "../../config/env.js";
+import { getRequestPublicOrigin } from "../../lib/public-origin.js";
 import { pruneExpiredAuthArtifacts, registerReplayPayload, sha256Hex } from "../../lib/replay-guard.js";
 import { decideOidcCanary, newCanaryBucket, normalizeForceOverride, parseCanaryBucket } from "../../lib/auth-canary.js";
 import { getAuthSloSummary, recordAuthMetric } from "../../lib/auth-slo.js";
@@ -126,25 +127,12 @@ function sanitizeRedirectTo(input: unknown, fallback = "/app"): string {
   return input;
 }
 
-function getRequestPublicOrigin(req: any): string {
-  const fallback = new URL(env.frontendUrl);
-  const forwardedHost = String(req.get("x-forwarded-host") || "")
-    .split(",")[0]
-    ?.trim();
-  const host = forwardedHost || String(req.get("host") || "").split(",")[0]?.trim();
-  const forwardedProto = String(req.get("x-forwarded-proto") || "")
-    .split(",")[0]
-    ?.trim();
-  const protocol = forwardedProto || fallback.protocol.replace(":", "");
-
-  if (!host) {
-    return env.frontendUrl;
-  }
-  return `${protocol}://${host}`;
-}
-
 function getAuthPublicUrls(req: any) {
-  const origin = getRequestPublicOrigin(req);
+  const origin = getRequestPublicOrigin({
+    host: req.get("host"),
+    forwardedHost: req.get("x-forwarded-host"),
+    forwardedProto: req.get("x-forwarded-proto"),
+  });
   return {
     origin,
     callbackUrl: new URL("/api/v1/auth/telegram/callback", origin).toString(),

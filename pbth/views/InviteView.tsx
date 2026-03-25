@@ -98,13 +98,17 @@ export const InviteView: React.FC = () => {
   const handleLogin = () => {
     if (!inviteId) return;
     const redirectTo = `/invite/${inviteId}`;
-    sendAuthTelemetry({
-      scope: 'INVITE',
-      flow: 'OIDC',
-      event: 'oidc_redirect_start',
-      path: redirectTo,
-    });
-    api.startTelegramOidc(redirectTo);
+    const run = async () => {
+      sendAuthTelemetry({
+        scope: 'INVITE',
+        flow: 'BOT_HANDOFF',
+        event: 'login_start',
+        path: redirectTo,
+      });
+      const handoff = await api.startTelegramHandoff('USER', redirectTo);
+      window.location.assign(handoff.botUrl);
+    };
+    void run();
   };
 
   const handleAccept = async () => {
