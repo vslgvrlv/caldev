@@ -12,7 +12,9 @@ For every production deployment, append one row:
 
 `YYYY-MM-DD | releaseId | commit | deployed by | smoke result | rollback target`
 
+2026-03-25 | v2026.03.25-pwa-safe-top1 | 52ee756fda945a33a61bc4067c5ee8af1a97ce0b | Codex via Deploy Production run 23540220050 | prod health ok, prod release/version ok, staging matched before deploy | v2026.03.06-1
+
 ## Current Rollback Anchors
 
-- `prod`: `v2026.03.06-1`
-- `staging`: `v2026.03.10-3` (commit `5d062aea9bd740f4c668443944cd9cfe18758741`, deployed via `Deploy Staging` run `22890852308`).
+- `prod`: `v2026.03.25-pwa-safe-top1` (commit `52ee756fda945a33a61bc4067c5ee8af1a97ce0b`, deployed via `Deploy Production` run `23540220050`).
+- `staging`: `v2026.03.25-pwa-safe-top1` (commit `52ee756fda945a33a61bc4067c5ee8af1a97ce0b`, deployed via `Deploy Staging` run `23540118498`).
