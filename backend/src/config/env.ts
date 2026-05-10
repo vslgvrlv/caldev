@@ -59,6 +59,10 @@ export const env = {
 
   telegram: {
     botToken: required("TELEGRAM_BOT_TOKEN", ""),
+    // Optional relay endpoint used when the host network cannot reach
+    // api.telegram.org directly (RU hosters often filter Telegram subnets).
+    // The relay must accept the same Bot API path layout: <base>/bot<token>/<method>.
+    botApiBaseUrl: process.env.TELEGRAM_BOT_API_BASE_URL || "https://api.telegram.org",
     allowedMaxAuthAgeSec: asNumber(process.env.TELEGRAM_MAX_AUTH_AGE_SEC || "600", "TELEGRAM_MAX_AUTH_AGE_SEC"),
     callbackUrl: required("TELEGRAM_CALLBACK_URL", "http://127.0.0.1:8000/api/v1/auth/telegram/callback"),
     botUsername: required("TELEGRAM_BOT_USERNAME", ""),

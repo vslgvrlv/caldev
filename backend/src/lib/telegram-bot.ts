@@ -49,7 +49,7 @@ export async function sendTelegramBotMessage(
   text: string,
   options?: TelegramSendMessageOptions
 ): Promise<void> {
-  const url = `https://api.telegram.org/bot${env.telegram.botToken}/sendMessage`;
+  const url = `${env.telegram.botApiBaseUrl}/bot${env.telegram.botToken}/sendMessage`;
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
