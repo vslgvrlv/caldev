@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const indexHtmlPath = fileURLToPath(new URL("../../index.html", import.meta.url));
+const indexCssPath = fileURLToPath(new URL("../../index.css", import.meta.url));
 const manifestPath = fileURLToPath(new URL("../../public/manifest.webmanifest", import.meta.url));
 const iconSvgPath = fileURLToPath(new URL("../../public/icons/icon.svg", import.meta.url));
 const icon192Path = fileURLToPath(new URL("../../public/icons/icon-192.png", import.meta.url));
@@ -40,22 +41,30 @@ describe("pwa shell", () => {
     expect(svg).not.toContain("feGaussianBlur");
   });
 
-  it("links manifest, branded icons, and shared safe-area helpers from the app shell", () => {
+  it("links manifest and branded icons from the app shell", () => {
     const html = readFileSync(indexHtmlPath, "utf8");
     expect(html).toContain('rel="manifest"');
     expect(html).toContain('rel="icon"');
     expect(html).toContain('apple-touch-icon');
-    expect(html).toContain("safe-area-inset-top");
-    expect(html).toContain(".pb-safe-top");
-    expect(html).toContain(".pb-safe");
   });
 
-  it("bootstraps vendor scripts without direct html src tags", () => {
+  it("ships safe-area helpers in the bundled stylesheet", () => {
+    const css = readFileSync(indexCssPath, "utf8");
+    expect(css).toContain("safe-area-inset-top");
+    expect(css).toContain(".pb-safe-top");
+    expect(css).toContain(".pb-safe");
+  });
+
+  it("does not load Tailwind from a runtime CDN", () => {
     const html = readFileSync(indexHtmlPath, "utf8");
-    expect(html).not.toContain('<script src="/api/v1/vendor/tailwindcss.js');
+    expect(html).not.toContain("/api/v1/vendor/tailwindcss.js");
+    expect(html).not.toContain("tailwind.runtime.config.js");
+  });
+
+  it("loads the Telegram WebApp SDK via the vendor proxy without a static src tag", () => {
+    const html = readFileSync(indexHtmlPath, "utf8");
     expect(html).not.toContain('<script src="/api/v1/vendor/telegram-web-app.js');
     expect(html).toContain("data-pbth-vendor");
-    expect(html).toContain("/api/v1/vendor/tailwindcss.js?v=20260304-1");
-    expect(html).toContain("/api/v1/vendor/telegram-web-app.js?v=20260304-1");
+    expect(html).toContain("/api/v1/vendor/telegram-web-app.js");
   });
 });

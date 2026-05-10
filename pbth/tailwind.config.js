@@ -1,5 +1,13 @@
-const pbthTailwindConfig = {
+/** @type {import('tailwindcss').Config} */
+export default {
   darkMode: 'class',
+  content: [
+    './index.html',
+    './**/*.{ts,tsx}',
+    '!./node_modules/**',
+    '!./dist/**',
+    '!./generated/**',
+  ],
   theme: {
     extend: {
       fontFamily: {
@@ -15,8 +23,8 @@ const pbthTailwindConfig = {
           highlight: '#FFEA00',
           danger: '#FF1744',
           text: '#FFFFFF',
-          subtext: '#A0A0B0'
-        }
+          subtext: '#A0A0B0',
+        },
       },
       backgroundImage: {
         splatter:
@@ -31,20 +39,7 @@ const pbthTailwindConfig = {
       animation: {
         'fade-in': 'fade-in 180ms ease-out',
       },
-    }
-  }
+    },
+  },
+  plugins: [],
 };
-
-if (typeof globalThis !== 'undefined') {
-  globalThis.tailwind = globalThis.tailwind || {};
-  globalThis.tailwind.config = pbthTailwindConfig;
-}
-
-if (typeof window !== 'undefined') {
-  window.tailwind = window.tailwind || {};
-  window.tailwind.config = pbthTailwindConfig;
-}
-
-if (typeof tailwind !== 'undefined') {
-  tailwind.config = pbthTailwindConfig;
-}

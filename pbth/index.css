@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Static fallback variables — kept so anything querying CSS custom props still works.
+   Tailwind generates the utility classes themselves from tailwind.config.js. */
+:root {
+  --pb-primary: #00e676;
+  --pb-secondary: #39ff14;
+  --pb-background: #0f0f0f;
+  --pb-surface: #1e1e2e;
+  --pb-warning: #ff6d00;
+  --pb-highlight: #ffea00;
+  --pb-danger: #ff1744;
+  --pb-text: #ffffff;
+  --pb-subtext: #a0a0b0;
+
+  --pb-safe-top: env(safe-area-inset-top, 0px);
+  --pb-safe-right: env(safe-area-inset-right, 0px);
+  --pb-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --pb-safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background-color: var(--pb-background);
+}
+
+body,
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--pb-background);
+  color: var(--pb-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+.pb-safe {
+  padding-bottom: var(--pb-safe-bottom);
+}
+
+.pb-safe-top {
+  padding-top: var(--pb-safe-top);
+}
+
+.pb-safe-x {
+  padding-left: var(--pb-safe-left);
+  padding-right: var(--pb-safe-right);
+}
+
+.pb-safe-screen {
+  padding-top: var(--pb-safe-top);
+  padding-right: var(--pb-safe-right);
+  padding-bottom: var(--pb-safe-bottom);
+  padding-left: var(--pb-safe-left);
+}
