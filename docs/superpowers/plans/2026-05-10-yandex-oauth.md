@@ -58,7 +58,7 @@
 | `pbth/lib/auth-ux.ts` | New error code `OAUTH_NO_ACCOUNT` with friendly Russian message |
 | `pbth/App.tsx` | Add `<Route path="/auth/yandex/link/confirm" element={<YandexLinkConfirmView />} />` |
 | `pbth/views/ProfileView.tsx` (or AppLayout profile section — find with grep) | Mount `<ProfileIdentities />` |
-| `pbth/vite.config.ts` | Pass `VITE_AUTH_YANDEX_ENABLED` via env |
+| `pbth/Dockerfile` | Add `ARG VITE_AUTH_YANDEX_ENABLED=0` + `ENV` line before `npm run build` |
 
 ### Infra / env files
 | File | Change |
@@ -262,6 +262,14 @@ In `backend/src/lib/http-error.ts`, add:
 | "OAUTH_PENDING_LINK_EXPIRED"
 ```
 
+- [ ] **Step 4b: Extend `AuthMetricMethod`**
+
+In `backend/src/lib/auth-slo.ts:1`, add `"YANDEX_OAUTH"` to the union so downstream calls don't need `as any`:
+```ts
+export type AuthMetricMethod = "OIDC" | "WEBAPP" | "LEGACY_WIDGET" | "DEV" | "UNKNOWN" | "BOT_HANDOFF" | "YANDEX_OAUTH";
+```
+(Confirm the existing list by reading the file — keep all existing values, just append `"YANDEX_OAUTH"`.)
+
 - [ ] **Step 5: Verify tests pass + typecheck**
 
 ```bash
@@ -315,7 +323,9 @@ afterAll(async () => {
 
 describe("identity-repo", () => {
   it("link + find + list + unlink round-trip", async () => {
-    await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_test_1", email: "x@y.ru" });
+    const r = await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_test_1", email: "x@y.ru" });
+    expect(r.conflict).toBeNull();
+    expect(r.identity?.userId).toBe(testUserId);
     const found = await repo.findIdentity("yandex", "yandex_test_1");
     expect(found?.userId).toBe(testUserId);
     const list = await repo.listIdentitiesForUser(testUserId);
@@ -325,12 +335,29 @@ describe("identity-repo", () => {
     expect(await repo.findIdentity("yandex", "yandex_test_1")).toBeNull();
   });
 
-  it("rejects duplicate (provider, provider_user_id)", async () => {
-    await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_dup", email: null });
-    await expect(
-      repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_dup", email: null })
-    ).rejects.toThrow(/user_identities_user_provider_unique|user_identities_provider_subject_unique/);
+  it("returns USER_PROVIDER_TAKEN when same user re-links same provider", async () => {
+    await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_dup_a", email: null });
+    const second = await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_dup_b", email: null });
+    expect(second.identity).toBeNull();
+    expect(second.conflict).toBe("USER_PROVIDER_TAKEN");
     await repo.unlinkIdentity(testUserId, "yandex");
+  });
+
+  it("returns PROVIDER_SUBJECT_TAKEN when same yandex id is linked to a different user", async () => {
+    // Make a second user
+    const u2 = await pool.query<{ id: string }>(
+      `INSERT INTO users (telegram_id, username, name, nickname, account_role)
+       VALUES (999992, 'identity_test_2', 'Other', 'other_test', 'USER')
+       ON CONFLICT (telegram_id) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const otherUserId = u2.rows[0].id;
+    await repo.linkIdentity({ userId: testUserId, provider: "yandex", providerUserId: "yandex_shared", email: null });
+    const second = await repo.linkIdentity({ userId: otherUserId, provider: "yandex", providerUserId: "yandex_shared", email: null });
+    expect(second.identity).toBeNull();
+    expect(second.conflict).toBe("PROVIDER_SUBJECT_TAKEN");
+    await repo.unlinkIdentity(testUserId, "yandex");
+    await pool.query(`DELETE FROM users WHERE id = $1`, [otherUserId]);
   });
 });
 ```
@@ -384,19 +411,39 @@ export async function listIdentitiesForUser(userId: string): Promise<IdentityRow
   return rows.map(mapRow);
 }
 
+export type LinkConflict = "PROVIDER_SUBJECT_TAKEN" | "USER_PROVIDER_TAKEN";
+
+export interface LinkResult {
+  identity: IdentityRow | null;
+  conflict: LinkConflict | null;
+}
+
 export async function linkIdentity(input: {
   userId: string;
   provider: string;
   providerUserId: string;
   email: string | null;
-}): Promise<IdentityRow> {
+}): Promise<LinkResult> {
+  // Race-safe: ON CONFLICT DO NOTHING covers both UNIQUE constraints atomically.
   const { rows } = await pool.query(
     `INSERT INTO user_identities (user_id, provider, provider_user_id, email)
      VALUES ($1, $2, $3, $4)
+     ON CONFLICT DO NOTHING
      RETURNING user_id, provider, provider_user_id, email, linked_at`,
     [input.userId, input.provider, input.providerUserId, input.email]
   );
-  return mapRow(rows[0]);
+  if (rows[0]) {
+    return { identity: mapRow(rows[0]), conflict: null };
+  }
+  // Conflict happened. Distinguish which UNIQUE fired so callers can return the right error code.
+  const { rows: subjectRows } = await pool.query(
+    `SELECT user_id FROM user_identities WHERE provider = $1 AND provider_user_id = $2`,
+    [input.provider, input.providerUserId]
+  );
+  if (subjectRows[0]) {
+    return { identity: null, conflict: "PROVIDER_SUBJECT_TAKEN" };
+  }
+  return { identity: null, conflict: "USER_PROVIDER_TAKEN" };
 }
 
 export async function unlinkIdentity(userId: string, provider: string): Promise<boolean> {
@@ -760,9 +807,22 @@ grep -n "completeTelegramLogin(" backend/src/modules/auth/routes.ts
 ```
 Note: 1 definition at line 216, 6 call sites (lines 730, 972, 1172, 1248, 1280, 1332 according to current main; verify).
 
-- [ ] **Step 2: Move + extend to `oauth-login.ts`**
+- [ ] **Step 2: Read existing `completeTelegramLogin` (routes.ts:216-340) and enumerate ALL invariants it preserves**
 
-Lift the function verbatim into `backend/src/lib/oauth-login.ts`. Add a `provider` parameter while keeping the existing semantics for `provider='telegram'`. Reuse `identity-repo` for the upsert path.
+Before lifting, list every side-effect of the inline function:
+- (1) Upsert into `users` keyed by `telegram_id` (`ON CONFLICT DO UPDATE` of name/nickname/avatar)
+- (2) `account_role = 'USER'` + `role_selected_at = NOW()` when `canChooseAdminRole` returns false
+- (3) `onboarding_completed_at`: for non-`BOT_HANDOFF` flows set to NOW on insert; for `BOT_HANDOFF` left NULL so the handoff onboarding screen can fire
+- (4) `entryRoleOverride`: dev-login call sites pass an override that sets `req.session.entryRole` directly
+- (5) `req.session.regenerate` → `req.session.userId = userId` → `req.session.authMethod = ...`
+- (6) Membership bootstrap: if exactly one membership, set `activeMembershipId` + `activeTeamId`; else clear
+- (7) `writeAudit(userId, "auth.telegram.login", {telegramId, authMethod})`
+- (8) `req.session.save`
+- (9) `res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions())`
+
+The new helper MUST preserve every one of these for the `provider='telegram'` path. Anything dropped breaks Telegram auth in prod.
+
+- [ ] **Step 3: Lift + extend to `oauth-login.ts`**
 
 ```typescript
 import type { Request, Response } from "express";
@@ -775,7 +835,7 @@ import { findIdentity, linkIdentity } from "./identity-repo.js";
 export type AuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "YANDEX_OAUTH";
 
 export interface OAuthProfile {
-  id: string;          // provider's permanent subject
+  id: string;
   email?: string | null;
   username?: string | null;
   firstName?: string | null;
@@ -788,6 +848,8 @@ export interface CompleteOAuthLoginParams {
   provider: "telegram" | "yandex";
   profile: OAuthProfile;
   authMethod: AuthMethod;
+  /** Forces a specific session.entryRole — used by dev-login flow. */
+  entryRoleOverride?: "ADMIN" | "USER" | null;
 }
 
 export async function completeOAuthLogin(
@@ -803,52 +865,80 @@ export async function completeOAuthLogin(
 
   if (existing) {
     userId = existing.userId;
-    // For telegram only, refresh users row with latest profile fields (keep prior behaviour).
     if (provider === "telegram") {
+      // Refresh denormalised users row with latest Telegram profile.
       const name = [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim() || profile.username || `tg-${profile.id}`;
       const nickname = profile.username || `tg_${profile.id}`;
       await query(
-        `UPDATE users SET username = COALESCE($2, username), name = $3, nickname = $4, avatar = COALESCE($5, avatar), updated_at = NOW() WHERE id = $1`,
+        `UPDATE users
+         SET username = COALESCE($2, username),
+             name = $3,
+             nickname = $4,
+             avatar = COALESCE($5, avatar),
+             updated_at = NOW()
+         WHERE id = $1`,
         [userId, profile.username ?? null, name, nickname, profile.avatarUrl ?? null]
       );
     }
   } else {
     if (provider !== "telegram") {
-      // Anonymous OAuth login with no existing identity is forbidden (PBTH is invite-only). Caller redirects with NO_ACCOUNT.
+      // Anonymous OAuth login with no existing identity → PBTH is invite-only, refuse auto-create.
       return null;
     }
-    // Telegram: create new user + identity row.
     const name = [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim() || profile.username || `tg-${profile.id}`;
     const nickname = profile.username || `tg_${profile.id}`;
+    // Invariant (3): BOT_HANDOFF new users must NOT have onboarding_completed_at — handoff onboarding fires.
+    // All other Telegram auth methods (WEBAPP, OIDC, LEGACY_WIDGET, DEV) treat the user as already-onboarded.
+    const onboardingClause =
+      params.authMethod === "BOT_HANDOFF"
+        ? "NULL"
+        : "NOW()";
     const inserted = await query<{ id: string }>(
-      `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at)
-       VALUES ($1::bigint, $2, $3, $4, $5, NULL, NULL)
+      `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at, onboarding_completed_at)
+       VALUES ($1::bigint, $2, $3, $4, $5, NULL, NULL, ${onboardingClause})
        ON CONFLICT (telegram_id) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`,
       [profile.id, profile.username ?? null, name, nickname, profile.avatarUrl ?? null]
     );
     userId = inserted.rows[0].id;
-    await linkIdentity({ userId, provider: "telegram", providerUserId: profile.id, email: null });
+    const linkResult = await linkIdentity({ userId, provider: "telegram", providerUserId: profile.id, email: null });
+    if (linkResult.conflict && linkResult.conflict !== "USER_PROVIDER_TAKEN") {
+      // PROVIDER_SUBJECT_TAKEN should never happen here (we just inserted the user), but log defensively.
+      throw new Error(`completeOAuthLogin: unexpected link conflict ${linkResult.conflict}`);
+    }
     isNewUser = true;
   }
 
-  // Role-selection invariant (mirror old logic, but match telegram identity explicitly).
+  // Invariant (2): role assignment based on allowlist.
   if (provider === "telegram") {
     const allowAdminChoice = canChooseAdminRole({ telegram_id: profile.id, username: profile.username ?? null });
     if (!allowAdminChoice) {
-      await query(`UPDATE users SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW() WHERE id = $1`, [userId]);
+      await query(
+        `UPDATE users SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
     }
   } else {
     // Non-telegram providers cannot grant ADMIN; force USER if unset.
-    await query(`UPDATE users SET account_role = COALESCE(account_role, 'USER'), role_selected_at = COALESCE(role_selected_at, NOW()), updated_at = NOW() WHERE id = $1`, [userId]);
+    await query(
+      `UPDATE users SET account_role = COALESCE(account_role, 'USER'), role_selected_at = COALESCE(role_selected_at, NOW()), updated_at = NOW() WHERE id = $1`,
+      [userId]
+    );
   }
 
-  // Regenerate session
+  // Invariant (5): regenerate session.
   await new Promise<void>((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
   req.session.userId = userId;
   req.session.authMethod = params.authMethod;
 
-  // Active team bootstrap (keep parity with old logic)
+  // Invariant (4): entry-role override for dev-login. Yandex callers do not pass this.
+  if (params.entryRoleOverride === "ADMIN" || params.entryRoleOverride === "USER") {
+    req.session.entryRole = params.entryRoleOverride;
+  } else {
+    delete req.session.entryRole;
+  }
+
+  // Invariant (6): membership bootstrap.
   const memberships = await getUserMemberships(userId);
   if (memberships.length === 1) {
     req.session.activeMembershipId = memberships[0].id;
@@ -858,45 +948,66 @@ export async function completeOAuthLogin(
     delete req.session.activeTeamId;
   }
 
-  await writeAudit(userId, `auth.${provider}.login`, { provider, providerUserId: profile.id, authMethod: params.authMethod, isNewUser });
+  // Invariant (7): audit log.
+  await writeAudit(userId, `auth.${provider}.login`, {
+    provider,
+    providerUserId: profile.id,
+    authMethod: params.authMethod,
+    isNewUser,
+  });
 
+  // Invariant (8): persist session.
   await new Promise<void>((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+
+  // Invariant (9): clear logout guard cookie. Logic stays inline in routes.ts callers (cookie name lives there).
+
   return { userId };
 }
 ```
 
-- [ ] **Step 3: Update `routes.ts` to import + call new helper**
+- [ ] **Step 4: Behaviour parity test**
 
-Replace inline `async function completeTelegramLogin(...)` and `LOGOUT_GUARD_*` constants if they're tangled (keep `LOGOUT_GUARD_COOKIE_NAME` / `logoutGuardCookieOptions` inline in routes.ts for now to minimise the rename surface).
+Before deleting the inline function, write `backend/src/__tests__/unit/oauth-login-parity.test.ts` that exercises the NEW helper for each of the 5 existing Telegram entry-points (WEBAPP/OIDC/LEGACY_WIDGET/DEV/BOT_HANDOFF) and asserts:
+- new-user insert sets `onboarding_completed_at` correctly per method
+- `session.entryRole` matches `entryRoleOverride` if passed
+- `session.activeTeamId` set correctly for 1-membership users
+- audit row written
+- `users.account_role` set for non-allowlist users
+
+Run, expect GREEN (helper already implements parity). If RED, fix helper before continuing.
+
+- [ ] **Step 5: Update `routes.ts` to import + call new helper**
+
+Keep `LOGOUT_GUARD_COOKIE_NAME` + `logoutGuardCookieOptions` inline in routes.ts (each call site still calls `res.clearCookie(...)` after `completeOAuthLogin` returns).
 
 At top of `routes.ts`:
 ```typescript
-import { completeOAuthLogin, type CompleteOAuthLoginParams } from "../../lib/oauth-login.js";
+import { completeOAuthLogin } from "../../lib/oauth-login.js";
 ```
 
-Replace each call site:
-- Line 730 (oidc callback): `await completeOAuthLogin(req, res, { provider: "telegram", profile: {...}, authMethod: "OIDC" });`
-- Line 972 (telegram callback): same with `authMethod: "BOT_HANDOFF"` if that's what fits or the original method.
+Replace each call site with translated payload shape `{id, first_name, last_name, username, photo_url}` → `{id, firstName, lastName, username, avatarUrl}`:
+- Line 730 (OIDC callback): `await completeOAuthLogin(req, res, { provider: "telegram", profile: {...}, authMethod: "OIDC" });`
+- Line 972 (Telegram callback — handoff or widget per code): preserve current `authMethod` (likely `"BOT_HANDOFF"`).
 - Line 1172 (legacy widget): `authMethod: "LEGACY_WIDGET"`.
 - Line 1248 (webapp): `authMethod: "WEBAPP"`.
-- Line 1280, 1332 (dev login): `authMethod: "DEV"`.
+- Line 1280, 1332 (dev login): `authMethod: "DEV"`. Pass `entryRoleOverride` from the dev-login request body — verify the current code reads it as `options.entryRoleOverride` and pass it through.
 
-Each call site needs translation of payload `{ id, first_name, last_name, username, photo_url }` (old shape) to `{ id, firstName, lastName, username, avatarUrl }` (new shape).
+After each call, keep the existing `res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions())` line.
 
-- [ ] **Step 4: Delete inline function definition** from routes.ts (lines 216-340).
+- [ ] **Step 6: Delete inline function definition** from routes.ts (lines 216-340).
 
-- [ ] **Step 5: Run typecheck + tests**
+- [ ] **Step 7: Run typecheck + tests**
 
 ```bash
 cd backend && npm run check && DB_HOST=127.0.0.1 BACKEND_ENV_FILE=/Users/pk/Documents/CalDEV/.env npm run test:unit
 ```
-Expected: all green. Existing telegram-bot / oidc tests still pass because behaviour parity preserved.
+Expected: all green including the new oauth-login-parity test. Existing telegram-bot / oidc / dev-login tests still pass because all 9 invariants preserved.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/src/lib/oauth-login.ts backend/src/modules/auth/routes.ts
-git commit -m "refactor(auth): extract completeOAuthLogin into reusable module"
+git add backend/src/lib/oauth-login.ts backend/src/modules/auth/routes.ts backend/src/__tests__/unit/oauth-login-parity.test.ts
+git commit -m "refactor(auth): extract completeOAuthLogin (parity-tested) into reusable module"
 ```
 
 ### Task 7: ADMIN allowlist via telegram identity (defensive)
@@ -1054,7 +1165,7 @@ yandexRouter.get(
       codeVerifier: null,
       nonce: null,
     });
-    recordAuthMetric({ method: "YANDEX_OAUTH" as any, platform: "unknown", outcome: "ATTEMPT" });
+    recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ATTEMPT" });
     res.redirect(302, buildYandexAuthorizeUrl({ state, redirectUri: env.yandexOAuth.redirectUri }));
   })
 );
@@ -1067,7 +1178,7 @@ yandexRouter.get(
     if (!parsed.success) return sendError(req, res, 400, "VALIDATION_ERROR", "code and state required");
     const stateRow = await consumeState(parsed.data.state, "yandex");
     if (!stateRow || stateRow.intent !== "login") {
-      recordAuthMetric({ method: "YANDEX_OAUTH" as any, platform: "unknown", outcome: "ERROR", code: "STATE_INVALID" });
+      recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "STATE_INVALID" });
       return res.redirect(302, `/login?auth_error=OAUTH_STATE_INVALID`);
     }
     try {
@@ -1086,14 +1197,14 @@ yandexRouter.get(
         authMethod: "YANDEX_OAUTH",
       });
       if (!result) {
-        recordAuthMetric({ method: "YANDEX_OAUTH" as any, platform: "unknown", outcome: "ERROR", code: "NO_ACCOUNT" });
+        recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "NO_ACCOUNT" });
         return res.redirect(302, `/login?auth_error=OAUTH_NO_ACCOUNT`);
       }
-      recordAuthMetric({ method: "YANDEX_OAUTH" as any, platform: "unknown", outcome: "SUCCESS" });
+      recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "SUCCESS" });
       return res.redirect(302, stateRow.redirectTo);
     } catch (err) {
       logger.warn("[yandex] callback failed", { err: err instanceof Error ? err.message : String(err) });
-      recordAuthMetric({ method: "YANDEX_OAUTH" as any, platform: "unknown", outcome: "ERROR", code: "CALLBACK_EXCEPTION" });
+      recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "CALLBACK_EXCEPTION" });
       return res.redirect(302, `/login?auth_error=OAUTH_STATE_INVALID`);
     }
   })
@@ -1102,7 +1213,7 @@ yandexRouter.get(
 export { yandexRouter };
 ```
 
-- [ ] **Step 4: Add `"YANDEX_OAUTH"` to `AuthMetricMethod`** union in `backend/src/lib/auth-slo.ts:1`.
+- [ ] **Step 4: (done in Task 2 Step 4b)** `AuthMetricMethod` union already includes `"YANDEX_OAUTH"`.
 
 - [ ] **Step 5: Mount in `app.ts` BEFORE `/auth`**
 
@@ -1299,13 +1410,16 @@ git commit -m "feat(pbth): Yandex link flow + Profile identities section"
 
 ## Phase 4: Infra plumbing + rollout
 
-### Task 14: Env config files
+### Task 14: Env config files + Dockerfile arg propagation
 
 **Files:**
 - Modify: `.env.example`, `docker-compose.yml`, `docker-compose.release.yml`
 - Modify: `scripts/release/env.prod.example`, `scripts/release/env.staging.example`
+- Modify: `pbth/Dockerfile`
+- Modify: `backend/src/__tests__/unit/release-compose-env.test.ts` — guard the new env vars are propagated
 
-Each file gets these new vars (default disabled):
+- [ ] **Step 1: Add backend env to all 5 config files**
+
 ```
 AUTH_YANDEX_ENABLED=0
 YANDEX_OAUTH_CLIENT_ID=
@@ -1314,9 +1428,44 @@ YANDEX_OAUTH_REDIRECT_URI=
 YANDEX_OAUTH_LINK_REDIRECT_URI=
 ```
 
-Also pass through `VITE_AUTH_YANDEX_ENABLED` build arg/env in `docker-compose.release.yml` frontend block, and in `pbth/Dockerfile`.
+In `docker-compose.release.yml` backend service env block AND `docker-compose.yml` dev service env block, prop them through:
+```yaml
+AUTH_YANDEX_ENABLED: ${AUTH_YANDEX_ENABLED:-0}
+YANDEX_OAUTH_CLIENT_ID: ${YANDEX_OAUTH_CLIENT_ID:-}
+YANDEX_OAUTH_CLIENT_SECRET: ${YANDEX_OAUTH_CLIENT_SECRET:-}
+YANDEX_OAUTH_REDIRECT_URI: ${YANDEX_OAUTH_REDIRECT_URI:-}
+YANDEX_OAUTH_LINK_REDIRECT_URI: ${YANDEX_OAUTH_LINK_REDIRECT_URI:-}
+```
 
-- [ ] **Step 1-3:** edit each file, run smoke `npm run check`, commit.
+- [ ] **Step 2: Frontend build arg in `pbth/Dockerfile`**
+
+Find the existing `ARG VITE_TELEGRAM_BOT_USERNAME` line. Above the `RUN npm run build` line, add:
+```dockerfile
+ARG VITE_AUTH_YANDEX_ENABLED=0
+ENV VITE_AUTH_YANDEX_ENABLED=$VITE_AUTH_YANDEX_ENABLED
+```
+
+In `docker-compose.release.yml` frontend service `build.args` block (line ~85), pass the arg:
+```yaml
+VITE_AUTH_YANDEX_ENABLED: ${VITE_AUTH_YANDEX_ENABLED:-0}
+```
+And in the frontend `environment` block also:
+```yaml
+VITE_AUTH_YANDEX_ENABLED: ${VITE_AUTH_YANDEX_ENABLED:-0}
+```
+(Vite's `VITE_` prefix exposes the var via `import.meta.env` at build time — no `vite.config.ts` change required.)
+
+- [ ] **Step 3: Extend `release-compose-env.test.ts`**
+
+Add an assertion that each of the 5 new backend env keys is referenced in `docker-compose.release.yml` and present in both `env.{prod,staging}.example`. Pattern matches existing telegram-bot relay assertions.
+
+- [ ] **Step 4: Run tests + commit**
+
+```bash
+cd backend && DB_HOST=127.0.0.1 BACKEND_ENV_FILE=/Users/pk/Documents/CalDEV/.env npm run test:unit -- release-compose-env.test.ts
+git add .env.example docker-compose.yml docker-compose.release.yml scripts/release/env.prod.example scripts/release/env.staging.example pbth/Dockerfile backend/src/__tests__/unit/release-compose-env.test.ts
+git commit -m "feat(infra): wire Yandex OAuth env through compose + dockerfile + release-env guard"
+```
 
 ### Task 15: Staging deploy + smoke
 
