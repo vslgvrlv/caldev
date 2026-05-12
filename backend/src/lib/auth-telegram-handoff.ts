@@ -1,6 +1,14 @@
 import crypto from "node:crypto";
 
-type TrustedAuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | null | undefined;
+type TrustedAuthMethod =
+  | "WEBAPP"
+  | "OIDC"
+  | "LEGACY_WIDGET"
+  | "DEV"
+  | "BOT_HANDOFF"
+  | "YANDEX_OAUTH"
+  | null
+  | undefined;
 
 export type TelegramHandoffScope = "USER" | "ADMIN";
 type TelegramHandoffProfile = {
