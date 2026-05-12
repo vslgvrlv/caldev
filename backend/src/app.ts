@@ -9,6 +9,7 @@ import { logger } from "./lib/logger.js";
 import { attachRequestContext } from "./middleware/request-context.js";
 import { authRouter } from "./modules/auth/routes.js";
 import { yandexRouter } from "./modules/auth/yandex-routes.js";
+import { identitiesRouter } from "./modules/auth/identities-routes.js";
 import { eventsRouter } from "./modules/events/routes.js";
 import { financeRouter } from "./modules/finance/routes.js";
 import { icsRouter } from "./modules/ics/routes.js";
@@ -97,6 +98,7 @@ function mountApiV1(router: express.Router) {
     res.json(openapiSpec);
   });
   router.use("/auth/yandex", authRateLimiter, yandexRouter);
+  router.use("/auth/identities", identitiesRouter);
   router.use("/auth", authRateLimiter, authRouter);
   router.use("/vendor", vendorRouter);
   router.use("/init", initRouter);
