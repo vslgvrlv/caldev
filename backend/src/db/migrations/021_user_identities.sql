@@ -9,8 +9,9 @@ CREATE TABLE IF NOT EXISTS user_identities (
   CONSTRAINT user_identities_user_provider_unique UNIQUE (user_id, provider)
 );
 
-LOCK TABLE users IN SHARE MODE;
-
+-- No explicit LOCK: `INSERT ... ON CONFLICT DO NOTHING` is race-safe via the
+-- unique constraint and we do not want to block writers on the users table
+-- while the migration runs.
 INSERT INTO user_identities (user_id, provider, provider_user_id)
 SELECT id, 'telegram', telegram_id::TEXT
 FROM users

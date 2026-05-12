@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS auth_oauth_pending_link (
   provider_user_id TEXT NOT NULL,
   provider_email TEXT,
   provider_display_name TEXT,
-  expires_at TIMESTAMPTZ NOT NULL
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_oauth_pending_link_expires_at ON auth_oauth_pending_link (expires_at);

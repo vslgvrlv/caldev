@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS auth_oauth_state (
   ip_hash TEXT,
   ua_hash TEXT,
   expires_at TIMESTAMPTZ NOT NULL,
-  consumed_at TIMESTAMPTZ
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_oauth_state_expires_at ON auth_oauth_state (expires_at);
