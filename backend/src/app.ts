@@ -8,6 +8,7 @@ import { sendError, withErrorMetadata } from "./lib/http-error.js";
 import { logger } from "./lib/logger.js";
 import { attachRequestContext } from "./middleware/request-context.js";
 import { authRouter } from "./modules/auth/routes.js";
+import { yandexRouter } from "./modules/auth/yandex-routes.js";
 import { eventsRouter } from "./modules/events/routes.js";
 import { financeRouter } from "./modules/finance/routes.js";
 import { icsRouter } from "./modules/ics/routes.js";
@@ -95,6 +96,7 @@ function mountApiV1(router: express.Router) {
   router.get("/openapi.json", (_req, res) => {
     res.json(openapiSpec);
   });
+  router.use("/auth/yandex", authRateLimiter, yandexRouter);
   router.use("/auth", authRateLimiter, authRouter);
   router.use("/vendor", vendorRouter);
   router.use("/init", initRouter);
