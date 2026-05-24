@@ -36,6 +36,28 @@ const AUTH_ERROR_MESSAGES: Record<string, AuthErrorMessageMap> = {
     user: "Для этого аккаунта недоступен вход в админ-режим.",
     admin: "Для этого аккаунта сейчас нет доступа к админке.",
   },
+  OAUTH_NO_ACCOUNT: {
+    user:
+      "Аккаунт PBTH не найден для этого Яндекса. Сначала войдите через Telegram-бота и привяжите Яндекс в профиле.",
+  },
+  OAUTH_STATE_INVALID: {
+    user: "Сессия входа через Яндекс истекла. Попробуйте ещё раз.",
+  },
+  OAUTH_STATE_EXPIRED: {
+    user: "Сессия входа через Яндекс истекла. Попробуйте ещё раз.",
+  },
+  OAUTH_LINK_TAKEN: {
+    user: "Этот Яндекс уже привязан к другому аккаунту PBTH.",
+  },
+  OAUTH_LAST_IDENTITY: {
+    user: "Нельзя отвязать последний способ входа — иначе вы потеряете доступ к аккаунту.",
+  },
+  OAUTH_PROVIDER_DISABLED: {
+    user: "Вход через этот сервис временно недоступен.",
+  },
+  OAUTH_PENDING_LINK_EXPIRED: {
+    user: "Подтверждение привязки истекло. Запустите привязку ещё раз из профиля.",
+  },
 };
 
 function tryReadParam(raw: string): string | null {

@@ -13,6 +13,31 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pbth
+          POSTGRES_USER: pbth
+          POSTGRES_PASSWORD: pbth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pbth"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: pbth
+      DB_USER: pbth
+      DB_PASSWORD: pbth
+      TELEGRAM_BOT_TOKEN: 123456:dummy-token
+      TELEGRAM_BOT_USERNAME: dummy_bot
+      TELEGRAM_CALLBACK_URL: http://127.0.0.1:8000/api/v1/auth/telegram/callback
+      SESSION_SECRET: test-secret
+      ICS_TOKEN_SECRET: test-ics-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +47,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run check
+      - run: npm run db:migrate
       - run: npm run test:unit
       - run: npm run test:integration
       - run: npm run build
@@ -49,6 +75,31 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pbth
+          POSTGRES_USER: pbth
+          POSTGRES_PASSWORD: pbth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pbth"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TELEGRAM_BOT_TOKEN: 123456:dummy-token
+      TELEGRAM_BOT_USERNAME: dummy_bot
+      TELEGRAM_CALLBACK_URL: http://127.0.0.1:8000/api/v1/auth/telegram/callback
+      SESSION_SECRET: test-secret
+      ICS_TOKEN_SECRET: test-ics-secret
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: pbth
+      DB_USER: pbth
+      DB_PASSWORD: pbth
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,15 +110,9 @@ jobs:
       - name: Install backend deps
         working-directory: backend
         run: npm ci --no-audit --no-fund
+      - name: Apply migrations
+        working-directory: backend
+        run: npm run db:migrate
       - name: Run API versioning smoke tests
         working-directory: backend
-        env:
-          TELEGRAM_BOT_TOKEN: 123456:dummy-token
-          TELEGRAM_BOT_USERNAME: dummy_bot
-          SESSION_SECRET: test-secret
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_NAME: pbth
-          DB_USER: pbth
-          DB_PASSWORD: pbth
         run: npm run test:integration -- src/__tests__/integration/api-versioning.test.ts

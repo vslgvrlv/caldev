@@ -18,6 +18,7 @@ import { PlayerProfileView } from './views/PlayerProfileView';
 import { InviteView } from './views/InviteView';
 import { AdminLoginView } from './views/admin/AdminLoginView';
 import { AdminConsoleView } from './views/admin/AdminConsoleView';
+import { YandexLinkConfirmView } from './views/YandexLinkConfirmView';
 import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
 import { api, type NotificationDeliveryResponse } from './api'; // Import API
@@ -1044,6 +1045,7 @@ const App: React.FC = () => {
       <Route path="/invite/:inviteId" element={<InviteView />} />
       <Route path="/admin/login" element={<AdminLoginView />} />
       <Route path="/admin/*" element={<AdminConsoleView />} />
+      <Route path="/auth/yandex/link/confirm" element={<YandexLinkConfirmView />} />
       <Route path="/login" element={
         authStep === 'APP'
           ? <Navigate to="/app" replace />
