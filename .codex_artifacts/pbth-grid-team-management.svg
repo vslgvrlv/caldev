@@ -1,0 +1,24 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="pbthGridShadow" x="0" y="0" width="160" height="160" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="16"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#pbthGridShadow)">
+    <rect x="16" y="16" width="128" height="128" rx="32" fill="#0F0F0F"/>
+  </g>
+
+  <g transform="translate(48 48) scale(2.6666667)" fill="none" stroke="#00E676" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="7" height="7" x="3" y="3" rx="1"/>
+    <rect width="7" height="7" x="14" y="3" rx="1"/>
+    <rect width="7" height="7" x="14" y="14" rx="1"/>
+    <rect width="7" height="7" x="3" y="14" rx="1"/>
+  </g>
+</svg>
