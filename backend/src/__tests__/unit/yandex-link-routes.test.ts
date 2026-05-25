@@ -129,7 +129,7 @@ describe("yandex link/unlink routes", () => {
     expect(r.rows[0].link_user_id).toBe(primaryUserId);
   });
 
-  it("GET /link/callback with valid state creates a pending link and redirects to confirm", async () => {
+  it("GET /link/callback with valid state links the identity directly and redirects to profile", async () => {
     const stateMod = await import("../../lib/oauth-state.js");
     const { state } = await stateMod.createState({
       provider: "yandex",
@@ -162,27 +162,67 @@ describe("yandex link/unlink routes", () => {
       `/api/v1/auth/yandex/link/callback?code=auth-c&state=${state}`
     );
     vi.unstubAllGlobals();
+    // No session cookie sent — the link must still persist (Telegram in-app
+    // browser drops the cookie across the OAuth round-trip).
     expect(res.status).toBe(302);
-    const loc = res.headers.location as string;
-    expect(loc).toContain("/auth/yandex/link/confirm?token=");
-    expect(loc).not.toContain("error=OAUTH_LINK_TAKEN");
-    const tokenMatch = loc.match(/token=([^&]+)/);
-    expect(tokenMatch).toBeTruthy();
-    // Pending row exists
-    const r = await pool.query(
-      `SELECT user_id, provider, provider_user_id FROM auth_oauth_pending_link WHERE token = $1`,
-      [decodeURIComponent(tokenMatch![1])]
+    expect(res.headers.location).toBe("/app/profile?linked=yandex");
+
+    // Identity row persisted in one step (no /link/confirm).
+    const ident = await pool.query(
+      `SELECT user_id, email FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
+      [PRIMARY_YANDEX_SUB]
     );
-    expect(r.rows[0].user_id).toBe(primaryUserId);
-    expect(r.rows[0].provider).toBe("yandex");
-    expect(r.rows[0].provider_user_id).toBe(PRIMARY_YANDEX_SUB);
+    expect(ident.rows[0].user_id).toBe(primaryUserId);
+    expect(ident.rows[0].email).toBe("primary@yandex.ru");
+
+    // Audit row written.
+    const audit = await pool.query(
+      `SELECT action, payload FROM audit_logs
+        WHERE user_id = $1 AND action = 'identity.link'
+        ORDER BY created_at DESC LIMIT 1`,
+      [primaryUserId]
+    );
+    expect(audit.rowCount).toBe(1);
+    expect(audit.rows[0].payload.provider).toBe("yandex");
+
+    // Idempotent re-link: same user + same sub again still succeeds.
+    const { state: state2 } = await stateMod.createState({
+      provider: "yandex",
+      intent: "link",
+      redirectTo: "/app/profile",
+      ttlSeconds: 60,
+      ipHash: null,
+      uaHash: null,
+      linkUserId: primaryUserId,
+      codeVerifier: null,
+      nonce: null,
+    });
+    const fetchMock2 = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "AT_link_again", token_type: "bearer", expires_in: 3600 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: PRIMARY_YANDEX_SUB, login: "yauser", default_email: "primary@yandex.ru" }),
+      });
+    vi.stubGlobal("fetch", fetchMock2);
+    const resAgain = await request(app).get(
+      `/api/v1/auth/yandex/link/callback?code=auth-c-again&state=${state2}`
+    );
+    vi.unstubAllGlobals();
+    expect(resAgain.status).toBe(302);
+    expect(resAgain.headers.location).toBe("/app/profile?linked=yandex");
+
+    // Cleanup so later tests see a fresh state.
     await pool.query(
-      `DELETE FROM auth_oauth_pending_link WHERE token = $1`,
-      [decodeURIComponent(tokenMatch![1])]
+      `DELETE FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
+      [PRIMARY_YANDEX_SUB]
     );
   });
 
-  it("GET /link/callback signals OAUTH_LINK_TAKEN when yandex sub already linked to a different user", async () => {
+  it("GET /link/callback redirects with OAUTH_LINK_TAKEN when yandex sub belongs to another user", async () => {
     // Seed: shared yandex sub already linked to otherUserId
     await pool.query(
       `INSERT INTO user_identities (user_id, provider, provider_user_id, email)
@@ -219,68 +259,23 @@ describe("yandex link/unlink routes", () => {
     );
     vi.unstubAllGlobals();
     expect(res.status).toBe(302);
-    const loc = res.headers.location as string;
-    expect(loc).toContain("/auth/yandex/link/confirm?token=");
-    expect(loc).toContain("error=OAUTH_LINK_TAKEN");
+    expect(res.headers.location).toBe("/app/profile?link_error=OAUTH_LINK_TAKEN");
 
-    // Cleanup the pending row
-    const tokenMatch = loc.match(/token=([^&]+)/);
-    if (tokenMatch) {
-      await pool.query(
-        `DELETE FROM auth_oauth_pending_link WHERE token = $1`,
-        [decodeURIComponent(tokenMatch![1])]
-      );
-    }
+    // The sub stays bound to the other user; primary did NOT acquire it.
+    const stillOther = await pool.query(
+      `SELECT user_id FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
+      [SHARED_YANDEX_SUB]
+    );
+    expect(stillOther.rows[0].user_id).toBe(otherUserId);
+    const primaryHas = await pool.query(
+      `SELECT 1 FROM user_identities WHERE user_id=$1 AND provider='yandex'`,
+      [primaryUserId]
+    );
+    expect(primaryHas.rowCount).toBe(0);
+
     await pool.query(
       `DELETE FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
       [SHARED_YANDEX_SUB]
-    );
-  });
-
-  it("POST /link/confirm consumes pending link, creates identity row, second call returns 410", async () => {
-    const pendingMod = await import("../../lib/pending-link.js");
-    const { token } = await pendingMod.createPendingLink({
-      userId: primaryUserId,
-      provider: "yandex",
-      providerUserId: PRIMARY_YANDEX_SUB,
-      providerEmail: "primary@yandex.ru",
-      providerDisplayName: "Primary",
-      ttlSeconds: 60,
-    });
-
-    const agent = await loginAs(PRIMARY_TG, PRIMARY_USERNAME);
-    const res = await agent.post("/api/v1/auth/yandex/link/confirm").send({ token });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.identity.provider).toBe("yandex");
-    expect(res.body.identity.email).toBe("primary@yandex.ru");
-
-    // Identity row exists
-    const ident = await pool.query(
-      `SELECT user_id FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
-      [PRIMARY_YANDEX_SUB]
-    );
-    expect(ident.rows[0].user_id).toBe(primaryUserId);
-
-    // Audit row exists
-    const audit = await pool.query(
-      `SELECT action, payload FROM audit_logs
-        WHERE user_id = $1 AND action = 'identity.link'
-        ORDER BY created_at DESC LIMIT 1`,
-      [primaryUserId]
-    );
-    expect(audit.rowCount).toBe(1);
-    expect(audit.rows[0].payload.provider).toBe("yandex");
-
-    // Second consume must fail (token already deleted)
-    const res2 = await agent.post("/api/v1/auth/yandex/link/confirm").send({ token });
-    expect(res2.status).toBe(410);
-    expect(res2.body.code).toBe("OAUTH_PENDING_LINK_EXPIRED");
-
-    // Cleanup the just-created identity so unlink test below sees a fresh state
-    await pool.query(
-      `DELETE FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
-      [PRIMARY_YANDEX_SUB]
     );
   });
 
