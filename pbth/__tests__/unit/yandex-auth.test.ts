@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listIdentities, completeYandexLink, unlinkProvider } from "../../lib/yandex-auth";
+import { listIdentities, unlinkProvider } from "../../lib/yandex-auth";
 
 describe("yandex-auth client", () => {
   beforeEach(() => {
@@ -25,24 +25,6 @@ describe("yandex-auth client", () => {
   it("listIdentities throws on !ok", async () => {
     (fetch as any).mockResolvedValueOnce({ ok: false, status: 401 });
     await expect(listIdentities()).rejects.toThrow(/identities_failed:401/);
-  });
-
-  it("completeYandexLink throws server code on 409", async () => {
-    (fetch as any).mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({ code: "OAUTH_LINK_TAKEN" }),
-    });
-    await expect(completeYandexLink("tok")).rejects.toThrow(/OAUTH_LINK_TAKEN/);
-  });
-
-  it("completeYandexLink throws server code on 410 expired", async () => {
-    (fetch as any).mockResolvedValueOnce({
-      ok: false,
-      status: 410,
-      json: async () => ({ code: "OAUTH_PENDING_LINK_EXPIRED" }),
-    });
-    await expect(completeYandexLink("tok")).rejects.toThrow(/OAUTH_PENDING_LINK_EXPIRED/);
   });
 
   it("unlinkProvider throws server code on 409 LAST_IDENTITY", async () => {

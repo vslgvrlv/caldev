@@ -11,19 +11,6 @@ export async function listIdentities(): Promise<Identity[]> {
   return body.identities;
 }
 
-export async function completeYandexLink(token: string): Promise<void> {
-  const res = await fetch("/api/v1/auth/yandex/link/confirm", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.code || `yandex_link_failed:${res.status}`);
-  }
-}
-
 export async function unlinkProvider(provider: "yandex" | "telegram"): Promise<void> {
   const res = await fetch("/api/v1/auth/yandex/unlink", {
     method: "POST",
