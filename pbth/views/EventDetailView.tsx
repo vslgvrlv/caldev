@@ -204,6 +204,15 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     }
   };
 
+  const handleRemindSilent = async () => {
+    setIsRemindingUnanswered(true);
+    try {
+      await onSendEventReminder({ eventId: event.id, audience: 'UNANSWERED', template: 'EVENT_REMINDER' });
+    } finally {
+      setIsRemindingUnanswered(false);
+    }
+  };
+
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newGameTime && newGameOpponent) {
@@ -741,7 +750,13 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               )}
             </div>
 
-            {!isAttendeesLoading && <AttendanceMap attendees={attendees} />}
+            {!isAttendeesLoading && (
+              <AttendanceMap
+                attendees={attendees}
+                onRemindSilent={canSendEventReminder ? handleRemindSilent : undefined}
+                remindingSilent={isRemindingUnanswered}
+              />
+            )}
 
             {isAttendeesLoading && (
               <div className="text-sm text-pb-subtext py-2">Загрузка списка участников...</div>

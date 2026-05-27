@@ -18,11 +18,19 @@ const GROUPS = [
   { key: 'notGoing', label: 'Не идут', chip: 'bg-rose-500/20 text-rose-200 border-rose-500/40' },
 ] as const;
 
+interface AttendanceMapProps {
+  attendees: AttendanceMapMember[];
+  /** #49: один тап «Напомнить молчунам». Если не передан — кнопка не показывается. */
+  onRemindSilent?: () => void;
+  remindingSilent?: boolean;
+}
+
 /**
  * Карта явки (#48): показывает капитану состав на событие одним взглядом —
  * Идут / Молчат / Не идут, с аватарками. Без UUID и внутренних статусов RSVP.
+ * #49: в группе «Молчат» — кнопка «Напомнить» в один тап.
  */
-export const AttendanceMap: React.FC<{ attendees: AttendanceMapMember[] }> = ({ attendees }) => {
+export const AttendanceMap: React.FC<AttendanceMapProps> = ({ attendees, onRemindSilent, remindingSilent }) => {
   const groups = groupAttendance(attendees);
   if (groups.counts.total === 0) return null;
 
@@ -42,9 +50,22 @@ export const AttendanceMap: React.FC<{ attendees: AttendanceMapMember[] }> = ({ 
       {GROUPS.map((g) => {
         const list = groups[g.key];
         if (list.length === 0) return null;
+        const showRemind = g.key === 'silent' && Boolean(onRemindSilent);
         return (
           <div key={g.key}>
-            <div className="text-[11px] uppercase tracking-wider text-pb-subtext font-bold mb-1.5">{g.label}</div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[11px] uppercase tracking-wider text-pb-subtext font-bold">{g.label}</div>
+              {showRemind && (
+                <button
+                  type="button"
+                  onClick={onRemindSilent}
+                  disabled={remindingSilent}
+                  className="text-[11px] font-semibold text-pb-primary border border-pb-primary/30 rounded-lg px-2 py-1 hover:bg-pb-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {remindingSilent ? 'Отправляем…' : `Напомнить (${list.length})`}
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {list.map((m) => (
                 <div
