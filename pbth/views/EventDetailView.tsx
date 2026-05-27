@@ -708,7 +708,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
           </div>
         </div>
 
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-6 py-6 pb-8 space-y-6">
           <div>
             <h1 className="text-2xl font-black text-white leading-tight mb-2">{event.title}</h1>
             <div className="flex items-center text-pb-subtext">
@@ -718,6 +718,55 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             {event.teamTimezone && (
               <div className="mt-2 inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-pb-subtext">
                 TZ команды: {event.teamTimezone}
+              </div>
+            )}
+          </div>
+
+          {/* RSVP-решение — главное на экране, поэтому сверху и компактно (#UI-иерархия). */}
+          <div className="rounded-2xl border border-white/5 bg-pb-surface p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-widest text-pb-subtext">
+              {isSeriesOccurrence ? 'Только это занятие' : 'Ваше решение'}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleStatusChange(RSVPStatus.CONFIRMED)}
+                className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-all ${
+                  event.rsvpStatus === RSVPStatus.CONFIRMED
+                    ? 'bg-pb-primary text-pb-background shadow-[0_0_15px_rgba(0,230,118,0.4)]'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                <Check size={16} />
+                <span>Иду</span>
+              </button>
+
+              <button
+                onClick={() => handleStatusChange(RSVPStatus.DECLINED)}
+                className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-all ${
+                  event.rsvpStatus === RSVPStatus.DECLINED
+                    ? 'bg-pb-danger text-white shadow-[0_0_15px_rgba(255,23,68,0.4)]'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                <X size={16} />
+                <span>{isSeriesOccurrence ? 'Не приду' : 'Не иду'}</span>
+              </button>
+
+              <button
+                onClick={() => handleStatusChange(RSVPStatus.PENDING)}
+                className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-all ${
+                  event.rsvpStatus === RSVPStatus.PENDING
+                    ? 'bg-pb-warning text-white shadow-[0_0_15px_rgba(255,109,0,0.4)]'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                <HelpCircle size={16} />
+                <span>Думаю</span>
+              </button>
+            </div>
+            {isSeriesOccurrence && seriesContext?.committed && (
+              <div className="mt-2 text-center text-[11px] text-pb-subtext">
+                Это меняет только сегодняшнее занятие. На серию вы по-прежнему записаны.
               </div>
             )}
           </div>
@@ -850,47 +899,6 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               <div className="mt-1 text-[11px] text-pb-subtext">Подтвержденные игроки и штаб</div>
             </div>
           </div>
-
-          {canReadEventFinance && (
-            <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-white font-bold uppercase text-sm tracking-wider">Сбор по событию</div>
-                  <div className="mt-1 text-xs text-pb-subtext">Итог по расходам, собранным деньгам и текущему сбору.</div>
-                </div>
-                <div className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-bold text-pb-subtext">
-                  {financeViewModel?.collectionStatusLabel || 'Сбор не создан'}
-                </div>
-              </div>
-
-              {isFinanceLoading && <div className="text-sm text-pb-subtext">Загрузка финансов события...</div>}
-
-              {!isFinanceLoading && financeViewModel && financeDetail && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    {financeViewModel.summaryCards.map((card) => (
-                      <div key={card.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-pb-subtext">{card.label}</div>
-                        <div className="mt-2 text-lg font-black text-white">{card.value}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {financeViewModel.canManage && (
-                    <div className="grid grid-cols-1 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsExpensesSheetOpen(true)}
-                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-bold text-white"
-                      >
-                        Добавить расход
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
 
           <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
             <div className="mb-4 space-y-3">
@@ -1075,6 +1083,48 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             )}
           </div>
 
+          {/* Сбор по событию — финансы вторичны, поэтому ниже явки (#UI-иерархия). */}
+          {canReadEventFinance && (
+            <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-white font-bold uppercase text-sm tracking-wider">Сбор по событию</div>
+                  <div className="mt-1 text-xs text-pb-subtext">Итог по расходам, собранным деньгам и текущему сбору.</div>
+                </div>
+                <div className="rounded-full bg-white/5 px-3 py-1 text-[11px] font-bold text-pb-subtext">
+                  {financeViewModel?.collectionStatusLabel || 'Сбор не создан'}
+                </div>
+              </div>
+
+              {isFinanceLoading && <div className="text-sm text-pb-subtext">Загрузка финансов события...</div>}
+
+              {!isFinanceLoading && financeViewModel && financeDetail && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    {financeViewModel.summaryCards.map((card) => (
+                      <div key={card.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-pb-subtext">{card.label}</div>
+                        <div className="mt-2 text-lg font-black text-white">{card.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {financeViewModel.canManage && (
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsExpensesSheetOpen(true)}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-bold text-white"
+                      >
+                        Добавить расход
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {canDeleteEvent && (
             <button
               type="button"
@@ -1086,54 +1136,6 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      <div className="bg-pb-surface border-t border-white/5 p-4 pb-safe space-y-3 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-        <div className="text-center text-xs text-pb-subtext mb-1 uppercase font-bold tracking-widest">
-          {isSeriesOccurrence ? 'Только это занятие' : 'Ваше решение'}
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleStatusChange(RSVPStatus.CONFIRMED)}
-            className={`flex-1 py-3 rounded-xl font-bold flex flex-col items-center justify-center transition-all ${
-              event.rsvpStatus === RSVPStatus.CONFIRMED
-                ? 'bg-pb-primary text-pb-background shadow-[0_0_15px_rgba(0,230,118,0.4)]'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-          >
-            <Check size={20} className="mb-0.5" />
-            <span className="text-xs">Иду</span>
-          </button>
-
-          <button
-            onClick={() => handleStatusChange(RSVPStatus.DECLINED)}
-            className={`flex-1 py-3 rounded-xl font-bold flex flex-col items-center justify-center transition-all ${
-              event.rsvpStatus === RSVPStatus.DECLINED
-                ? 'bg-pb-danger text-white shadow-[0_0_15px_rgba(255,23,68,0.4)]'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-          >
-            <X size={20} className="mb-0.5" />
-            <span className="text-xs">{isSeriesOccurrence ? 'Не приду' : 'Не иду'}</span>
-          </button>
-
-          <button
-            onClick={() => handleStatusChange(RSVPStatus.PENDING)}
-            className={`flex-1 py-3 rounded-xl font-bold flex flex-col items-center justify-center transition-all ${
-              event.rsvpStatus === RSVPStatus.PENDING
-                ? 'bg-pb-warning text-white shadow-[0_0_15px_rgba(255,109,0,0.4)]'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-          >
-            <HelpCircle size={20} className="mb-0.5" />
-            <span className="text-xs">Думаю</span>
-          </button>
-        </div>
-        {isSeriesOccurrence && seriesContext?.committed && (
-          <div className="text-center text-[11px] text-pb-subtext">
-            Это меняет только сегодняшнее занятие. На серию вы по-прежнему записаны.
-          </div>
-        )}
       </div>
 
       {eventExpensesViewModel ? (
