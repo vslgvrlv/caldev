@@ -28,6 +28,19 @@ export type NotificationDeliveryResponse = {
   failed: Array<{ userId?: string; reason?: string }>;
 };
 
+export type SeriesContextResponse = {
+  seriesId: string;
+  title: string;
+  type: string;
+  upcomingCount: number;
+  committed: boolean;
+};
+
+export type EventAttendanceResponse = {
+  eventId: string;
+  attendance: Array<{ userId: string; present: boolean; markedAt: string }>;
+};
+
 export type TeamInviteCreateResponse = {
   token: string;
   role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
@@ -633,6 +646,18 @@ export const api = {
     });
   },
 
+  // #61: удалить событие. scope 'single' — только это занятие (серия сохраняется),
+  // scope 'future' — это и все будущие занятия серии.
+  async deleteEvent(
+    eventId: string,
+    scope: 'single' | 'future' = 'single'
+  ): Promise<{ success: boolean; deleted: number; scope: 'single' | 'future' }> {
+    return request(`/events/${eventId}`, {
+      method: 'DELETE',
+      body: { scope },
+    });
+  },
+
   async getEventAttendees(eventId: string): Promise<{
     eventId: string;
     attendees: Array<{
@@ -661,6 +686,34 @@ export const api = {
     return request('/rsvp', {
       method: 'POST',
       body: { eventId, userId, status },
+    });
+  },
+
+  // #60: согласие игрока на всю серию занятий (дефолт «иду» на каждое занятие).
+  async commitSeries(seriesId: string): Promise<{ ok: boolean; committed: boolean }> {
+    return request(`/events/series/${seriesId}/commit`, { method: 'POST', body: {} });
+  },
+
+  async leaveSeries(seriesId: string): Promise<{ ok: boolean; committed: boolean }> {
+    return request(`/events/series/${seriesId}/commit`, { method: 'DELETE' });
+  },
+
+  async getSeriesContext(seriesId: string): Promise<SeriesContextResponse> {
+    return request(`/events/series/${seriesId}/context`);
+  },
+
+  // #62: фактическая явка (был/не был) — отдельный слой от намерения (RSVP).
+  async getAttendance(eventId: string): Promise<EventAttendanceResponse> {
+    return request(`/events/${eventId}/attendance`);
+  },
+
+  async markAttendance(
+    eventId: string,
+    entries: Array<{ userId: string; present: boolean }>
+  ): Promise<EventAttendanceResponse & { marked: number }> {
+    return request(`/events/${eventId}/attendance`, {
+      method: 'POST',
+      body: { entries },
     });
   },
 

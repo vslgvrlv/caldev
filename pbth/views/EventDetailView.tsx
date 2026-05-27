@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
-import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { api, type FinanceEventDetailResponse } from '../api';
+import { api, type FinanceEventDetailResponse, type SeriesContextResponse } from '../api';
 import { EventCollectionSheet } from '../components/EventCollectionSheet';
 import { EventExpensesSheet } from '../components/EventExpensesSheet';
 import { FinanceTransactionModal } from '../components/FinanceTransactionModal';
@@ -41,6 +41,8 @@ interface EventDetailViewProps {
     userId: string,
     seed?: { name: string; nickname: string; avatar?: string; role?: 'CAPTAIN' | 'TRAINER' | 'PLAYER' }
   ) => void;
+  /** #61: удалить это занятие (scope single — серия сохраняется). Капитан/штаб. */
+  onDeleteEvent?: (eventId: string, scope: 'single' | 'future') => Promise<void>;
 }
 
 const PIT_ZONE_LABELS: Record<'NEAR' | 'FAR', string> = {
@@ -58,6 +60,16 @@ const GAME_PAIR_LABELS: Record<'FIRST' | 'SECOND', string> = {
   SECOND: 'Вторая пара',
 };
 
+// Русская плюрализация «занятие» для баннера серии (#60): 1 занятие, 2 занятия, 5 занятий.
+const pluralizeOccurrence = (count: number): string => {
+  const mod100 = Math.abs(count) % 100;
+  const mod10 = mod100 % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'занятий';
+  if (mod10 === 1) return 'занятие';
+  if (mod10 >= 2 && mod10 <= 4) return 'занятия';
+  return 'занятий';
+};
+
 export const EventDetailView: React.FC<EventDetailViewProps> = ({
   event,
   currentUserRole,
@@ -67,6 +79,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   onUpdateGame,
   onSendEventReminder,
   onAttendeeClick,
+  onDeleteEvent,
 }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
@@ -91,6 +104,15 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
   const [attendees, setAttendees] = useState<EventDetailAttendee[]>([]);
   const [isAttendeesLoading, setIsAttendeesLoading] = useState(false);
+  const [seriesContext, setSeriesContext] = useState<SeriesContextResponse | null>(null);
+  const [isSeriesBusy, setIsSeriesBusy] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  // #62: фактическая явка (был/не был). draft = текущее состояние тумблеров.
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [attendanceDraft, setAttendanceDraft] = useState<Record<string, boolean>>({});
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [financeDetail, setFinanceDetail] = useState<FinanceEventDetailResponse | null>(null);
   const [isFinanceLoading, setIsFinanceLoading] = useState(false);
   const [isExpensesSheetOpen, setIsExpensesSheetOpen] = useState(false);
@@ -107,45 +129,78 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
+  // #61: ответ на занятие серии = оверрайд только этого занятия (серия в целом сохраняется).
+  const isSeriesOccurrence = Boolean(event.seriesId);
+  // #61: тренер управляет только тренировками/собраниями (зеркалит правило бэкенда).
+  const isTrainerManageableType = event.type === EventType.TRAINING || event.type === EventType.MEETING;
+  const canDeleteEvent =
+    Boolean(onDeleteEvent) &&
+    (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
+  // #62: явку отмечает капитан/штаб; тренер — только тренировки/собрания (как на бэкенде).
+  const canManageAttendance = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
+  // Явка имеет смысл только когда событие уже началось/прошло.
+  const hasEventStarted = event.startDate.getTime() <= Date.now();
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
   const canReadEventFinance = currentUserRole !== Role.PLAYER;
   const isTournament = event.type === EventType.TOURNAMENT || event.type === EventType.CHAMPIONSHIP;
   const isGameReminderTemplate = reminderTemplate === 'GAME_GATHERING' || reminderTemplate === 'GAME_WARMUP';
 
+  // Карта явки (#48): держим ВСЕХ участников со статусами, а не только
+  // CONFIRMED — иначе капитан не видит молчунов. Confirmed-списки ниже
+  // фильтруются отдельно из этого же массива. Вынесено в callback, чтобы
+  // перезагружать карту после согласия на серию (#60).
+  const refreshAttendees = useCallback(async () => {
+    try {
+      const response = await api.getEventAttendees(event.id);
+      setAttendees(response.attendees);
+    } catch (error) {
+      const fallback = (event.attendeePreview || []).map((item) => ({
+        userId: item.userId,
+        name: item.name,
+        nickname: item.nickname,
+        avatar: item.avatar,
+        role: 'PLAYER' as const,
+        memberStatus: 'ACTIVE' as const,
+        rsvpStatus: 'CONFIRMED' as const,
+      }));
+      setAttendees(fallback);
+    }
+  }, [event.id, event.attendeePreview]);
+
   useEffect(() => {
     let cancelled = false;
-
-    const loadAttendees = async () => {
-      setIsAttendeesLoading(true);
-      try {
-        const response = await api.getEventAttendees(event.id);
-        if (cancelled) return;
-        // Карта явки (#48): держим ВСЕХ участников со статусами, а не только
-        // CONFIRMED — иначе капитан не видит молчунов. Confirmed-списки ниже
-        // фильтруются отдельно из этого же массива.
-        setAttendees(response.attendees);
-      } catch (error) {
-        if (cancelled) return;
-        const fallback = (event.attendeePreview || []).map((item) => ({
-          userId: item.userId,
-          name: item.name,
-          nickname: item.nickname,
-          avatar: item.avatar,
-          role: 'PLAYER' as const,
-          memberStatus: 'ACTIVE' as const,
-          rsvpStatus: 'CONFIRMED' as const,
-        }));
-        setAttendees(fallback);
-      } finally {
-        if (!cancelled) setIsAttendeesLoading(false);
-      }
-    };
-
-    loadAttendees();
+    setIsAttendeesLoading(true);
+    void refreshAttendees().finally(() => {
+      if (!cancelled) setIsAttendeesLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [event.id, event.attendeePreview]);
+  }, [refreshAttendees]);
+
+  // #60: контекст серии — сколько занятий впереди и ходит ли игрок на серию.
+  useEffect(() => {
+    if (!event.seriesId) {
+      setSeriesContext(null);
+      return;
+    }
+    let cancelled = false;
+    const seriesId = event.seriesId;
+    void api
+      .getSeriesContext(seriesId)
+      .then((ctx) => {
+        if (!cancelled) setSeriesContext(ctx);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to load series context', error);
+          setSeriesContext(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [event.seriesId]);
 
   useEffect(() => {
     if (!canReadEventFinance) {
@@ -184,6 +239,104 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
   const handleStatusChange = (status: RSVPStatus) => {
     onRsvp(event.id, status);
+  };
+
+  // #60: «Иду на все» — согласие на серию. После — перезагружаем карту явки,
+  // чтобы статус игрока перетёк в «Идут» (дефолт от серии).
+  const handleCommitSeries = async () => {
+    if (!event.seriesId) return;
+    const seriesId = event.seriesId;
+    setIsSeriesBusy(true);
+    try {
+      await api.commitSeries(seriesId);
+      setSeriesContext((prev) => (prev ? { ...prev, committed: true } : prev));
+      await refreshAttendees();
+    } catch (error) {
+      console.error('Failed to commit to series', error);
+      alert(`Не удалось записаться на серию: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSeriesBusy(false);
+    }
+  };
+
+  const handleLeaveSeries = async () => {
+    if (!event.seriesId) return;
+    const seriesId = event.seriesId;
+    setIsSeriesBusy(true);
+    try {
+      await api.leaveSeries(seriesId);
+      setSeriesContext((prev) => (prev ? { ...prev, committed: false } : prev));
+      await refreshAttendees();
+    } catch (error) {
+      console.error('Failed to leave series', error);
+      alert(`Не удалось выйти из серии: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSeriesBusy(false);
+    }
+  };
+
+  // #61: удалить только это занятие (scope single). Серия сохраняется.
+  const handleDeleteThisOccurrence = async () => {
+    if (!onDeleteEvent) return;
+    setIsDeletingEvent(true);
+    try {
+      await onDeleteEvent(event.id, 'single');
+      setIsDeleteConfirmOpen(false);
+    } catch (error) {
+      console.error('Failed to delete event', error);
+      alert(`Не удалось удалить событие: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsDeletingEvent(false);
+    }
+  };
+
+  // #62: открыть отметку явки. Стартуем от уже сохранённой явки, а где её нет —
+  // от намерения (CONFIRMED → «был» по умолчанию, остальные → «не был»).
+  const handleOpenAttendance = async () => {
+    setIsAttendanceOpen(true);
+    setIsAttendanceLoading(true);
+    try {
+      const response = await api.getAttendance(event.id);
+      const saved = new Map(response.attendance.map((row) => [row.userId, row.present]));
+      const draft: Record<string, boolean> = {};
+      for (const attendee of attendees) {
+        draft[attendee.userId] = saved.has(attendee.userId)
+          ? Boolean(saved.get(attendee.userId))
+          : attendee.rsvpStatus === 'CONFIRMED';
+      }
+      setAttendanceDraft(draft);
+    } catch (error) {
+      console.error('Failed to load attendance', error);
+      const draft: Record<string, boolean> = {};
+      for (const attendee of attendees) {
+        draft[attendee.userId] = attendee.rsvpStatus === 'CONFIRMED';
+      }
+      setAttendanceDraft(draft);
+    } finally {
+      setIsAttendanceLoading(false);
+    }
+  };
+
+  const toggleAttendancePresent = (userId: string) => {
+    setAttendanceDraft((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
+
+  const handleSaveAttendance = async () => {
+    const entries = attendees.map((attendee) => ({
+      userId: attendee.userId,
+      present: Boolean(attendanceDraft[attendee.userId]),
+    }));
+    if (entries.length === 0) return;
+    setIsSavingAttendance(true);
+    try {
+      await api.markAttendance(event.id, entries);
+      setIsAttendanceOpen(false);
+    } catch (error) {
+      console.error('Failed to save attendance', error);
+      alert(`Не удалось сохранить явку: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSavingAttendance(false);
+    }
   };
 
   const handleSendReminder = async () => {
@@ -539,12 +692,20 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
           <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: color }}></div>
           <Icon size={120} className="absolute -right-6 -top-6 opacity-10" color={color} />
 
-          <span
-            className="inline-block px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-black/40 backdrop-blur-md text-white border border-white/10 shadow-lg"
-            style={{ borderColor: `${color}50`, color: color }}
-          >
-            {EVENT_LABELS[event.type]}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-block px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-black/40 backdrop-blur-md text-white border border-white/10 shadow-lg"
+              style={{ borderColor: `${color}50`, color: color }}
+            >
+              {EVENT_LABELS[event.type]}
+            </span>
+            {event.seriesId && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-black/40 backdrop-blur-md text-pb-primary border border-pb-primary/40 shadow-lg">
+                <Repeat size={12} />
+                Серия
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="px-6 py-6 space-y-6">
@@ -560,6 +721,54 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
             )}
           </div>
+
+          {event.seriesId && seriesContext && (
+            <div className="rounded-2xl border border-pb-primary/30 bg-pb-primary/5 p-4">
+              {seriesContext.committed ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-white font-bold">
+                      <Repeat size={16} className="text-pb-primary shrink-0" />
+                      Вы ходите на серию
+                    </div>
+                    <div className="mt-1 text-xs text-pb-subtext">
+                      По умолчанию вы идёте на каждое занятие. На любом из них можно отметить «сегодня не приду».
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLeaveSeries}
+                    disabled={isSeriesBusy}
+                    className="shrink-0 text-xs font-semibold text-pb-subtext border border-white/10 rounded-lg px-3 py-2 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSeriesBusy ? 'Сохраняем…' : 'Выйти'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-white font-bold">
+                      <Repeat size={16} className="text-pb-primary shrink-0" />
+                      Это серия занятий
+                    </div>
+                    <div className="mt-1 text-xs text-pb-subtext">
+                      {seriesContext.upcomingCount > 0
+                        ? `Впереди ещё ${seriesContext.upcomingCount} ${pluralizeOccurrence(seriesContext.upcomingCount)}. Запишитесь сразу на все.`
+                        : 'Запишитесь сразу на все занятия серии.'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCommitSeries}
+                    disabled={isSeriesBusy}
+                    className="shrink-0 text-xs font-bold text-pb-background bg-pb-primary rounded-lg px-3 py-2 hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSeriesBusy ? 'Записываем…' : 'Иду на все'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {event.description && (
             <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
@@ -758,6 +967,98 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               />
             )}
 
+            {/* #62: фактическая явка (был/не был) — второй слой, факт vs намерение. */}
+            {!isAttendeesLoading && canManageAttendance && hasEventStarted && attendees.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                {!isAttendanceOpen ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenAttendance}
+                    className="w-full flex items-center justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-white">Отметить явку</div>
+                      <div className="text-[11px] text-pb-subtext mt-0.5">Кто реально был на занятии — факт, не планы.</div>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-pb-primary border border-pb-primary/30 rounded-lg px-3 py-1.5">
+                      Открыть
+                    </span>
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-bold text-white">Кто был на занятии</div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAttendanceOpen(false)}
+                        className="text-[11px] text-pb-subtext hover:text-white"
+                      >
+                        Свернуть
+                      </button>
+                    </div>
+
+                    {isAttendanceLoading ? (
+                      <div className="text-sm text-pb-subtext py-2">Загрузка явки…</div>
+                    ) : (
+                      <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                        {attendees.map((attendee) => {
+                          const present = Boolean(attendanceDraft[attendee.userId]);
+                          return (
+                            <div
+                              key={attendee.userId}
+                              className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/5 px-2.5 py-2"
+                            >
+                              <img
+                                src={attendee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.name)}&background=0F0F0F&color=fff`}
+                                alt={attendee.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0"
+                              />
+                              <span className="text-sm text-white truncate flex-1 min-w-0">{attendee.name}</span>
+                              <div className="shrink-0 flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => !present && toggleAttendancePresent(attendee.userId)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                    present
+                                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40'
+                                      : 'bg-white/5 text-pb-subtext border border-white/10 hover:text-white'
+                                  }`}
+                                >
+                                  Был
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => present && toggleAttendancePresent(attendee.userId)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                    !present
+                                      ? 'bg-rose-500/20 text-rose-200 border border-rose-500/40'
+                                      : 'bg-white/5 text-pb-subtext border border-white/10 hover:text-white'
+                                  }`}
+                                >
+                                  Не был
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!isAttendanceLoading && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAttendance}
+                        disabled={isSavingAttendance}
+                        className="w-full py-2.5 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+                      >
+                        {isSavingAttendance ? 'Сохраняем…' : 'Сохранить явку'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {isAttendeesLoading && (
               <div className="text-sm text-pb-subtext py-2">Загрузка списка участников...</div>
             )}
@@ -773,11 +1074,24 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
             )}
           </div>
+
+          {canDeleteEvent && (
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl border border-pb-danger/30 bg-pb-danger/5 px-4 py-3 text-sm font-semibold text-pb-danger hover:bg-pb-danger/10 transition-colors"
+            >
+              <Trash2 size={16} />
+              {isSeriesOccurrence ? 'Удалить это занятие' : 'Удалить событие'}
+            </button>
+          )}
         </div>
       </div>
 
       <div className="bg-pb-surface border-t border-white/5 p-4 pb-safe space-y-3 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-        <div className="text-center text-xs text-pb-subtext mb-1 uppercase font-bold tracking-widest">Ваше решение</div>
+        <div className="text-center text-xs text-pb-subtext mb-1 uppercase font-bold tracking-widest">
+          {isSeriesOccurrence ? 'Только это занятие' : 'Ваше решение'}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => handleStatusChange(RSVPStatus.CONFIRMED)}
@@ -800,7 +1114,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             }`}
           >
             <X size={20} className="mb-0.5" />
-            <span className="text-xs">Не иду</span>
+            <span className="text-xs">{isSeriesOccurrence ? 'Не приду' : 'Не иду'}</span>
           </button>
 
           <button
@@ -815,6 +1129,11 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             <span className="text-xs">Думаю</span>
           </button>
         </div>
+        {isSeriesOccurrence && seriesContext?.committed && (
+          <div className="text-center text-[11px] text-pb-subtext">
+            Это меняет только сегодняшнее занятие. На серию вы по-прежнему записаны.
+          </div>
+        )}
       </div>
 
       {eventExpensesViewModel ? (
@@ -991,6 +1310,40 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsDeleteConfirmOpen(false)}></div>
+          <div className="relative w-full max-w-sm bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
+            <h3 className="text-lg font-bold text-white mb-1">
+              {isSeriesOccurrence ? 'Удалить это занятие?' : 'Удалить событие?'}
+            </h3>
+            <p className="text-sm text-pb-subtext mb-5">
+              {isSeriesOccurrence
+                ? 'Удалится только это занятие. Остальные занятия серии останутся на месте.'
+                : `«${event.title}» исчезнет из календаря у всей команды.`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeletingEvent}
+                className="flex-1 py-3 rounded-xl bg-white/5 text-pb-subtext hover:text-white transition-colors disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteThisOccurrence}
+                disabled={isDeletingEvent}
+                className="flex-1 py-3 rounded-xl bg-pb-danger text-white font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+              >
+                {isDeletingEvent ? 'Удаляем…' : 'Удалить'}
+              </button>
+            </div>
           </div>
         </div>
       )}

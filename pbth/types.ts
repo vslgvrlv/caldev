@@ -93,6 +93,7 @@ export interface Event {
   maxAttendees?: number;
   cost?: number;
   isConflict?: boolean;
+  seriesId?: string;
   schedule?: Game[];
   attendeePreview?: AttendeePreview[];
 }
