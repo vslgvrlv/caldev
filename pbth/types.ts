@@ -94,6 +94,7 @@ export interface Event {
   cost?: number;
   isConflict?: boolean;
   seriesId?: string;
+  seriesCommitted?: boolean;
   schedule?: Game[];
   attendeePreview?: AttendeePreview[];
 }

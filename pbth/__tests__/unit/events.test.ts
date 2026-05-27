@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDashboardEventSections,
+  canCommitToSeries,
   filterFutureEvents,
   filterUpcomingAndOngoingEvents,
   getCountdownParts,
@@ -140,5 +141,25 @@ describe("events helpers", () => {
     const now = Date.parse("2026-03-01T00:00:00.000Z");
     const countdown = getCountdownParts(new Date("2026-03-02T02:05:00.000Z"), now);
     expect(countdown).toEqual({ days: "01", hours: "02", mins: "05" });
+  });
+});
+
+describe("canCommitToSeries", () => {
+  // #60: «Иду на серию» в списке появляется только для занятий серии,
+  // на которые игрок ещё не согласился.
+  it("offers the series commit for a series occurrence not yet joined", () => {
+    expect(canCommitToSeries({ seriesId: "s1", seriesCommitted: false })).toBe(true);
+  });
+
+  it("hides it once the player already committed to the series", () => {
+    expect(canCommitToSeries({ seriesId: "s1", seriesCommitted: true })).toBe(false);
+  });
+
+  it("hides it for standalone events with no series", () => {
+    expect(canCommitToSeries({ seriesId: undefined, seriesCommitted: false })).toBe(false);
+  });
+
+  it("hides it when commitment status is unknown (avoids nagging on stale payloads)", () => {
+    expect(canCommitToSeries({ seriesId: "s1", seriesCommitted: undefined })).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import {
   type EventRegistrationProjection,
   type ImportedTeamScheduleProjection,
 } from "../../lib/event-domain.js";
+import { resolveFeedRsvpStatus } from "../../lib/series-commitment.js";
 
 type RawEvent = {
   id: string;
@@ -37,6 +38,7 @@ type RawEvent = {
   is_cancelled: boolean;
   viewer_role: "CAPTAIN" | "TRAINER" | "PLAYER";
   my_rsvp: "PENDING" | "CONFIRMED" | "DECLINED" | null;
+  series_committed: boolean;
   attendees_count: string;
 };
 
@@ -153,7 +155,8 @@ initRouter.get(
               e.source_external_event_id,
               e.is_cancelled,
               tm.role AS viewer_role,
-              r.status AS my_rsvp,
+              COALESCE(r.status, CASE WHEN sc.id IS NOT NULL THEN 'CONFIRMED'::rsvp_status ELSE NULL END) AS my_rsvp,
+              (sc.id IS NOT NULL) AS series_committed,
               COALESCE((
                 SELECT COUNT(*)
                 FROM rsvps r2
@@ -165,10 +168,11 @@ initRouter.get(
        FROM events e
        JOIN teams t ON t.id = e.team_id
        JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $1
-       JOIN rsvps r ON r.event_id = e.id AND r.user_id = $1
+       LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = $1
+       LEFT JOIN event_series_commitment sc ON sc.series_id = e.series_id AND sc.user_id = $1 AND sc.status = 'COMMITTED'
        WHERE e.team_id = ANY($2::uuid[])
          AND e.is_cancelled = FALSE
-         AND r.status IN ('CONFIRMED', 'PENDING', 'DECLINED')
+         AND (r.status IN ('CONFIRMED', 'PENDING', 'DECLINED') OR sc.id IS NOT NULL)
        ORDER BY e.start_at ASC`,
       [user.id, teamIds]
     );
@@ -198,6 +202,7 @@ initRouter.get(
               e.is_cancelled,
               tm.role AS viewer_role,
               NULL::rsvp_status AS my_rsvp,
+              FALSE AS series_committed,
               COALESCE((
                 SELECT COUNT(*)
                 FROM rsvps r2
@@ -210,9 +215,11 @@ initRouter.get(
        JOIN teams t ON t.id = e.team_id
        JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $1
        LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = $1
+       LEFT JOIN event_series_commitment sc ON sc.series_id = e.series_id AND sc.user_id = $1 AND sc.status = 'COMMITTED'
        WHERE e.team_id = ANY($2::uuid[])
          AND e.is_cancelled = FALSE
          AND r.event_id IS NULL
+         AND sc.id IS NULL
        ORDER BY e.start_at ASC`,
       [user.id, teamIds]
     );
@@ -432,6 +439,7 @@ initRouter.get(
         teamId: e.team_id,
         seriesId: e.series_id || undefined,
         isRecurring: Boolean(e.series_id),
+        seriesCommitted: Boolean(e.series_committed),
         viewerRole: e.viewer_role,
         teamName: e.team_name,
         teamShortCode: e.team_short_code,
@@ -507,7 +515,9 @@ initRouter.get(
         role: m.role,
         membershipId: m.id,
       })),
-      events: eventsResult.rows.map((e) => mapEventForFeed(e, e.my_rsvp || "UNANSWERED")),
+      events: eventsResult.rows.map((e) =>
+        mapEventForFeed(e, resolveFeedRsvpStatus({ explicit: e.my_rsvp, seriesCommitted: Boolean(e.series_committed) }))
+      ),
       actionRequiredEvents: actionRequiredResult.rows.map((e) => mapEventForFeed(e, "UNANSWERED")),
       transactions: transactionsResult.rows.map((t) => ({
         id: t.id,

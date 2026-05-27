@@ -581,6 +581,13 @@ const App: React.FC = () => {
     await api.rsvp(id, user.id, status);
   };
 
+  // #60: «Иду на серию» одним тапом из списка. После согласия фид перестаёт
+  // показывать каждое занятие серии как «требует ответа».
+  const handleCommitSeries = async (seriesId: string) => {
+    await api.commitSeries(seriesId);
+    await loadData({ silent: true });
+  };
+
   // #61: удалить событие (scope single — серия сохраняется). Капитан/штаб.
   const handleDeleteEvent = async (eventId: string, scope: 'single' | 'future') => {
     await api.deleteEvent(eventId, scope);
@@ -838,21 +845,23 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'DASHBOARD':
         return (
-          <Dashboard 
+          <Dashboard
             user={user!}
             activeTeam={activeTeam!}
             events={events}
             onRsvp={handleRsvp}
             onEventClick={handleEventClick}
             onEventLongPress={handleEventLongPress}
+            onCommitSeries={handleCommitSeries}
           />
         );
       case 'CALENDAR':
         return (
-          <CalendarView 
-            events={events} 
+          <CalendarView
+            events={events}
             onEventClick={handleEventClick}
             onEventLongPress={handleEventLongPress}
+            onCommitSeries={handleCommitSeries}
           />
         );
       case 'FINANCE':

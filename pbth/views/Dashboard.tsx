@@ -12,9 +12,10 @@ interface DashboardProps {
   onRsvp: (id: string, status: RSVPStatus) => void;
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
+  onCommitSeries: (seriesId: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, onRsvp, onEventClick, onEventLongPress }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
   const [nowTs, setNowTs] = React.useState(() => Date.now());
 
   React.useEffect(() => {
@@ -133,12 +134,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
           </div>
           <div className="space-y-3">
             {pendingEvents.map(event => (
-              <EventCard 
-                key={event.id} 
-                event={event} 
-                onRsvp={onRsvp} 
+              <EventCard
+                key={event.id}
+                event={event}
+                onRsvp={onRsvp}
                 onClick={onEventClick}
                 onLongPress={onEventLongPress}
+                onCommitSeries={onCommitSeries}
               />
             ))}
           </div>
@@ -151,12 +153,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
          <div className="space-y-3">
             {upcomingEvents.length === 0 && <p className="text-pb-subtext text-sm">Событий нет</p>}
             {upcomingEvents.map(event => (
-              <EventCard 
-                key={event.id} 
-                event={event} 
-                compact 
+              <EventCard
+                key={event.id}
+                event={event}
+                compact
                 onClick={onEventClick}
                 onLongPress={onEventLongPress}
+                onCommitSeries={onCommitSeries}
               />
             ))}
          </div>
