@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getActiveContext } from "../teams/context.js";
+import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
@@ -722,8 +723,8 @@ eventsRouter.get(
     const eventId = z.string().uuid().parse(req.params.eventId);
     const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
 
-    const eventResult = await query<{ id: string; team_id: string }>(
-      `SELECT id, team_id
+    const eventResult = await query<{ id: string; team_id: string; series_id: string | null }>(
+      `SELECT id, team_id, series_id::text
        FROM events
        WHERE id = $1 AND is_cancelled = FALSE`,
       [eventId]
@@ -748,7 +749,7 @@ eventsRouter.get(
       role: "CAPTAIN" | "TRAINER" | "PLAYER";
       member_status: "ACTIVE" | "INJURED" | "RESERVE" | "VACATION";
       rsvp_status: "PENDING" | "CONFIRMED" | "DECLINED" | null;
-      rsvp_updated_at: string | null;
+      committed: boolean;
     }>(
       `SELECT u.id AS user_id,
               u.name,
@@ -757,35 +758,108 @@ eventsRouter.get(
               tm.role::text AS role,
               tm.status::text AS member_status,
               r.status::text AS rsvp_status,
-              r.updated_at::text AS rsvp_updated_at
+              (c.id IS NOT NULL) AS committed
        FROM team_memberships tm
        JOIN users u ON u.id = tm.user_id
        LEFT JOIN rsvps r ON r.event_id = $1 AND r.user_id = tm.user_id
-       WHERE tm.team_id = $2 AND u.is_active = TRUE
-       ORDER BY
-         CASE COALESCE(r.status::text, 'UNANSWERED')
-           WHEN 'CONFIRMED' THEN 1
-           WHEN 'PENDING' THEN 2
-           WHEN 'UNANSWERED' THEN 3
-           WHEN 'DECLINED' THEN 4
-           ELSE 5
-         END,
-         r.updated_at DESC NULLS LAST,
-         u.name ASC`,
-      [eventId, event.team_id]
+       LEFT JOIN event_series_commitment c
+         ON c.series_id = $3::uuid AND c.user_id = tm.user_id AND c.status = 'COMMITTED'
+       WHERE tm.team_id = $2 AND u.is_active = TRUE`,
+      [eventId, event.team_id, event.series_id]
     );
 
-    return res.json({
-      eventId,
-      attendees: attendeesResult.rows.map((row) => ({
+    // #60: эффективный статус = явный ответ на занятие, иначе дефолт от согласия на серию.
+    const hasSeries = Boolean(event.series_id);
+    const STATUS_ORDER: Record<string, number> = { CONFIRMED: 1, PENDING: 2, UNANSWERED: 3, DECLINED: 4 };
+    const attendees = attendeesResult.rows
+      .map((row) => ({
         userId: row.user_id,
         name: row.name,
         nickname: row.nickname,
         avatar: row.avatar,
         role: row.role,
         memberStatus: row.member_status,
-        rsvpStatus: row.rsvp_status ?? "UNANSWERED",
-      })),
+        rsvpStatus: resolveEffectiveRsvp({
+          explicit: row.rsvp_status,
+          hasSeries,
+          committedToSeries: row.committed,
+        }),
+      }))
+      .sort((a, b) => (STATUS_ORDER[a.rsvpStatus] - STATUS_ORDER[b.rsvpStatus]) || a.name.localeCompare(b.name));
+
+    return res.json({ eventId, attendees });
+  })
+);
+
+// #60: согласие игрока на серию (generic — любой тип события).
+eventsRouter.post(
+  "/series/:seriesId/commit",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const seriesId = z.string().uuid().parse(req.params.seriesId);
+    const seriesResult = await query<{ team_id: string }>(`SELECT team_id FROM event_series WHERE id = $1`, [seriesId]);
+    const series = seriesResult.rows[0];
+    if (!series) return res.status(404).json({ detail: "Series not found" });
+
+    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
+    if (effectiveRole !== "ADMIN") {
+      const role = await getMembershipRole(req.authUser!.id, series.team_id);
+      if (!role) return res.status(403).json({ detail: "You are not a member of this team" });
+    }
+
+    await query(
+      `INSERT INTO event_series_commitment (series_id, user_id, status)
+       VALUES ($1, $2, 'COMMITTED')
+       ON CONFLICT (series_id, user_id) DO UPDATE SET status = 'COMMITTED', updated_at = now()`,
+      [seriesId, req.authUser!.id]
+    );
+    await writeAudit(req.authUser!.id, "events.series.commit", { seriesId });
+    return res.json({ ok: true, committed: true });
+  })
+);
+
+eventsRouter.delete(
+  "/series/:seriesId/commit",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const seriesId = z.string().uuid().parse(req.params.seriesId);
+    await query(
+      `UPDATE event_series_commitment SET status = 'LEFT', updated_at = now()
+       WHERE series_id = $1 AND user_id = $2`,
+      [seriesId, req.authUser!.id]
+    );
+    await writeAudit(req.authUser!.id, "events.series.leave", { seriesId });
+    return res.json({ ok: true, committed: false });
+  })
+);
+
+eventsRouter.get(
+  "/series/:seriesId/context",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const seriesId = z.string().uuid().parse(req.params.seriesId);
+    const seriesResult = await query<{ id: string; title: string; type: string }>(
+      `SELECT id, title, type::text AS type FROM event_series WHERE id = $1`,
+      [seriesId]
+    );
+    const series = seriesResult.rows[0];
+    if (!series) return res.status(404).json({ detail: "Series not found" });
+
+    const countResult = await query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM events
+       WHERE series_id = $1 AND is_cancelled = FALSE AND start_at >= now()`,
+      [seriesId]
+    );
+    const commitResult = await query<{ status: string }>(
+      `SELECT status FROM event_series_commitment WHERE series_id = $1 AND user_id = $2`,
+      [seriesId, req.authUser!.id]
+    );
+    return res.json({
+      seriesId: series.id,
+      title: series.title,
+      type: series.type,
+      upcomingCount: Number(countResult.rows[0]?.count || 0),
+      committed: commitResult.rows[0]?.status === "COMMITTED",
     });
   })
 );
