@@ -641,6 +641,18 @@ export const api = {
     });
   },
 
+  // #61: удалить событие. scope 'single' — только это занятие (серия сохраняется),
+  // scope 'future' — это и все будущие занятия серии.
+  async deleteEvent(
+    eventId: string,
+    scope: 'single' | 'future' = 'single'
+  ): Promise<{ success: boolean; deleted: number; scope: 'single' | 'future' }> {
+    return request(`/events/${eventId}`, {
+      method: 'DELETE',
+      body: { scope },
+    });
+  },
+
   async getEventAttendees(eventId: string): Promise<{
     eventId: string;
     attendees: Array<{

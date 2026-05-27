@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
-import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { api, type FinanceEventDetailResponse, type SeriesContextResponse } from '../api';
@@ -41,6 +41,8 @@ interface EventDetailViewProps {
     userId: string,
     seed?: { name: string; nickname: string; avatar?: string; role?: 'CAPTAIN' | 'TRAINER' | 'PLAYER' }
   ) => void;
+  /** #61: удалить это занятие (scope single — серия сохраняется). Капитан/штаб. */
+  onDeleteEvent?: (eventId: string, scope: 'single' | 'future') => Promise<void>;
 }
 
 const PIT_ZONE_LABELS: Record<'NEAR' | 'FAR', string> = {
@@ -77,6 +79,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   onUpdateGame,
   onSendEventReminder,
   onAttendeeClick,
+  onDeleteEvent,
 }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
@@ -103,6 +106,8 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isAttendeesLoading, setIsAttendeesLoading] = useState(false);
   const [seriesContext, setSeriesContext] = useState<SeriesContextResponse | null>(null);
   const [isSeriesBusy, setIsSeriesBusy] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [financeDetail, setFinanceDetail] = useState<FinanceEventDetailResponse | null>(null);
   const [isFinanceLoading, setIsFinanceLoading] = useState(false);
   const [isExpensesSheetOpen, setIsExpensesSheetOpen] = useState(false);
@@ -119,6 +124,13 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
+  // #61: ответ на занятие серии = оверрайд только этого занятия (серия в целом сохраняется).
+  const isSeriesOccurrence = Boolean(event.seriesId);
+  // #61: тренер управляет только тренировками/собраниями (зеркалит правило бэкенда).
+  const isTrainerManageableType = event.type === EventType.TRAINING || event.type === EventType.MEETING;
+  const canDeleteEvent =
+    Boolean(onDeleteEvent) &&
+    (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
   const canReadEventFinance = currentUserRole !== Role.PLAYER;
   const isTournament = event.type === EventType.TOURNAMENT || event.type === EventType.CHAMPIONSHIP;
@@ -251,6 +263,21 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       alert(`Не удалось выйти из серии: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setIsSeriesBusy(false);
+    }
+  };
+
+  // #61: удалить только это занятие (scope single). Серия сохраняется.
+  const handleDeleteThisOccurrence = async () => {
+    if (!onDeleteEvent) return;
+    setIsDeletingEvent(true);
+    try {
+      await onDeleteEvent(event.id, 'single');
+      setIsDeleteConfirmOpen(false);
+    } catch (error) {
+      console.error('Failed to delete event', error);
+      alert(`Не удалось удалить событие: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsDeletingEvent(false);
     }
   };
 
@@ -897,11 +924,24 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
             )}
           </div>
+
+          {canDeleteEvent && (
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl border border-pb-danger/30 bg-pb-danger/5 px-4 py-3 text-sm font-semibold text-pb-danger hover:bg-pb-danger/10 transition-colors"
+            >
+              <Trash2 size={16} />
+              {isSeriesOccurrence ? 'Удалить это занятие' : 'Удалить событие'}
+            </button>
+          )}
         </div>
       </div>
 
       <div className="bg-pb-surface border-t border-white/5 p-4 pb-safe space-y-3 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
-        <div className="text-center text-xs text-pb-subtext mb-1 uppercase font-bold tracking-widest">Ваше решение</div>
+        <div className="text-center text-xs text-pb-subtext mb-1 uppercase font-bold tracking-widest">
+          {isSeriesOccurrence ? 'Только это занятие' : 'Ваше решение'}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={() => handleStatusChange(RSVPStatus.CONFIRMED)}
@@ -924,7 +964,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             }`}
           >
             <X size={20} className="mb-0.5" />
-            <span className="text-xs">Не иду</span>
+            <span className="text-xs">{isSeriesOccurrence ? 'Не приду' : 'Не иду'}</span>
           </button>
 
           <button
@@ -939,6 +979,11 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             <span className="text-xs">Думаю</span>
           </button>
         </div>
+        {isSeriesOccurrence && seriesContext?.committed && (
+          <div className="text-center text-[11px] text-pb-subtext">
+            Это меняет только сегодняшнее занятие. На серию вы по-прежнему записаны.
+          </div>
+        )}
       </div>
 
       {eventExpensesViewModel ? (
@@ -1115,6 +1160,40 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsDeleteConfirmOpen(false)}></div>
+          <div className="relative w-full max-w-sm bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
+            <h3 className="text-lg font-bold text-white mb-1">
+              {isSeriesOccurrence ? 'Удалить это занятие?' : 'Удалить событие?'}
+            </h3>
+            <p className="text-sm text-pb-subtext mb-5">
+              {isSeriesOccurrence
+                ? 'Удалится только это занятие. Остальные занятия серии останутся на месте.'
+                : `«${event.title}» исчезнет из календаря у всей команды.`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeletingEvent}
+                className="flex-1 py-3 rounded-xl bg-white/5 text-pb-subtext hover:text-white transition-colors disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteThisOccurrence}
+                disabled={isDeletingEvent}
+                className="flex-1 py-3 rounded-xl bg-pb-danger text-white font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+              >
+                {isDeletingEvent ? 'Удаляем…' : 'Удалить'}
+              </button>
+            </div>
           </div>
         </div>
       )}
