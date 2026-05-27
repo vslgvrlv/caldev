@@ -28,6 +28,14 @@ export type NotificationDeliveryResponse = {
   failed: Array<{ userId?: string; reason?: string }>;
 };
 
+export type SeriesContextResponse = {
+  seriesId: string;
+  title: string;
+  type: string;
+  upcomingCount: number;
+  committed: boolean;
+};
+
 export type TeamInviteCreateResponse = {
   token: string;
   role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
@@ -662,6 +670,19 @@ export const api = {
       method: 'POST',
       body: { eventId, userId, status },
     });
+  },
+
+  // #60: согласие игрока на всю серию занятий (дефолт «иду» на каждое занятие).
+  async commitSeries(seriesId: string): Promise<{ ok: boolean; committed: boolean }> {
+    return request(`/events/series/${seriesId}/commit`, { method: 'POST', body: {} });
+  },
+
+  async leaveSeries(seriesId: string): Promise<{ ok: boolean; committed: boolean }> {
+    return request(`/events/series/${seriesId}/commit`, { method: 'DELETE' });
+  },
+
+  async getSeriesContext(seriesId: string): Promise<SeriesContextResponse> {
+    return request(`/events/series/${seriesId}/context`);
   },
 
   async addTransaction(tx: Transaction) {
