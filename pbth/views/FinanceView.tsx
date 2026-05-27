@@ -197,7 +197,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                      </div>
                   </div>
                   <div className="text-right">
-                     <div className="font-mono font-bold text-pb-danger">{m.balance} ₽</div>
+                     <div className="font-mono font-bold text-pb-danger">Должен {Math.abs(m.balance || 0).toLocaleString('ru-RU')} ₽</div>
                      {isAdmin && (
                         <button
                           type="button"

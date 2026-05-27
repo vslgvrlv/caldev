@@ -12,6 +12,7 @@ import { TransferConfirmationModal } from '../components/TransferConfirmationMod
 import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
 import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
+import { AttendanceMap } from '../components/AttendanceMap';
 
 interface EventDetailAttendee {
   userId: string;
@@ -119,7 +120,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       try {
         const response = await api.getEventAttendees(event.id);
         if (cancelled) return;
-        setAttendees(response.attendees.filter((item) => item.rsvpStatus === 'CONFIRMED'));
+        // Карта явки (#48): держим ВСЕХ участников со статусами, а не только
+        // CONFIRMED — иначе капитан не видит молчунов. Confirmed-списки ниже
+        // фильтруются отдельно из этого же массива.
+        setAttendees(response.attendees);
       } catch (error) {
         if (cancelled) return;
         const fallback = (event.attendeePreview || []).map((item) => ({
@@ -173,7 +177,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     };
   }, [canReadEventFinance, event.id]);
 
-  const confirmedAttendees = attendees;
+  const confirmedAttendees = attendees.filter((item) => item.rsvpStatus === 'CONFIRMED');
   const trainerAttendees = confirmedAttendees.filter((item) => item.role === 'TRAINER');
   const playerAttendees = confirmedAttendees.filter((item) => item.role !== 'TRAINER');
   const attendeesCount = confirmedAttendees.length || event.attendeesCount;
@@ -195,6 +199,15 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         template: reminderTemplate,
         gameId: isGameReminderTemplate ? reminderGameId : undefined,
       });
+    } finally {
+      setIsRemindingUnanswered(false);
+    }
+  };
+
+  const handleRemindSilent = async () => {
+    setIsRemindingUnanswered(true);
+    try {
+      await onSendEventReminder({ eventId: event.id, audience: 'UNANSWERED', template: 'EVENT_REMINDER' });
     } finally {
       setIsRemindingUnanswered(false);
     }
@@ -736,6 +749,14 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 </div>
               )}
             </div>
+
+            {!isAttendeesLoading && (
+              <AttendanceMap
+                attendees={attendees}
+                onRemindSilent={canSendEventReminder ? handleRemindSilent : undefined}
+                remindingSilent={isRemindingUnanswered}
+              />
+            )}
 
             {isAttendeesLoading && (
               <div className="text-sm text-pb-subtext py-2">Загрузка списка участников...</div>
