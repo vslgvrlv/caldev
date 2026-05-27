@@ -586,6 +586,7 @@ export const api = {
       pitZone?: 'NEAR' | 'FAR';
       gamePair?: 'FIRST' | 'SECOND';
     }>;
+    recurrence?: { enabled: boolean; weekdays: string[]; untilDate: string };
   }) {
     const storage = localDevStorage();
     const localCreated = storage
@@ -617,6 +618,7 @@ export const api = {
         cost: payload.cost,
         costStatus: payload.costStatus,
         schedule: payload.schedule,
+        recurrence: payload.recurrence,
       }
     });
   },

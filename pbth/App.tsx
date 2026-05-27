@@ -612,6 +612,7 @@ const App: React.FC = () => {
         startDate,
         location: normalizedLocation || undefined,
         cost: normalizedCost,
+        recurrence: eventData.recurrence,
       });
 
       if (response?.event) {

@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
 import { EventType } from '../types';
 import { EVENT_LABELS, EVENT_COLORS } from '../constants';
-import { ChevronLeft, Calendar, MapPin, Type, AlignLeft, DollarSign } from 'lucide-react';
+import { ChevronLeft, Calendar, MapPin, Type, AlignLeft, DollarSign, Repeat } from 'lucide-react';
+import { buildRecurrence, type Weekday } from '../lib/recurrence';
+
+const WEEKDAYS: { key: Weekday; label: string }[] = [
+  { key: 'MON', label: 'Пн' },
+  { key: 'TUE', label: 'Вт' },
+  { key: 'WED', label: 'Ср' },
+  { key: 'THU', label: 'Чт' },
+  { key: 'FRI', label: 'Пт' },
+  { key: 'SAT', label: 'Сб' },
+  { key: 'SUN', label: 'Вс' },
+];
 
 interface CreateEventViewProps {
   onBack: () => void;
@@ -18,6 +29,12 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
     description: '',
     cost: ''
   });
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatWeekdays, setRepeatWeekdays] = useState<Weekday[]>([]);
+  const [repeatUntil, setRepeatUntil] = useState('');
+
+  const toggleWeekday = (day: Weekday) =>
+    setRepeatWeekdays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -47,10 +64,21 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
             return;
         }
 
+        const recurrence = buildRecurrence({
+          enabled: repeatEnabled,
+          weekdays: repeatWeekdays,
+          untilDate: repeatUntil,
+        });
+        if (recurrence.kind === 'error') {
+          alert(recurrence.message);
+          return;
+        }
+
         onCreate({
           ...formData,
           startDate,
-          cost: formData.cost ? Number(formData.cost) : 0
+          cost: formData.cost ? Number(formData.cost) : 0,
+          recurrence: recurrence.kind === 'ok' ? recurrence.value : undefined,
         });
     } catch (error) {
         console.error("Date parsing error", error);
@@ -144,6 +172,52 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
                     required
                 />
             </div>
+        </div>
+
+        {/* Повтор (#52) */}
+        <div className="space-y-3">
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-pb-subtext text-xs uppercase font-bold tracking-wider flex items-center">
+              <Repeat size={14} className="mr-1" /> Повторять событие
+            </span>
+            <input
+              type="checkbox"
+              checked={repeatEnabled}
+              onChange={(e) => setRepeatEnabled(e.target.checked)}
+              className="w-5 h-5 accent-pb-primary"
+            />
+          </label>
+          {repeatEnabled && (
+            <div className="space-y-3 bg-pb-surface border border-white/10 rounded-xl p-4">
+              <div>
+                <div className="text-pb-subtext text-[11px] uppercase font-bold mb-2">Дни недели</div>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAYS.map((d) => {
+                    const active = repeatWeekdays.includes(d.key);
+                    return (
+                      <button
+                        key={d.key}
+                        type="button"
+                        onClick={() => toggleWeekday(d.key)}
+                        className={`w-10 h-10 rounded-full text-xs font-bold border transition-colors ${active ? 'bg-pb-primary text-pb-background border-pb-primary' : 'bg-black/30 text-pb-subtext border-white/10'}`}
+                      >
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-pb-subtext text-[11px] uppercase font-bold mb-2">Повторять до</div>
+                <input
+                  type="date"
+                  value={repeatUntil}
+                  onChange={(e) => setRepeatUntil(e.target.value)}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Location */}
