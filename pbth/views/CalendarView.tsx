@@ -11,9 +11,10 @@ interface CalendarViewProps {
   events: Event[];
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
+  onCommitSeries: (seriesId: string) => void;
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ events, onEventClick, onEventLongPress }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({ events, onEventClick, onEventLongPress, onCommitSeries }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -109,12 +110,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onEventClick
             </div>
           ) : (
             selectedEvents.map(event => (
-               <EventCard 
-                 key={event.id} 
-                 event={event} 
-                 compact 
+               <EventCard
+                 key={event.id}
+                 event={event}
+                 compact
                  onClick={onEventClick}
                  onLongPress={onEventLongPress}
+                 onCommitSeries={onCommitSeries}
                />
             ))
           )}
