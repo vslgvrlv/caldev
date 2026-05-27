@@ -47,6 +47,17 @@ export type TeamInviteCreateResponse = {
   expiresAt: string;
 };
 
+export type TeamCreateResponse = {
+  team: {
+    id: string;
+    name: string;
+    shortCode: string;
+    logo: string | null;
+    budget: number;
+    timezone: string;
+  };
+};
+
 export type TeamInviteInfoResponse = {
   teamId: string;
   teamName: string;
@@ -907,6 +918,17 @@ export const api = {
       body: {
         userIds: payload.userIds,
         customText: payload.customText,
+      },
+    });
+  },
+
+  async createTeam(payload: { name: string; shortCode: string; timezone?: string }): Promise<TeamCreateResponse> {
+    return request<TeamCreateResponse>('/teams', {
+      method: 'POST',
+      body: {
+        name: payload.name,
+        shortCode: payload.shortCode,
+        ...(payload.timezone ? { timezone: payload.timezone } : {}),
       },
     });
   },
