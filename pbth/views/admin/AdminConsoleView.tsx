@@ -12,6 +12,7 @@ import {
 import { EventType } from '../../types';
 import { Loader2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
 import { resolveManagedTeamOptions } from '../../lib/admin-managed-teams';
+import { humanizeAuditAction } from '../../lib/admin-audit-format';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -591,7 +592,7 @@ export const AdminConsoleView: React.FC = () => {
           {selectedTeamId && (
             <div className="mb-3 rounded-xl border border-white/10 bg-black/30 p-3">
               <div className="text-sm">
-                Team ID: <span className="font-mono text-xs">{selectedTeamId}</span>
+                Команда: <span className="font-semibold">{managedTeamOptions.find((t) => t.id === selectedTeamId)?.name || '—'}</span>
               </div>
               {members.length > 0 && (
                 <div className="text-xs text-pb-subtext mt-1">
@@ -729,14 +730,11 @@ export const AdminConsoleView: React.FC = () => {
           <div className="space-y-2 max-h-[360px] overflow-auto">
             {audit.map((row) => (
               <div key={row.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                <div className="text-sm font-semibold">{row.action}</div>
+                <div className="text-sm font-semibold">{humanizeAuditAction(row.action)}</div>
                 <div className="text-xs text-pb-subtext mb-1">
                   {new Date(row.createdAt).toLocaleString('ru-RU')}
                   {row.actor?.name ? ` · ${row.actor.name}` : ''}
                 </div>
-                <pre className="text-xs text-pb-subtext whitespace-pre-wrap break-words">
-                  {JSON.stringify(row.payload, null, 2)}
-                </pre>
               </div>
             ))}
           </div>
