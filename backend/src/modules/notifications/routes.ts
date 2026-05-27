@@ -4,6 +4,7 @@ import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
+import { classifyDelivery, type DeliveryStatus } from "../../lib/notification-delivery.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getActiveContext } from "../teams/context.js";
 import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
@@ -453,6 +454,8 @@ notificationsRouter.post(
       reason: string;
       code: "CHAT_NOT_FOUND" | "BOT_BLOCKED" | "USER_DEACTIVATED" | "SEND_FAILED";
     }> = [];
+    // #46: пер-получательский журнал доставки
+    const deliveryRows: Array<{ userId: string; status: DeliveryStatus; errorCode?: string; errorDetail?: string }> = [];
     const skippedNoTelegramUsers: Array<{
       userId: string;
       name: string;
@@ -486,17 +489,33 @@ notificationsRouter.post(
         });
         if (dispatched.mode === "QUEUE") queued += 1;
         else sent += 1;
+        deliveryRows.push({ userId: row.user_id, ...classifyDelivery({ mode: dispatched.mode }) });
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Send failed";
+        const code = classifyTelegramSendError(reason);
         failed.push({
           userId: row.user_id,
           name: row.name,
           nickname: row.nickname,
           username: row.username,
           reason,
-          code: classifyTelegramSendError(reason),
+          code,
         });
+        deliveryRows.push({ userId: row.user_id, ...classifyDelivery({ error }), errorCode: code });
       }
+    }
+
+    // #46: записываем пер-получательский журнал доставки (best-effort — не ломает ответ)
+    try {
+      for (const d of deliveryRows) {
+        await query(
+          `INSERT INTO notification_deliveries (team_id, event_id, user_id, kind, channel, status, error_code, error_detail)
+           VALUES ($1, $2, $3, 'EVENT_REMINDER', 'TELEGRAM', $4, $5, $6)`,
+          [event.team_id, eventId, d.userId, d.status, d.errorCode ?? null, d.errorDetail ?? null]
+        );
+      }
+    } catch (err) {
+      console.error("notification_deliveries insert failed", err);
     }
 
     await writeAudit(access.userId, "notifications.event_reminder.send", {
@@ -522,6 +541,40 @@ notificationsRouter.post(
       skippedNoTelegram,
       skippedNoTelegramUsers,
       failed,
+    });
+  })
+);
+
+notificationsRouter.get(
+  "/events/:eventId/deliveries",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const access = await resolveNotificationsAccess(req as any);
+
+    const ev = await query<{ team_id: string }>(`SELECT team_id FROM events WHERE id = $1`, [eventId]);
+    const teamId = ev.rows[0]?.team_id;
+    if (!teamId) return res.status(404).json({ detail: "Event not found" });
+
+    const role = await resolveActorRoleForTeam(access, teamId);
+    if (!role) return res.status(403).json({ detail: "Team access denied" });
+
+    // Последний статус доставки по каждому получателю (#46).
+    const rows = await query<{ user_id: string; status: string; error_detail: string | null; created_at: string }>(
+      `SELECT DISTINCT ON (user_id) user_id, status, error_detail, created_at
+       FROM notification_deliveries
+       WHERE event_id = $1
+       ORDER BY user_id, created_at DESC`,
+      [eventId]
+    );
+
+    return res.json({
+      items: rows.rows.map((r) => ({
+        userId: r.user_id,
+        status: r.status,
+        errorDetail: r.error_detail,
+        at: r.created_at,
+      })),
     });
   })
 );
