@@ -108,6 +108,11 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isSeriesBusy, setIsSeriesBusy] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  // #62: фактическая явка (был/не был). draft = текущее состояние тумблеров.
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [attendanceDraft, setAttendanceDraft] = useState<Record<string, boolean>>({});
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [financeDetail, setFinanceDetail] = useState<FinanceEventDetailResponse | null>(null);
   const [isFinanceLoading, setIsFinanceLoading] = useState(false);
   const [isExpensesSheetOpen, setIsExpensesSheetOpen] = useState(false);
@@ -131,6 +136,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const canDeleteEvent =
     Boolean(onDeleteEvent) &&
     (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
+  // #62: явку отмечает капитан/штаб; тренер — только тренировки/собрания (как на бэкенде).
+  const canManageAttendance = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
+  // Явка имеет смысл только когда событие уже началось/прошло.
+  const hasEventStarted = event.startDate.getTime() <= Date.now();
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
   const canReadEventFinance = currentUserRole !== Role.PLAYER;
   const isTournament = event.type === EventType.TOURNAMENT || event.type === EventType.CHAMPIONSHIP;
@@ -278,6 +287,55 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       alert(`Не удалось удалить событие: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setIsDeletingEvent(false);
+    }
+  };
+
+  // #62: открыть отметку явки. Стартуем от уже сохранённой явки, а где её нет —
+  // от намерения (CONFIRMED → «был» по умолчанию, остальные → «не был»).
+  const handleOpenAttendance = async () => {
+    setIsAttendanceOpen(true);
+    setIsAttendanceLoading(true);
+    try {
+      const response = await api.getAttendance(event.id);
+      const saved = new Map(response.attendance.map((row) => [row.userId, row.present]));
+      const draft: Record<string, boolean> = {};
+      for (const attendee of attendees) {
+        draft[attendee.userId] = saved.has(attendee.userId)
+          ? Boolean(saved.get(attendee.userId))
+          : attendee.rsvpStatus === 'CONFIRMED';
+      }
+      setAttendanceDraft(draft);
+    } catch (error) {
+      console.error('Failed to load attendance', error);
+      const draft: Record<string, boolean> = {};
+      for (const attendee of attendees) {
+        draft[attendee.userId] = attendee.rsvpStatus === 'CONFIRMED';
+      }
+      setAttendanceDraft(draft);
+    } finally {
+      setIsAttendanceLoading(false);
+    }
+  };
+
+  const toggleAttendancePresent = (userId: string) => {
+    setAttendanceDraft((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
+
+  const handleSaveAttendance = async () => {
+    const entries = attendees.map((attendee) => ({
+      userId: attendee.userId,
+      present: Boolean(attendanceDraft[attendee.userId]),
+    }));
+    if (entries.length === 0) return;
+    setIsSavingAttendance(true);
+    try {
+      await api.markAttendance(event.id, entries);
+      setIsAttendanceOpen(false);
+    } catch (error) {
+      console.error('Failed to save attendance', error);
+      alert(`Не удалось сохранить явку: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSavingAttendance(false);
     }
   };
 
@@ -907,6 +965,98 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 onRemindSilent={canSendEventReminder ? handleRemindSilent : undefined}
                 remindingSilent={isRemindingUnanswered}
               />
+            )}
+
+            {/* #62: фактическая явка (был/не был) — второй слой, факт vs намерение. */}
+            {!isAttendeesLoading && canManageAttendance && hasEventStarted && attendees.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                {!isAttendanceOpen ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenAttendance}
+                    className="w-full flex items-center justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-white">Отметить явку</div>
+                      <div className="text-[11px] text-pb-subtext mt-0.5">Кто реально был на занятии — факт, не планы.</div>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-pb-primary border border-pb-primary/30 rounded-lg px-3 py-1.5">
+                      Открыть
+                    </span>
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-bold text-white">Кто был на занятии</div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAttendanceOpen(false)}
+                        className="text-[11px] text-pb-subtext hover:text-white"
+                      >
+                        Свернуть
+                      </button>
+                    </div>
+
+                    {isAttendanceLoading ? (
+                      <div className="text-sm text-pb-subtext py-2">Загрузка явки…</div>
+                    ) : (
+                      <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                        {attendees.map((attendee) => {
+                          const present = Boolean(attendanceDraft[attendee.userId]);
+                          return (
+                            <div
+                              key={attendee.userId}
+                              className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/5 px-2.5 py-2"
+                            >
+                              <img
+                                src={attendee.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(attendee.name)}&background=0F0F0F&color=fff`}
+                                alt={attendee.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0"
+                              />
+                              <span className="text-sm text-white truncate flex-1 min-w-0">{attendee.name}</span>
+                              <div className="shrink-0 flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => !present && toggleAttendancePresent(attendee.userId)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                    present
+                                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40'
+                                      : 'bg-white/5 text-pb-subtext border border-white/10 hover:text-white'
+                                  }`}
+                                >
+                                  Был
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => present && toggleAttendancePresent(attendee.userId)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                    !present
+                                      ? 'bg-rose-500/20 text-rose-200 border border-rose-500/40'
+                                      : 'bg-white/5 text-pb-subtext border border-white/10 hover:text-white'
+                                  }`}
+                                >
+                                  Не был
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!isAttendanceLoading && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAttendance}
+                        disabled={isSavingAttendance}
+                        className="w-full py-2.5 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+                      >
+                        {isSavingAttendance ? 'Сохраняем…' : 'Сохранить явку'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {isAttendeesLoading && (

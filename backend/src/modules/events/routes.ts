@@ -7,6 +7,7 @@ import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getActiveContext } from "../teams/context.js";
 import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
+import { canMarkAttendance } from "../../lib/attendance-permissions.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
@@ -76,6 +77,18 @@ const updateEventSchema = z.object({
 
 const deleteEventSchema = z.object({
   scope: z.enum(["single", "future"]).default("single"),
+});
+
+// #62: фактическая явка (был/не был). Капитан/штаб отмечает участников.
+const attendanceSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        userId: z.string().uuid(),
+        present: z.boolean(),
+      })
+    )
+    .min(1),
 });
 
 const WEEKDAY_TO_ISO: Record<z.infer<typeof weekdaySchema>, number> = {
@@ -860,6 +873,129 @@ eventsRouter.get(
       type: series.type,
       upcomingCount: Number(countResult.rows[0]?.count || 0),
       committed: commitResult.rows[0]?.status === "COMMITTED",
+    });
+  })
+);
+
+// #62: фактическая явка (факт vs намерение). Кто реально был на занятии.
+eventsRouter.get(
+  "/:eventId/attendance",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
+
+    const eventResult = await query<{ id: string; team_id: string; type: string }>(
+      `SELECT id, team_id, type::text AS type FROM events WHERE id = $1 AND is_cancelled = FALSE`,
+      [eventId]
+    );
+    const event = eventResult.rows[0];
+    if (!event) {
+      return res.status(404).json({ detail: "Event not found" });
+    }
+
+    const teamRole = effectiveRole === "ADMIN" ? null : await getMembershipRole(req.authUser!.id, event.team_id);
+    if (
+      !canMarkAttendance({
+        isPlatformAdmin: effectiveRole === "ADMIN",
+        teamRole,
+        eventType: event.type,
+      })
+    ) {
+      return res.status(403).json({ detail: "You cannot view attendance for this event" });
+    }
+
+    const result = await query<{ user_id: string; present: boolean; marked_at: string }>(
+      `SELECT user_id, present, marked_at FROM event_attendance WHERE event_id = $1`,
+      [eventId]
+    );
+    return res.json({
+      eventId,
+      attendance: result.rows.map((row) => ({
+        userId: row.user_id,
+        present: row.present,
+        markedAt: row.marked_at,
+      })),
+    });
+  })
+);
+
+eventsRouter.post(
+  "/:eventId/attendance",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const payload = attendanceSchema.parse(req.body ?? {});
+    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
+
+    const eventResult = await query<{ id: string; team_id: string; type: string }>(
+      `SELECT id, team_id, type::text AS type FROM events WHERE id = $1 AND is_cancelled = FALSE`,
+      [eventId]
+    );
+    const event = eventResult.rows[0];
+    if (!event) {
+      return res.status(404).json({ detail: "Event not found" });
+    }
+
+    const teamRole = effectiveRole === "ADMIN" ? null : await getMembershipRole(req.authUser!.id, event.team_id);
+    if (
+      !canMarkAttendance({
+        isPlatformAdmin: effectiveRole === "ADMIN",
+        teamRole,
+        eventType: event.type,
+      })
+    ) {
+      return res.status(403).json({ detail: "You cannot mark attendance for this event" });
+    }
+
+    // Помечаем только тех, кто реально в команде события — защита от чужих userId.
+    const memberResult = await query<{ user_id: string }>(
+      `SELECT user_id FROM team_memberships WHERE team_id = $1`,
+      [event.team_id]
+    );
+    const teamMemberIds = new Set(memberResult.rows.map((row) => row.user_id));
+    const validEntries = payload.entries.filter((entry) => teamMemberIds.has(entry.userId));
+    if (validEntries.length === 0) {
+      return res.status(400).json({ detail: "No valid team members in attendance entries" });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const entry of validEntries) {
+        await client.query(
+          `INSERT INTO event_attendance (event_id, user_id, present, marked_by, marked_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (event_id, user_id)
+           DO UPDATE SET present = EXCLUDED.present, marked_by = EXCLUDED.marked_by, marked_at = now()`,
+          [eventId, entry.userId, entry.present, req.authUser!.id]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await writeAudit(req.authUser!.id, "events.attendance.mark", {
+      eventId,
+      marked: validEntries.length,
+    });
+
+    const result = await query<{ user_id: string; present: boolean; marked_at: string }>(
+      `SELECT user_id, present, marked_at FROM event_attendance WHERE event_id = $1`,
+      [eventId]
+    );
+    return res.json({
+      eventId,
+      marked: validEntries.length,
+      attendance: result.rows.map((row) => ({
+        userId: row.user_id,
+        present: row.present,
+        markedAt: row.marked_at,
+      })),
     });
   })
 );

@@ -36,6 +36,11 @@ export type SeriesContextResponse = {
   committed: boolean;
 };
 
+export type EventAttendanceResponse = {
+  eventId: string;
+  attendance: Array<{ userId: string; present: boolean; markedAt: string }>;
+};
+
 export type TeamInviteCreateResponse = {
   token: string;
   role: 'CAPTAIN' | 'TRAINER' | 'PLAYER';
@@ -695,6 +700,21 @@ export const api = {
 
   async getSeriesContext(seriesId: string): Promise<SeriesContextResponse> {
     return request(`/events/series/${seriesId}/context`);
+  },
+
+  // #62: фактическая явка (был/не был) — отдельный слой от намерения (RSVP).
+  async getAttendance(eventId: string): Promise<EventAttendanceResponse> {
+    return request(`/events/${eventId}/attendance`);
+  },
+
+  async markAttendance(
+    eventId: string,
+    entries: Array<{ userId: string; present: boolean }>
+  ): Promise<EventAttendanceResponse & { marked: number }> {
+    return request(`/events/${eventId}/attendance`, {
+      method: 'POST',
+      body: { entries },
+    });
   },
 
   async addTransaction(tx: Transaction) {
