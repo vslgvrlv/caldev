@@ -3,6 +3,7 @@ import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { TeamMemberCard } from '../components/TeamMemberCard';
 import { UserPlus, Search, Shield, Users, Check, BarChart2, Star, Trophy } from 'lucide-react';
 import { api } from '../api';
+import { buildInviteLink } from '../lib/team-invite-link';
 
 interface TeamViewProps {
   team: Team;
@@ -65,8 +66,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const handleCopyInvite = async () => {
     try {
       const created = await api.createTeamInvite(team.id, { teamRole: 'PLAYER', expiresInHours: 72 });
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://pbthub.ru';
-      const inviteLink = `${origin}/invite/${created.token}`;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const inviteLink = buildInviteLink(origin, created.token);
 
       const copied = await copyText(inviteLink);
       if (copied) {

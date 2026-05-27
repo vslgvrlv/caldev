@@ -10,9 +10,37 @@ import {
   type AuthMeResponse,
 } from '../../api';
 import { EventType } from '../../types';
-import { Loader2, RefreshCw, Save, ShieldAlert } from 'lucide-react';
+import { Loader2, RefreshCw, Save, ShieldAlert, Check, Copy, PlusCircle, UserPlus } from 'lucide-react';
 import { resolveManagedTeamOptions } from '../../lib/admin-managed-teams';
 import { humanizeAuditAction } from '../../lib/admin-audit-format';
+import { buildInviteLink } from '../../lib/team-invite-link';
+
+const copyText = async (text: string): Promise<boolean> => {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback below.
+  }
+
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return copied;
+  } catch {
+    return false;
+  }
+};
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -67,6 +95,18 @@ export const AdminConsoleView: React.FC = () => {
   const [createExternalEventId, setCreateExternalEventId] = useState('');
   const [createRegistrationStatus, setCreateRegistrationStatus] = useState<EventRegistrationStatus>('REQUESTED');
   const [eventRegistrationDrafts, setEventRegistrationDrafts] = useState<Record<string, EventRegistrationStatus>>({});
+
+  // «Создать команду + пригласить капитана» (только владелец платформы).
+  const [teamName, setTeamName] = useState('');
+  const [teamShortCode, setTeamShortCode] = useState('');
+  const [teamTimezone, setTeamTimezone] = useState('Europe/Moscow');
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [teamCreateError, setTeamCreateError] = useState('');
+  const [createdTeam, setCreatedTeam] = useState<{ id: string; name: string } | null>(null);
+  const [invitingCaptain, setInvitingCaptain] = useState(false);
+  const [captainInviteLink, setCaptainInviteLink] = useState('');
+  const [captainInviteCopied, setCaptainInviteCopied] = useState(false);
+  const [captainInviteError, setCaptainInviteError] = useState('');
 
   const managedTeamOptions = useMemo(() => {
     if (!me) return [];
@@ -164,6 +204,72 @@ export const AdminConsoleView: React.FC = () => {
       body: '{}',
     }).catch(() => undefined);
     navigate('/admin/login', { replace: true });
+  };
+
+  const handleCreateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = teamName.trim();
+    const shortCode = teamShortCode.trim().toUpperCase();
+    if (name.length < 2) {
+      setTeamCreateError('Введи название команды (минимум 2 символа).');
+      return;
+    }
+    if (!shortCode) {
+      setTeamCreateError('Введи короткий код команды.');
+      return;
+    }
+    setCreatingTeam(true);
+    setTeamCreateError('');
+    setCaptainInviteError('');
+    setCaptainInviteLink('');
+    setCaptainInviteCopied(false);
+    try {
+      const { team } = await api.createTeam({
+        name,
+        shortCode,
+        timezone: teamTimezone.trim() || undefined,
+      });
+      setCreatedTeam({ id: team.id, name: team.name });
+      setTeamName('');
+      setTeamShortCode('');
+      setTeamTimezone('Europe/Moscow');
+      // Обновляем список управляемых команд, чтобы новая появилась в селекторе.
+      await loadData(team.id);
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 409) {
+        setTeamCreateError('Такой короткий код уже занят — выбери другой.');
+      } else {
+        setTeamCreateError(err instanceof Error ? err.message : 'Не удалось создать команду.');
+      }
+    } finally {
+      setCreatingTeam(false);
+    }
+  };
+
+  const handleInviteCaptain = async () => {
+    if (!createdTeam) return;
+    setInvitingCaptain(true);
+    setCaptainInviteError('');
+    setCaptainInviteCopied(false);
+    try {
+      const invite = await api.createTeamInvite(createdTeam.id, {
+        teamRole: 'CAPTAIN',
+        expiresInHours: 168,
+      });
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const link = buildInviteLink(origin, invite.token);
+      setCaptainInviteLink(link);
+      const copied = await copyText(link);
+      if (copied) {
+        setCaptainInviteCopied(true);
+        setTimeout(() => setCaptainInviteCopied(false), 2500);
+      }
+    } catch (err) {
+      setCaptainInviteError(err instanceof Error ? err.message : 'Не удалось создать ссылку для капитана.');
+    } finally {
+      setInvitingCaptain(false);
+    }
   };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
@@ -389,6 +495,128 @@ export const AdminConsoleView: React.FC = () => {
             ))}
           </select>
         </div>
+
+        {adminScopeLabel === 'PLATFORM' && (
+          <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <PlusCircle size={18} className="text-pb-primary" />
+              <h2 className="font-semibold">Создать команду</h2>
+            </div>
+            <p className="text-sm text-pb-subtext mb-3">
+              Заведи новую команду и сразу пришли капитану ссылку для входа.
+            </p>
+
+            <form onSubmit={handleCreateTeam} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-pb-subtext">Название</span>
+                <input
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  placeholder="Дневной дозор"
+                  className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-pb-subtext">Короткий код</span>
+                <input
+                  value={teamShortCode}
+                  onChange={(e) => setTeamShortCode(e.target.value.toUpperCase())}
+                  placeholder="DOZOR"
+                  maxLength={20}
+                  className="bg-black/40 border border-white/20 rounded-lg px-3 py-2 uppercase tracking-wide"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-pb-subtext">Таймзона</span>
+                <input
+                  value={teamTimezone}
+                  onChange={(e) => setTeamTimezone(e.target.value)}
+                  placeholder="Europe/Moscow"
+                  className="bg-black/40 border border-white/20 rounded-lg px-3 py-2"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  disabled={creatingTeam}
+                  className="w-full sm:w-auto bg-pb-primary text-pb-background rounded-lg px-4 py-2 font-semibold disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                  {creatingTeam ? <Loader2 className="animate-spin" size={16} /> : <PlusCircle size={16} />}
+                  Создать команду
+                </button>
+              </div>
+            </form>
+
+            {teamCreateError && (
+              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {teamCreateError}
+              </div>
+            )}
+
+            {createdTeam && (
+              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm text-emerald-100">
+                    Команда <span className="font-semibold">«{createdTeam.name}»</span> создана.
+                  </div>
+                  <button
+                    onClick={() => {
+                      void handleInviteCaptain();
+                    }}
+                    disabled={invitingCaptain}
+                    className="inline-flex items-center gap-2 rounded-lg bg-pb-primary text-pb-background px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {invitingCaptain ? <Loader2 className="animate-spin" size={14} /> : <UserPlus size={14} />}
+                    Пригласить капитана
+                  </button>
+                </div>
+
+                {captainInviteError && (
+                  <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-200">
+                    {captainInviteError}
+                  </div>
+                )}
+
+                {captainInviteLink && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs text-emerald-200 inline-flex items-center gap-1">
+                      {captainInviteCopied ? (
+                        <>
+                          <Check size={14} /> Ссылка скопирована — отправь капитану
+                        </>
+                      ) : (
+                        'Ссылка для капитана — отправь её, ссылка живёт 7 дней'
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        readOnly
+                        value={captainInviteLink}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="flex-1 min-w-[240px] bg-black/40 border border-white/20 rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={() => {
+                          void (async () => {
+                            const copied = await copyText(captainInviteLink);
+                            if (copied) {
+                              setCaptainInviteCopied(true);
+                              setTimeout(() => setCaptainInviteCopied(false), 2500);
+                            }
+                          })();
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10"
+                      >
+                        <Copy size={14} />
+                        Скопировать
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4">
           <h2 className="font-semibold mb-3">Overview</h2>
