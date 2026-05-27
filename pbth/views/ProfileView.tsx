@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
 import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, X, Lock, Camera, MessageCircle } from 'lucide-react';
+import { ProfileIdentities } from '../components/ProfileIdentities';
 
 interface ProfileViewProps {
   user: User;
@@ -120,6 +121,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
          </div>
       </div>
+
+      <ProfileIdentities />
 
       <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-4">
           <h3 className="text-white font-bold flex items-center">

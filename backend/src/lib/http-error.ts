@@ -12,7 +12,14 @@ export type ApiErrorCode =
   | "INVITE_REVOKED"
   | "ALREADY_MEMBER"
   | "ROLE_REQUIRED"
-  | "EVENT_NOT_FOUND";
+  | "EVENT_NOT_FOUND"
+  | "OAUTH_STATE_INVALID"
+  | "OAUTH_STATE_EXPIRED"
+  | "OAUTH_NO_ACCOUNT"
+  | "OAUTH_LINK_TAKEN"
+  | "OAUTH_LAST_IDENTITY"
+  | "OAUTH_PROVIDER_DISABLED"
+  | "OAUTH_PENDING_LINK_EXPIRED";
 
 export function httpStatusToCode(status: number): ApiErrorCode {
   if (status === 400) return "BAD_REQUEST";

@@ -21,6 +21,7 @@ import {
   resolveTelegramHandoffRedirect,
   type TelegramHandoffScope,
 } from "../../lib/auth-telegram-handoff.js";
+import { completeOAuthLogin } from "../../lib/oauth-login.js";
 
 const contextSchema = z.object({
   membershipId: z.string().uuid(),
@@ -211,110 +212,6 @@ function shouldUseOidcFromCanary(req: any, res: any, redirectTo: string) {
       forceOverride,
     }),
   };
-}
-
-async function completeTelegramLogin(
-  req: any,
-  res: any,
-  payload: {
-    id: string;
-    first_name?: string;
-    last_name?: string;
-    username?: string;
-    photo_url?: string;
-  },
-  options?: {
-    authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF";
-    entryRoleOverride?: "ADMIN" | "USER";
-  }
-) {
-  const name = [payload.first_name, payload.last_name].filter(Boolean).join(" ").trim() || payload.username || `tg-${payload.id}`;
-  const nickname = payload.username || `tg_${payload.id}`;
-  const onboardingCompletedAt = options?.authMethod === "BOT_HANDOFF" ? null : new Date().toISOString();
-
-  const upsert = await query<{
-    id: string;
-    telegram_id: string;
-    username: string | null;
-    account_role: "ADMIN" | "USER" | null;
-    onboarding_completed_at: string | null;
-  }>(
-    `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at, onboarding_completed_at)
-     VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6::timestamptz)
-     ON CONFLICT (telegram_id)
-     DO UPDATE SET
-       username = COALESCE(EXCLUDED.username, users.username),
-       name = EXCLUDED.name,
-       nickname = EXCLUDED.nickname,
-       avatar = EXCLUDED.avatar,
-       onboarding_completed_at = COALESCE(users.onboarding_completed_at, EXCLUDED.onboarding_completed_at),
-       updated_at = NOW()
-     RETURNING id, telegram_id::text, username, account_role, onboarding_completed_at`,
-    [payload.id, payload.username ?? null, name, nickname, payload.photo_url ?? null, onboardingCompletedAt]
-  );
-
-  const userRow = upsert.rows[0];
-  const userId = userRow.id;
-  const allowAdminChoice = canChooseAdminRole({ telegram_id: userRow.telegram_id, username: userRow.username });
-  if (options?.entryRoleOverride === "ADMIN" && !allowAdminChoice) {
-    throw new Error("ADMIN_SCOPE_NONE");
-  }
-  const targetEntryRole = options?.entryRoleOverride ?? (allowAdminChoice ? null : "USER");
-  if (targetEntryRole && userRow.account_role !== targetEntryRole) {
-    await query(
-      `UPDATE users
-       SET account_role = $2::account_role,
-           role_selected_at = NOW(),
-           updated_at = NOW()
-       WHERE id = $1`,
-      [userId, targetEntryRole]
-    );
-  } else if (!targetEntryRole && !allowAdminChoice && !userRow.account_role) {
-    await query(
-      `UPDATE users
-       SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW()
-       WHERE id = $1`,
-      [userId]
-    );
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    req.session.regenerate((err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-
-  req.session.userId = userId;
-  req.session.authMethod = options?.authMethod ?? "WEBAPP";
-  if (targetEntryRole) req.session.entryRole = targetEntryRole;
-  else delete req.session.entryRole;
-
-  const accountRole = req.session.entryRole ?? null;
-
-  const memberships = accountRole === "USER" ? await getUserMemberships(userId) : [];
-  if (accountRole === "USER" && memberships.length === 1) {
-    req.session.activeMembershipId = memberships[0].id;
-    req.session.activeTeamId = memberships[0].team_id;
-  } else {
-    delete req.session.activeMembershipId;
-    delete req.session.activeTeamId;
-  }
-
-  await writeAudit(userId, "auth.telegram.login", {
-    telegramId: payload.id,
-    authMethod: req.session.authMethod,
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    req.session.save((err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-  res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
-
-  return { userId };
 }
 
 async function ensureUserHasTeam(userId: string, req: any) {
@@ -727,21 +624,19 @@ authRouter.get(
       );
     }
 
-    await completeTelegramLogin(
-      req,
-      res,
-      {
+    await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
         id: String(attempt.telegram_profile.id),
-        first_name: attempt.telegram_profile.first_name,
-        last_name: attempt.telegram_profile.last_name,
+        firstName: attempt.telegram_profile.first_name,
+        lastName: attempt.telegram_profile.last_name,
         username: attempt.telegram_profile.username,
-        photo_url: attempt.telegram_profile.photo_url,
+        avatarUrl: attempt.telegram_profile.photo_url,
       },
-      {
-        authMethod: "BOT_HANDOFF",
-        entryRoleOverride: attempt.scope === "ADMIN" ? "ADMIN" : "USER",
-      }
-    );
+      authMethod: "BOT_HANDOFF",
+      entryRoleOverride: attempt.scope === "ADMIN" ? "ADMIN" : "USER",
+    });
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
 
     await query(
       `UPDATE auth_telegram_handoff_attempts
@@ -969,18 +864,18 @@ authRouter.get(
       );
     }
 
-    await completeTelegramLogin(
-      req,
-      res,
-      {
+    await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
         id: verified.profile.id,
-        first_name: verified.profile.first_name,
-        last_name: verified.profile.last_name,
+        firstName: verified.profile.first_name,
+        lastName: verified.profile.last_name,
         username: verified.profile.username,
-        photo_url: verified.profile.photo_url,
+        avatarUrl: verified.profile.photo_url,
       },
-      { authMethod: "OIDC" }
-    );
+      authMethod: "OIDC",
+    });
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
     recordAuthMetric({
       method: "OIDC",
       platform: detectRequestPlatform(req),
@@ -1169,7 +1064,18 @@ authRouter.get(
       });
       return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
     }
-    await completeTelegramLogin(req, res, payload, { authMethod: "LEGACY_WIDGET" });
+    await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
+        id: payload.id,
+        firstName: payload.first_name,
+        lastName: payload.last_name,
+        username: payload.username,
+        avatarUrl: payload.photo_url,
+      },
+      authMethod: "LEGACY_WIDGET",
+    });
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
     recordAuthMetric({
       method: "LEGACY_WIDGET",
       platform: detectRequestPlatform(req),
@@ -1245,7 +1151,18 @@ authRouter.post(
       return res.status(409).json({ detail: "Replay login payload rejected", code: "AUTH_REPLAY_DETECTED" });
     }
 
-    await completeTelegramLogin(req, res, verification.payload, { authMethod: "WEBAPP" });
+    await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
+        id: verification.payload.id,
+        firstName: verification.payload.first_name,
+        lastName: verification.payload.last_name,
+        username: verification.payload.username,
+        avatarUrl: verification.payload.photo_url,
+      },
+      authMethod: "WEBAPP",
+    });
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
     recordAuthMetric({
       method: "WEBAPP",
       platform: detectRequestPlatform(req),
@@ -1277,7 +1194,19 @@ authRouter.post(
     const parsed = devLoginSchema.parse(req.body ?? {});
     const loginPayload = await resolveDevLoginPayload(parsed);
 
-    const login = await completeTelegramLogin(req, res, loginPayload, { authMethod: "DEV" });
+    const login = await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
+        id: loginPayload.id,
+        firstName: loginPayload.first_name,
+        username: loginPayload.username,
+      },
+      authMethod: "DEV",
+    });
+    if (!login) {
+      return res.status(500).json({ detail: "Dev login failed", code: "DEV_LOGIN_FAILED" });
+    }
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
 
     await query(
       `UPDATE users
@@ -1329,7 +1258,19 @@ authRouter.get(
 
     const loginPayload = await resolveDevLoginPayload(parsed);
 
-    const login = await completeTelegramLogin(req, res, loginPayload, { authMethod: "DEV" });
+    const login = await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
+        id: loginPayload.id,
+        firstName: loginPayload.first_name,
+        username: loginPayload.username,
+      },
+      authMethod: "DEV",
+    });
+    if (!login) {
+      return res.status(500).json({ detail: "Dev login failed", code: "DEV_LOGIN_FAILED" });
+    }
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
     await query(
       `UPDATE users
        SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW()

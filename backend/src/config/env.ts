@@ -81,6 +81,25 @@ export const env = {
     ),
   },
 
+  yandexOAuth: {
+    enabled: asBoolean(process.env.AUTH_YANDEX_ENABLED, false),
+    clientId: process.env.YANDEX_OAUTH_CLIENT_ID || "",
+    clientSecret: process.env.YANDEX_OAUTH_CLIENT_SECRET || "",
+    redirectUri: process.env.YANDEX_OAUTH_REDIRECT_URI || "",
+    linkRedirectUri: process.env.YANDEX_OAUTH_LINK_REDIRECT_URI || "",
+    authorizeUrl: process.env.YANDEX_OAUTH_AUTHORIZE_URL || "https://oauth.yandex.ru/authorize",
+    tokenUrl: process.env.YANDEX_OAUTH_TOKEN_URL || "https://oauth.yandex.ru/token",
+    userInfoUrl: process.env.YANDEX_OAUTH_USERINFO_URL || "https://login.yandex.ru/info",
+    stateTtlSeconds: asNumber(
+      process.env.AUTH_YANDEX_STATE_TTL_SEC || "600",
+      "AUTH_YANDEX_STATE_TTL_SEC"
+    ),
+    pendingLinkTtlSeconds: asNumber(
+      process.env.AUTH_YANDEX_PENDING_LINK_TTL_SEC || "300",
+      "AUTH_YANDEX_PENDING_LINK_TTL_SEC"
+    ),
+  },
+
   telegramOidc: {
     enabled: asBoolean(process.env.AUTH_OIDC_ENABLED, false),
     fallbackEnabled: asBoolean(process.env.AUTH_OIDC_FALLBACK_ENABLED, true),
@@ -191,4 +210,19 @@ if (env.authSlo.minAttempts < 1) {
 
 if (env.authSlo.maxErrorRate < 0 || env.authSlo.maxErrorRate > 1) {
   throw new Error("AUTH_SLO_MAX_ERROR_RATE must be within [0,1]");
+}
+
+if (env.yandexOAuth.enabled) {
+  if (!env.yandexOAuth.clientId) {
+    throw new Error("YANDEX_OAUTH_CLIENT_ID is required when AUTH_YANDEX_ENABLED=1");
+  }
+  if (!env.yandexOAuth.clientSecret) {
+    throw new Error("YANDEX_OAUTH_CLIENT_SECRET is required when AUTH_YANDEX_ENABLED=1");
+  }
+  if (!env.yandexOAuth.redirectUri) {
+    throw new Error("YANDEX_OAUTH_REDIRECT_URI is required when AUTH_YANDEX_ENABLED=1");
+  }
+  if (!env.yandexOAuth.linkRedirectUri) {
+    throw new Error("YANDEX_OAUTH_LINK_REDIRECT_URI is required when AUTH_YANDEX_ENABLED=1");
+  }
 }
