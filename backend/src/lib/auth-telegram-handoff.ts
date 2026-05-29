@@ -1,6 +1,14 @@
 import crypto from "node:crypto";
 
-type TrustedAuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | null | undefined;
+type TrustedAuthMethod =
+  | "WEBAPP"
+  | "OIDC"
+  | "LEGACY_WIDGET"
+  | "DEV"
+  | "BOT_HANDOFF"
+  | "YANDEX_OAUTH"
+  | null
+  | undefined;
 
 export type TelegramHandoffScope = "USER" | "ADMIN";
 type TelegramHandoffProfile = {
@@ -91,7 +99,19 @@ export function resolveTelegramHandoffRedirect(params: {
 }
 
 export function isTrustedAdminAuthMethod(authMethod: TrustedAuthMethod): boolean {
-  return authMethod === "OIDC" || authMethod === "BOT_HANDOFF";
+  // Trusted admin methods are full server-mediated OAuth flows with
+  // state validation and replay-guard:
+  //  - OIDC          — Telegram OIDC (signed JWT, replay-guarded).
+  //  - BOT_HANDOFF   — one-shot server-issued token presented via the bot DM.
+  //  - YANDEX_OAUTH  — OAuth2 + PKCE + replay-guard (migrations 023/024).
+  // WEBAPP (Telegram Mini App initData) is intentionally NOT trusted:
+  // initData is client-presented and trust-rooted in the host TG client,
+  // which is acceptable for player surfaces but not for the admin gate.
+  return (
+    authMethod === "OIDC" ||
+    authMethod === "BOT_HANDOFF" ||
+    authMethod === "YANDEX_OAUTH"
+  );
 }
 
 export function resolveOnboardingRequired(params: {

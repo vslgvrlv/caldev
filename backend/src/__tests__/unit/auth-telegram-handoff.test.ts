@@ -75,11 +75,20 @@ describe("telegram bot handoff auth helpers", () => {
     );
   });
 
-  it("treats OIDC and BOT_HANDOFF as trusted admin auth methods", () => {
+  it("treats OIDC, BOT_HANDOFF, and YANDEX_OAUTH as trusted admin auth methods", () => {
+    // Trusted admin methods are full server-mediated OAuth flows with
+    // state validation and replay-guard (PKCE for Yandex, signed JWT for
+    // Telegram OIDC, server-issued one-shot token for the bot handoff).
+    // WEBAPP (Telegram Mini App initData) stays OFF this list by design:
+    // initData is client-presented and trust-rooted in the host TG client.
     expect(isTrustedAdminAuthMethod("OIDC")).toBe(true);
     expect(isTrustedAdminAuthMethod("BOT_HANDOFF")).toBe(true);
+    expect(isTrustedAdminAuthMethod("YANDEX_OAUTH")).toBe(true);
     expect(isTrustedAdminAuthMethod("WEBAPP")).toBe(false);
+    expect(isTrustedAdminAuthMethod("LEGACY_WIDGET")).toBe(false);
+    expect(isTrustedAdminAuthMethod("DEV")).toBe(false);
     expect(isTrustedAdminAuthMethod(null)).toBe(false);
+    expect(isTrustedAdminAuthMethod(undefined)).toBe(false);
   });
 
   it("requires soft onboarding only for first-login handoff users without completion timestamp", () => {
