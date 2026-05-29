@@ -24,7 +24,14 @@ export interface CompleteOAuthLoginParams {
   provider: OAuthProvider;
   profile: OAuthProfile;
   authMethod: AuthMethod;
-  /** Forces a specific session.entryRole — used by the telegram-handoff flow (ADMIN/USER). Other callers must leave it undefined. */
+  /**
+   * Forces a specific session.entryRole. Used by:
+   *   - telegram-handoff (USER/ADMIN, scope decided from the deeplink),
+   *   - yandex callback (ADMIN when redirectTo starts with /admin AND the
+   *     user is allowlisted via their linked telegram_id).
+   * Other callers must leave it undefined → entryRole stays unset (neutral
+   * mode for allowlisted owners, "USER" otherwise).
+   */
   entryRoleOverride?: "ADMIN" | "USER";
 }
 
@@ -159,10 +166,16 @@ export async function completeOAuthLogin(
     }
   }
 
-  // 2. Role-selection invariant. Telegram users may be in the admin allowlist
-  // and pick ADMIN; everyone else is locked to USER.
+  // 2. Role-selection invariant. A user can pick ADMIN if their *linked*
+  // telegram_id is in the allowlist — independent of which OAuth provider
+  // ran THIS login. Rationale: allowlist membership belongs to the human, not
+  // to the channel they signed in through. A Telegram-registered owner who
+  // later attaches Yandex should be able to enter admin mode via either path.
+  // The auth-method trust gate (`isTrustedAdminAuthMethod`) decides whether
+  // the admin scope is actually granted on the auth/me side; here we only
+  // unlock the *eligibility* to choose ADMIN entryRole.
   const allowAdminChoice =
-    provider === "telegram" && userRow.telegram_id !== null
+    userRow.telegram_id !== null
       ? canChooseAdminRole({ telegram_id: userRow.telegram_id, username: userRow.username })
       : false;
 
