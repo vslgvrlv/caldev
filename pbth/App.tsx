@@ -16,7 +16,6 @@ import { TermsView } from './views/TermsView';
 import { SupportView } from './views/SupportView';
 import { PlayerProfileView } from './views/PlayerProfileView';
 import { InviteView } from './views/InviteView';
-import { AdminLoginView } from './views/admin/AdminLoginView';
 import { AdminConsoleView } from './views/admin/AdminConsoleView';
 import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
@@ -951,7 +950,7 @@ const App: React.FC = () => {
             </p>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => navigate('/admin/login', { replace: true })}
+                onClick={() => navigate('/admin', { replace: true })}
                 className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
               >
                 Перейти в админку
@@ -1060,7 +1059,8 @@ const App: React.FC = () => {
       <Route path="/terms" element={<TermsView />} />
       <Route path="/support" element={<SupportView />} />
       <Route path="/invite/:inviteId" element={<InviteView />} />
-      <Route path="/admin/login" element={<AdminLoginView />} />
+      {/* /admin/login сведён в /login?next=/admin — единый вход для всех ролей */}
+      <Route path="/admin/login" element={<Navigate to="/login?next=/admin" replace />} />
       <Route path="/admin/*" element={<AdminConsoleView />} />
       <Route path="/login" element={
         authStep === 'APP'
