@@ -45,7 +45,7 @@ export const LandingView: React.FC = () => {
               <a href="#how-it-works" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-pb-subtext hover:text-white">Как это работает</a>
               <a href="#pricing" onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 text-base font-medium text-pb-subtext hover:text-white">Тарифы</a>
               <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full text-center bg-pb-primary text-pb-background px-5 py-3 rounded-xl text-base font-bold mt-4">
-                Войти через Telegram
+                Войти
               </Link>
             </div>
           </div>
@@ -100,9 +100,8 @@ export const LandingView: React.FC = () => {
             Единый хаб для капитанов и игроков. Забудьте про 10 разных чатов — расписание, финансы и состав теперь всегда под рукой.
           </p>
           <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
-            <Link to="/login" className="w-full sm:w-auto bg-[#24A1DE] hover:bg-[#208bbf] text-white px-8 py-4 rounded-2xl text-lg font-bold transition-all duration-300 active:scale-95 hover:-translate-y-0.5 shadow-lg shadow-[#24A1DE]/20 hover:shadow-[0_0_30px_rgba(36,161,222,0.35)] flex items-center justify-center space-x-2">
-              <SendIcon className="w-5 h-5" />
-              <span>Войти через Telegram</span>
+            <Link to="/login" className="w-full sm:w-auto bg-pb-primary hover:bg-pb-primary/90 text-pb-background px-8 py-4 rounded-2xl text-lg font-bold transition-all duration-300 active:scale-95 hover:-translate-y-0.5 shadow-lg shadow-pb-primary/20 hover:shadow-[0_0_30px_rgba(0,230,118,0.35)] flex items-center justify-center">
+              <span>Войти в приложение</span>
             </Link>
             <a href="#features" className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/10 text-white px-8 py-4 rounded-2xl text-lg font-bold transition-all duration-300 hover:-translate-y-0.5 flex items-center justify-center space-x-2">
               <span>Узнать больше</span>
@@ -263,10 +262,3 @@ const PricingFeature = ({ text }: { text: string }) => (
   </li>
 );
 
-// Simple Telegram Send Icon SVG
-const SendIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);

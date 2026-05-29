@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { api, type TeamInviteInfoResponse } from '../api';
 import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
@@ -95,21 +95,11 @@ export const InviteView: React.FC = () => {
     };
   }, [inviteId]);
 
-  const handleLogin = () => {
-    if (!inviteId) return;
-    const redirectTo = `/invite/${inviteId}`;
-    const run = async () => {
-      sendAuthTelemetry({
-        scope: 'INVITE',
-        flow: 'BOT_HANDOFF',
-        event: 'login_start',
-        path: redirectTo,
-      });
-      const handoff = await api.startTelegramHandoff('USER', redirectTo);
-      window.location.assign(handoff.botUrl);
-    };
-    void run();
-  };
+  // Note: login from invite is now routed through the unified /login screen
+  // (with ?next=/invite/<id>) so the user can pick Yandex or Telegram, see
+  // continuity if already signed in, etc. The old inline Telegram-only
+  // handoff was a parallel auth path — removed in favour of one source of
+  // truth for provider choice.
 
   const handleAccept = async () => {
     if (!inviteId) return;
@@ -179,13 +169,13 @@ export const InviteView: React.FC = () => {
         )}
 
         {!isAuthenticated ? (
-          <button
-            onClick={handleLogin}
-            className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+          <Link
+            to={`/login?next=${encodeURIComponent(`/invite/${inviteId}`)}`}
+            className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-pb-primary/90 transition-colors"
           >
             <LogIn size={18} />
-            Войти через Telegram
-          </button>
+            Войти и принять приглашение
+          </Link>
         ) : (
           <button
             onClick={handleAccept}
