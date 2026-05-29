@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
-import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, X, Lock, Camera, MessageCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, X, Lock, Camera, MessageCircle, Shield, ArrowRight } from 'lucide-react';
 import { ProfileIdentities } from '../components/ProfileIdentities';
 
 interface ProfileViewProps {
@@ -11,16 +11,25 @@ interface ProfileViewProps {
   onCopyLink: () => void;
   onShareLink: () => void;
   onDownloadICS: () => void;
+  /**
+   * True when the current user is allowlisted as a platform owner.
+   * Renders the "Платформа админа" entry-point card.
+   */
+  canEnterAdmin?: boolean;
+  /** Called when the admin-entry card is tapped. */
+  onEnterAdmin?: () => void;
 }
 
-export const ProfileView: React.FC<ProfileViewProps> = ({ 
-  user, 
-  onUpdateUser, 
+export const ProfileView: React.FC<ProfileViewProps> = ({
+  user,
+  onUpdateUser,
   onLogout,
   calendarLink,
   onCopyLink,
   onShareLink,
-  onDownloadICS
+  onDownloadICS,
+  canEnterAdmin = false,
+  onEnterAdmin,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...user, password: '' });
@@ -123,6 +132,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       <ProfileIdentities />
+
+      {/* Entry point to the Platform Admin Console — visible only for
+          allowlist-eligible users (owners). Hidden for regular players /
+          captains because they have no PLATFORM scope on the backend
+          anyway, so the link would lead to a permission error. */}
+      {canEnterAdmin && (
+        <button
+          onClick={() => onEnterAdmin?.()}
+          className="w-full bg-pb-surface border border-pb-primary/40 rounded-2xl p-4 flex items-center justify-between hover:bg-pb-primary/5 transition-colors active:scale-[0.99] text-left"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-pb-primary/15 flex items-center justify-center flex-shrink-0">
+              <Shield size={22} className="text-pb-primary" strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-white font-bold text-sm">Платформа админа</div>
+              <div className="text-pb-subtext text-xs truncate">Управление командами, события, биллинг</div>
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-pb-primary flex-shrink-0" />
+        </button>
+      )}
 
       <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-4">
           <h3 className="text-white font-bold flex items-center">

@@ -33,6 +33,10 @@ const App: React.FC = () => {
   const [authBootstrapDone, setAuthBootstrapDone] = useState(false);
   const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM' | 'ADMIN_MODE'>('READY');
   const [onboardingRequired, setOnboardingRequired] = useState(false);
+  // Tracks whether the current session's user is allowlisted to enter the
+  // Platform Admin Console. Drives the "Платформа админа" entry-point in
+  // ProfileView so owners have a 1-tap path into /admin from /app.
+  const [canEnterAdmin, setCanEnterAdmin] = useState(false);
   
   // Data State
   const [user, setUser] = useState<User | null>(null);
@@ -294,6 +298,7 @@ const App: React.FC = () => {
         if (!payload?.authenticated || cancelled) return;
         clearLogoutGuard();
         setOnboardingRequired(Boolean(payload.onboardingRequired));
+        setCanEnterAdmin(Boolean(payload.canChooseAdminRole));
 
         if (payload?.user) {
           setUser((prev) => {
@@ -888,7 +893,7 @@ const App: React.FC = () => {
         );
       case 'PROFILE':
         return (
-          <ProfileView 
+          <ProfileView
             user={user!}
             onUpdateUser={() => {}}
             onLogout={handleLogout}
@@ -896,6 +901,8 @@ const App: React.FC = () => {
             onCopyLink={handleCopyIcsLink}
             onShareLink={handleShareIcsLink}
             onDownloadICS={handleDownloadIcs}
+            canEnterAdmin={canEnterAdmin}
+            onEnterAdmin={() => navigate('/admin')}
           />
         );
       case 'CREATE':

@@ -177,6 +177,25 @@ export const AdminConsoleView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-elevate allowlist users to PLATFORM mode on /admin entry.
+  // Background: a user who came in via Yandex from /login (without
+  // ?next=/admin) gets session.entryRole=undefined → adminScope=TEAM
+  // (because of their captainship). They land in /admin but see the
+  // captain's view of their own team, with no "Create team" card.
+  // Forcing selectAccountRole('ADMIN') here removes the manual click
+  // and matches what the user expects when they navigate to /admin:
+  // "I'm the owner, give me owner tools."
+  const [hasAutoElevated, setHasAutoElevated] = useState(false);
+  useEffect(() => {
+    if (hasAutoElevated) return;
+    if (!me?.canChooseAdminRole) return;
+    if (me.accountRole === 'ADMIN') return;
+    if (adminScopeLabel === 'PLATFORM') return;
+    setHasAutoElevated(true);
+    void handleSwitchToOwnerMode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.canChooseAdminRole, me?.accountRole, adminScopeLabel, hasAutoElevated]);
+
   const overviewMetrics = useMemo(() => {
     if (!overview) return null;
     return [
