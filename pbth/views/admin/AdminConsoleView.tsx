@@ -118,7 +118,7 @@ export const AdminConsoleView: React.FC = () => {
   const loadAuth = async () => {
     const auth = await api.getAuthMe();
     if (!auth.authenticated) {
-      navigate('/admin/login', { replace: true });
+      navigate('/login?next=/admin', { replace: true });
       return null;
     }
     if (auth.adminScope === 'NONE') {
@@ -203,7 +203,7 @@ export const AdminConsoleView: React.FC = () => {
       headers: { 'content-type': 'application/json' },
       body: '{}',
     }).catch(() => undefined);
-    navigate('/admin/login', { replace: true });
+    navigate('/login?next=/admin', { replace: true });
   };
 
   const [switchingToOwner, setSwitchingToOwner] = useState(false);
@@ -433,7 +433,7 @@ export const AdminConsoleView: React.FC = () => {
             Текущая сессия не имеет `adminScope`.
           </p>
           <button
-            onClick={() => navigate('/admin/login', { replace: true })}
+            onClick={() => navigate('/login?next=/admin', { replace: true })}
             className="bg-pb-primary text-pb-background px-4 py-2 rounded-xl font-semibold"
           >
             Перейти ко входу
@@ -448,9 +448,13 @@ export const AdminConsoleView: React.FC = () => {
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-pb-surface border border-white/10 rounded-2xl p-4 flex flex-wrap items-center gap-3 justify-between">
           <div>
-            <h1 className="text-xl font-bold">Admin Console v1</h1>
+            <h1 className="text-xl font-bold">Admin Console</h1>
             <p className="text-sm text-pb-subtext">
-              scope: {adminScopeLabel} · auth: {me.authMethod || 'unknown'}
+              {adminScopeLabel === 'PLATFORM'
+                ? 'Режим владельца платформы'
+                : adminScopeLabel === 'TEAM'
+                  ? 'Режим капитана команды'
+                  : 'Без админ-доступа'}
             </p>
           </div>
           <div className="flex gap-2">
