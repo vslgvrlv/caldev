@@ -4,11 +4,13 @@ process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "123:dummy";
 process.env.TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || "dummy_bot";
 process.env.TELEGRAM_CALLBACK_URL =
   process.env.TELEGRAM_CALLBACK_URL || "http://127.0.0.1:8000/api/v1/auth/telegram/callback";
-// Seed admin allowlist with a known telegram_id used by the cross-provider
+// Seed admin allowlist with the telegram_ids used by the cross-provider
 // allowlist tests below. Tests that rely on the empty allowlist (e.g. the
 // "non-allowlisted user is locked to USER" cases) use telegram_ids outside
-// this set.
-process.env.ADMIN_ROLE_ALLOWLIST_IDS = process.env.ADMIN_ROLE_ALLOWLIST_IDS || "920100";
+// this set. Multiple ids are listed up-front because env.ts reads
+// ADMIN_ROLE_ALLOWLIST_IDS once at import time — mutating it later in a
+// test has no effect.
+process.env.ADMIN_ROLE_ALLOWLIST_IDS = process.env.ADMIN_ROLE_ALLOWLIST_IDS || "920100,920102";
 
 let pool: typeof import("../../db/pool.js").pool;
 let mod: typeof import("../../lib/oauth-login.js");
@@ -308,12 +310,9 @@ describe("completeOAuthLogin parity", () => {
     // /login (redirectTo=/app) lands in USER-eligible state with entryRole
     // intentionally unset, so they can still play as a regular user and
     // separately flip to ADMIN via /admin/login → "Включить режим владельца".
+    // telegramId is seeded into ADMIN_ROLE_ALLOWLIST_IDS at file top.
     const telegramId = 920102;
     cleanup.push(telegramId);
-    process.env.ADMIN_ROLE_ALLOWLIST_IDS = `920100,${telegramId}`;
-    // Re-import env to pick up updated allowlist for this isolated case.
-    // Note: completeOAuthLogin reads env lazily through canChooseAdminRole, so
-    // mutating process.env in-place is enough for this test.
     {
       const { req, res } = makeReqRes();
       await mod.completeOAuthLogin(req, res, {
