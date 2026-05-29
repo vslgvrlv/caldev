@@ -5,6 +5,12 @@ export function sortEventsByStart(events: Event[]): Event[] {
   return [...events].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 }
 
+// #60: показывать одно-тапный «Иду на серию» только для занятий серии,
+// на которые игрок ещё не согласился. Уже согласившиеся занятия не нудят.
+export function canCommitToSeries(event: Pick<Event, "seriesId" | "seriesCommitted">): boolean {
+  return Boolean(event.seriesId) && event.seriesCommitted === false;
+}
+
 export function getEventEndTimestamp(event: Event): number {
   if (event.endDate instanceof Date) return event.endDate.getTime();
   if (event.endAt) {

@@ -91,6 +91,16 @@ describe("telegram bot handoff auth helpers", () => {
     expect(isTrustedAdminAuthMethod(undefined)).toBe(false);
   });
 
+  it("does NOT grant trusted admin status to YANDEX_OAUTH or other non-Telegram providers", () => {
+    // Even if a user has account_role='ADMIN' historically, a session
+    // established via Yandex (or VK / future providers) must not pass the
+    // admin gate. ADMIN is gated to Telegram-trusted methods only.
+    expect(isTrustedAdminAuthMethod("YANDEX_OAUTH")).toBe(false);
+    expect(isTrustedAdminAuthMethod("LEGACY_WIDGET")).toBe(false);
+    expect(isTrustedAdminAuthMethod("DEV")).toBe(false);
+    expect(isTrustedAdminAuthMethod(undefined)).toBe(false);
+  });
+
   it("requires soft onboarding only for first-login handoff users without completion timestamp", () => {
     expect(resolveOnboardingRequired({ onboardingCompletedAt: null, wasAutoCreated: true })).toBe(true);
     expect(resolveOnboardingRequired({ onboardingCompletedAt: "2026-03-17T10:00:00.000Z", wasAutoCreated: true })).toBe(

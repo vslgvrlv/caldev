@@ -581,6 +581,20 @@ const App: React.FC = () => {
     await api.rsvp(id, user.id, status);
   };
 
+  // #60: «Иду на серию» одним тапом из списка. После согласия фид перестаёт
+  // показывать каждое занятие серии как «требует ответа».
+  const handleCommitSeries = async (seriesId: string) => {
+    await api.commitSeries(seriesId);
+    await loadData({ silent: true });
+  };
+
+  // #61: удалить событие (scope single — серия сохраняется). Капитан/штаб.
+  const handleDeleteEvent = async (eventId: string, scope: 'single' | 'future') => {
+    await api.deleteEvent(eventId, scope);
+    setEvents((prev) => prev.filter((e) => e.id !== eventId));
+    setSelectedEvent((prev) => (prev && prev.id === eventId ? null : prev));
+  };
+
   const handleCreateEvent = async (eventData: any) => {
     if (!activeTeam) return;
 
@@ -612,6 +626,7 @@ const App: React.FC = () => {
         startDate,
         location: normalizedLocation || undefined,
         cost: normalizedCost,
+        recurrence: eventData.recurrence,
       });
 
       if (response?.event) {
@@ -813,8 +828,8 @@ const App: React.FC = () => {
 
     if (selectedEvent) {
       return (
-        <EventDetailView 
-          event={selectedEvent} 
+        <EventDetailView
+          event={selectedEvent}
           currentUserRole={selectedEvent.viewerRole || activeTeam!.role}
           onBack={() => setSelectedEvent(null)}
           onRsvp={handleRsvp}
@@ -822,6 +837,7 @@ const App: React.FC = () => {
           onUpdateGame={handleUpdateGame}
           onAttendeeClick={handleAttendeeClick}
           onSendEventReminder={handleSendEventReminder}
+          onDeleteEvent={handleDeleteEvent}
         />
       );
     }
@@ -829,21 +845,23 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'DASHBOARD':
         return (
-          <Dashboard 
+          <Dashboard
             user={user!}
             activeTeam={activeTeam!}
             events={events}
             onRsvp={handleRsvp}
             onEventClick={handleEventClick}
             onEventLongPress={handleEventLongPress}
+            onCommitSeries={handleCommitSeries}
           />
         );
       case 'CALENDAR':
         return (
-          <CalendarView 
-            events={events} 
+          <CalendarView
+            events={events}
             onEventClick={handleEventClick}
             onEventLongPress={handleEventLongPress}
+            onCommitSeries={handleCommitSeries}
           />
         );
       case 'FINANCE':

@@ -220,7 +220,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
               {authError}
             </div>
           )}
-          <button 
+          {(import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
+            <button
+              onClick={() => { window.location.assign('/api/v1/auth/yandex/start?redirectTo=/app'); }}
+              disabled={isLoading}
+              className="w-full mb-3 bg-[#FFCC00] hover:bg-[#FFB800] text-black font-bold py-4 rounded-xl flex items-center justify-center space-x-3 transition-all active:scale-95 shadow-lg shadow-[#FFCC00]/30"
+            >
+              <span className="text-2xl leading-none">Я</span>
+              <span>Войти через Яндекс</span>
+            </button>
+          )}
+          <button
             onClick={handleTelegramLogin}
             disabled={isLoading}
             className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-4 rounded-xl flex items-center justify-center space-x-3 transition-all active:scale-95 shadow-lg shadow-[#24A1DE]/30"

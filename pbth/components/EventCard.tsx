@@ -4,6 +4,7 @@ import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
 import { MapPin, Clock, AlertTriangle, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { canCommitToSeries } from '../lib/events';
 
 interface EventCardProps {
   event: Event;
@@ -11,9 +12,10 @@ interface EventCardProps {
   onRsvp?: (id: string, status: RSVPStatus) => void;
   onClick?: (event: Event) => void;
   onLongPress?: (event: Event) => void;
+  onCommitSeries?: (seriesId: string) => void;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, onRsvp, onClick, onLongPress }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, onRsvp, onClick, onLongPress, onCommitSeries }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,14 +116,14 @@ export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, on
         {/* Action Buttons for Pending - stopPropagation needed to not trigger card click */}
         {!compact && (event.rsvpStatus === RSVPStatus.PENDING || event.rsvpStatus === RSVPStatus.UNANSWERED) && (
           <div className="flex gap-2 mt-2 border-t border-white/10 pt-3">
-             <button 
+             <button
                 onPointerDown={(e) => e.stopPropagation()} // Stop long press propagation
                 onClick={(e) => { e.stopPropagation(); onRsvp?.(event.id, RSVPStatus.CONFIRMED); }}
                 className="flex-1 bg-white/5 hover:bg-pb-primary/20 text-pb-primary py-2 rounded-xl text-sm font-semibold transition-colors z-10"
              >
                Иду
              </button>
-             <button 
+             <button
                 onPointerDown={(e) => e.stopPropagation()} // Stop long press propagation
                 onClick={(e) => { e.stopPropagation(); onRsvp?.(event.id, RSVPStatus.DECLINED); }}
                 className="flex-1 bg-white/5 hover:bg-pb-danger/20 text-pb-danger py-2 rounded-xl text-sm font-semibold transition-colors z-10"
@@ -129,6 +131,17 @@ export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, on
                Не иду
              </button>
           </div>
+        )}
+
+        {/* One-tap "going to the whole series" — for occurrences in a series the player hasn't joined yet */}
+        {onCommitSeries && canCommitToSeries(event) && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()} // Stop long press propagation
+            onClick={(e) => { e.stopPropagation(); onCommitSeries(event.seriesId!); }}
+            className="w-full mt-3 bg-pb-primary text-pb-background py-2.5 rounded-xl text-sm font-bold transition-colors active:scale-[0.98] z-10"
+          >
+            Иду на серию
+          </button>
         )}
       </div>
     </div>

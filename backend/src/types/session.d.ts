@@ -6,6 +6,6 @@ declare module "express-session" {
     entryRole?: "ADMIN" | "USER";
     activeMembershipId?: string;
     activeTeamId?: string;
-    authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF";
+    authMethod?: "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "YANDEX_OAUTH";
   }
 }
