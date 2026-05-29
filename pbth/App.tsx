@@ -298,7 +298,14 @@ const App: React.FC = () => {
         if (!payload?.authenticated || cancelled) return;
         clearLogoutGuard();
         setOnboardingRequired(Boolean(payload.onboardingRequired));
-        setCanEnterAdmin(Boolean(payload.canChooseAdminRole));
+        // canEnterAdmin gates the ProfileView "Платформа админа" tile.
+        // We require both allowlist eligibility AND a non-NONE adminScope —
+        // otherwise the tile would be visible to Mini App (WEBAPP) owners
+        // whose authMethod is untrusted for admin, leading them into a
+        // dead-end /admin → /login → /app loop.
+        setCanEnterAdmin(
+          Boolean(payload.canChooseAdminRole) && payload.adminScope !== 'NONE',
+        );
 
         if (payload?.user) {
           setUser((prev) => {
@@ -315,6 +322,27 @@ const App: React.FC = () => {
           });
         }
 
+        const currentPath = window.location.pathname;
+        const wantsAdminPath = currentPath.startsWith('/admin');
+        const wantsInvitePath = currentPath.startsWith('/invite/');
+
+        // PATH-RESPECTING BOOTSTRAP.
+        // If the user is already on /admin or /invite (full reload, paste-URL,
+        // back-button), do NOT funnel them through tryEnterUserApp. That helper
+        // forces a selectAccountRole('USER') on allowlist owners with
+        // accountRole==='ADMIN' (App.tsx:227-255), which silently demotes the
+        // session and bounces them to /app. AdminConsoleView / InviteView own
+        // the further flow; we just mark auth-bootstrap done and let them
+        // render.
+        if (wantsAdminPath || wantsInvitePath) {
+          setAuthStep('APP');
+          // Bootstrap-time post-auth flag is irrelevant for explicit /admin
+          // and /invite entries — clear it so the next full reload doesn't
+          // surprise-redirect to /app.
+          sessionStorage.removeItem('pbth:post-auth-app');
+          return;
+        }
+
         const ok = await tryEnterUserApp({ silent: true });
         if (cancelled) return;
         if (!ok) {
@@ -325,12 +353,9 @@ const App: React.FC = () => {
         setAuthStep('APP');
 
         const postAuthRequested = sessionStorage.getItem('pbth:post-auth-app') === '1';
-        const currentPath = window.location.pathname;
         const isPublicEntryPath = currentPath === '/' || currentPath === '/login';
-        const isInvitePath = currentPath.startsWith('/invite/');
         const shouldOpenApp =
-          !isInvitePath &&
-          (postAuthRequested || isTelegramMiniApp() || isPublicEntryPath);
+          postAuthRequested || isTelegramMiniApp() || isPublicEntryPath;
 
         if (postAuthRequested) {
           sessionStorage.removeItem('pbth:post-auth-app');

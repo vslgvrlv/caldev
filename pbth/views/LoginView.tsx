@@ -114,14 +114,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   const handleContinueExisting = () => {
     if (!continuity) return;
     sessionStorage.setItem('pbth:post-auth-app', wantsAdmin ? '0' : '1');
-    onLogin();
-    // Smart routing: if /admin requested AND scope is admin-eligible, go to /admin;
-    // otherwise go to /app (regardless of next, because session is for player by default).
+
+    // Smart routing: if /admin requested AND scope is admin-eligible, go to
+    // /admin. Critically, we DO NOT call onLogin() (=handleLogin in App.tsx)
+    // for the admin path. handleLogin → tryEnterUserApp → selectRole('USER')
+    // would demote the just-elevated ADMIN session back to USER and bounce to
+    // /app. AdminConsoleView's own bootstrap owns the admin entry flow.
     if (wantsAdmin && continuity.adminScope && continuity.adminScope !== 'NONE') {
       navigate('/admin', { replace: true });
-    } else {
-      navigate(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect, { replace: true });
+      return;
     }
+
+    onLogin();
+    navigate(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect, { replace: true });
   };
 
   const handleSwitchAccount = async () => {
