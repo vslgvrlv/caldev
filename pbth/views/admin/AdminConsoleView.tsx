@@ -206,6 +206,20 @@ export const AdminConsoleView: React.FC = () => {
     navigate('/admin/login', { replace: true });
   };
 
+  const [switchingToOwner, setSwitchingToOwner] = useState(false);
+  const handleSwitchToOwnerMode = async () => {
+    setSwitchingToOwner(true);
+    setError('');
+    try {
+      await api.selectAccountRole('ADMIN');
+      await loadData(selectedTeamId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to switch to owner mode');
+    } finally {
+      setSwitchingToOwner(false);
+    }
+  };
+
   const handleCreateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = teamName.trim();
@@ -458,6 +472,23 @@ export const AdminConsoleView: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {me.canChooseAdminRole && me.accountRole !== 'ADMIN' && adminScopeLabel !== 'PLATFORM' && (
+          <div className="rounded-2xl border border-pb-primary/40 bg-pb-primary/10 px-4 py-3 text-sm text-pb-primary flex flex-wrap items-center gap-3 justify-between">
+            <span>
+              Сейчас ты в режиме капитана. Чтобы создавать команды и видеть всю платформу — включи режим владельца.
+            </span>
+            <button
+              onClick={() => {
+                void handleSwitchToOwnerMode();
+              }}
+              disabled={switchingToOwner}
+              className="px-3 py-2 rounded-xl bg-pb-primary text-pb-background font-semibold disabled:opacity-60"
+            >
+              {switchingToOwner ? 'Включаем...' : 'Включить режим владельца'}
+            </button>
+          </div>
+        )}
 
         {me.onboardingRequired && (
           <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">

@@ -225,13 +225,13 @@ export const AdminLoginView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold">PBTH Admin Console</h1>
-            <p className="text-pb-subtext text-sm">Вход через Telegram Mini App или через бота из браузера</p>
+            <p className="text-pb-subtext text-sm">Вход через Яндекс с десктопа или через Telegram-бот</p>
           </div>
         </div>
 
         {error && (
           <div className="mb-4 text-sm bg-red-500/10 text-red-300 border border-red-500/30 rounded-xl p-3">
-            Ошибка проверки сессии: {error}
+            {error}
           </div>
         )}
 
@@ -243,7 +243,19 @@ export const AdminLoginView: React.FC = () => {
             disabled={switchingRole}
             className="w-full mb-3 bg-pb-primary text-pb-background font-bold py-3 rounded-xl disabled:opacity-60"
           >
-            {switchingRole ? 'Переключаем роль...' : 'Переключить роль на ADMIN'}
+            {switchingRole ? 'Включаем режим владельца...' : 'Включить режим владельца'}
+          </button>
+        )}
+
+        {(import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
+          <button
+            onClick={() => {
+              window.location.assign('/api/v1/auth/yandex/start?redirectTo=/admin');
+            }}
+            className="w-full mb-3 bg-[#FFCC00] hover:bg-[#FFB800] text-black font-bold py-3 rounded-xl flex items-center justify-center gap-3"
+          >
+            <span className="text-xl leading-none">Я</span>
+            <span>Войти в Admin через Яндекс</span>
           </button>
         )}
 

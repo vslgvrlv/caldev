@@ -75,6 +75,13 @@ yandexRouter.get(
     try {
       const token = await exchangeYandexCode({ code: parsed.data.code, redirectUri: env.yandexOAuth.redirectUri });
       const info = await fetchYandexUserInfo(token.access_token);
+      // If the user arrived via /admin/login (redirectTo starts with /admin),
+      // ask completeOAuthLogin to land them in ADMIN entryRole. The helper
+      // throws ADMIN_SCOPE_NONE when the linked telegram_id is not in the
+      // allowlist; we catch and redirect with the matching error code so the
+      // login screen can render a human-readable message.
+      const wantsAdminEntry =
+        typeof stateRow.redirectTo === "string" && stateRow.redirectTo.startsWith("/admin");
       const result = await completeOAuthLogin(req, res, {
         provider: "yandex",
         profile: {
@@ -87,6 +94,7 @@ yandexRouter.get(
           avatarUrl: info.avatarUrl,
         },
         authMethod: "YANDEX_OAUTH",
+        ...(wantsAdminEntry ? { entryRoleOverride: "ADMIN" as const } : {}),
       });
       if (!result) {
         recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "NO_ACCOUNT" });
@@ -95,7 +103,15 @@ yandexRouter.get(
       recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "SUCCESS" });
       return res.redirect(302, stateRow.redirectTo);
     } catch (err) {
-      logger.warn("[yandex] callback failed", { err: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "ADMIN_SCOPE_NONE") {
+        // User is not in the admin allowlist — bounce back to /admin/login
+        // with the matching code so AdminLoginView renders the right message.
+        logger.info("[yandex] admin entry denied", { code: "ADMIN_SCOPE_NONE" });
+        recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "ADMIN_SCOPE_NONE" });
+        return res.redirect(302, `/admin/login?auth_error=ADMIN_SCOPE_NONE`);
+      }
+      logger.warn("[yandex] callback failed", { err: message });
       recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "CALLBACK_EXCEPTION" });
       return res.redirect(302, `/login?auth_error=OAUTH_STATE_INVALID`);
     }
