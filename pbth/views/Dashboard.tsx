@@ -1,13 +1,15 @@
 import React from 'react';
-import { User, Event, Team, RSVPStatus } from '../types';
+import { User, Event, Team, RSVPStatus, TeamContext } from '../types';
 import { EventCard } from '../components/EventCard';
-import { Bell, ChevronDown } from 'lucide-react';
+import { Bell, ChevronDown, Check } from 'lucide-react';
 import { EVENT_COLORS, EVENT_LABELS } from '../constants';
 import { buildDashboardEventSections, getCountdownParts, getEventEndTimestamp } from '../lib/events';
 
 interface DashboardProps {
   user: User;
   activeTeam: Team;
+  teams: TeamContext[];
+  onSwitchTeam: (membershipId: string) => void;
   events: Event[];
   onRsvp: (id: string, status: RSVPStatus) => void;
   onEventClick: (event: Event) => void;
@@ -15,8 +17,10 @@ interface DashboardProps {
   onCommitSeries: (seriesId: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, onSwitchTeam, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
   const [nowTs, setNowTs] = React.useState(() => Date.now());
+  const [teamMenuOpen, setTeamMenuOpen] = React.useState(false);
+  const hasMultipleTeams = teams.length > 1;
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNowTs(Date.now()), 1000);
@@ -51,15 +55,57 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, events, 
                className="w-full h-full rounded-full object-cover border-2 border-pb-background"
              />
           </div>
-          <div>
-            <div className="flex items-center space-x-1 text-pb-subtext text-xs uppercase tracking-wide">
-              <span>{activeTeam.shortCode}</span>
-              <span className="w-1 h-1 bg-pb-primary rounded-full"></span>
-              <span>{activeTeam.role}</span>
-            </div>
-            <div className="flex items-center text-white font-bold text-lg">
-              {activeTeam.name} <ChevronDown size={16} className="ml-1 text-pb-subtext" />
-            </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => hasMultipleTeams && setTeamMenuOpen((v) => !v)}
+              className="text-left"
+              aria-haspopup={hasMultipleTeams}
+              aria-expanded={teamMenuOpen}
+            >
+              <div className="flex items-center space-x-1 text-pb-subtext text-xs uppercase tracking-wide">
+                <span>{activeTeam.shortCode}</span>
+                <span className="w-1 h-1 bg-pb-primary rounded-full"></span>
+                <span>{activeTeam.role}</span>
+              </div>
+              <div className="flex items-center text-white font-bold text-lg">
+                {activeTeam.name}
+                {hasMultipleTeams && (
+                  <ChevronDown
+                    size={16}
+                    className={`ml-1 text-pb-subtext transition-transform ${teamMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                )}
+              </div>
+            </button>
+
+            {teamMenuOpen && hasMultipleTeams && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setTeamMenuOpen(false)} />
+                <div className="absolute left-0 top-full mt-2 z-40 w-60 rounded-xl bg-pb-surface border border-white/10 shadow-xl overflow-hidden">
+                  {teams.map((t) => {
+                    const isActive = t.teamId === activeTeam.id;
+                    return (
+                      <button
+                        key={t.membershipId}
+                        type="button"
+                        onClick={() => {
+                          setTeamMenuOpen(false);
+                          if (!isActive) onSwitchTeam(t.membershipId);
+                        }}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors ${isActive ? 'bg-white/5' : ''}`}
+                      >
+                        <div>
+                          <div className="text-white font-semibold text-sm">{t.teamName}</div>
+                          <div className="text-pb-subtext text-[11px] uppercase tracking-wide">{t.role}</div>
+                        </div>
+                        {isActive && <Check size={16} className="text-pb-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
         <button className="relative p-2 rounded-full bg-pb-surface hover:bg-white/10">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LandingView } from './views/LandingView';
-import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game } from './types';
+import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game, TeamContext } from './types';
 import { BottomNav } from './components/BottomNav';
 import { Dashboard } from './views/Dashboard';
 import { CalendarView } from './views/CalendarView';
@@ -41,6 +41,7 @@ const App: React.FC = () => {
   // Data State
   const [user, setUser] = useState<User | null>(null);
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+  const [teams, setTeams] = useState<TeamContext[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -124,6 +125,7 @@ const App: React.FC = () => {
 
         setUser(data.user);
         setActiveTeam(data.team);
+        setTeams(data.teams || []);
         setEvents(data.events || []);
         setMembers(data.members || []);
         setTransactions(data.transactions || []);
@@ -411,6 +413,7 @@ const App: React.FC = () => {
     setCurrentView('DASHBOARD');
     setUser(null);
     setActiveTeam(null);
+    setTeams([]);
     setEvents([]);
     setMembers([]);
     setTransactions([]);
@@ -697,6 +700,18 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSwitchTeam = async (membershipId: string) => {
+    const target = teams.find((t) => t.membershipId === membershipId);
+    if (!target || target.teamId === activeTeam?.id) return;
+    try {
+      await api.switchTeamContext(membershipId);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to switch team', err);
+      alert('Не удалось переключить команду. Попробуйте еще раз.');
+    }
+  };
+
   const handleEventClick = (event: Event) => setSelectedEvent(event);
   const handleEventLongPress = (event: Event) => {
     setRsvpModalEvent(event);
@@ -877,6 +892,8 @@ const App: React.FC = () => {
           <Dashboard
             user={user!}
             activeTeam={activeTeam!}
+            teams={teams}
+            onSwitchTeam={handleSwitchTeam}
             events={events}
             onRsvp={handleRsvp}
             onEventClick={handleEventClick}
