@@ -180,7 +180,7 @@ const App: React.FC = () => {
 
         try {
           const ics = await api.getIcs(data.team.id);
-          setCalendarLink(ics.url);
+          setCalendarLink(ics.subscriptionUrl || ics.url);
         } catch (icsErr) {
           console.warn('ICS bootstrap failed', icsErr);
           setCalendarLink('');
