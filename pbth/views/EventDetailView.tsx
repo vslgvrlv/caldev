@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
-import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2 } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { api, type FinanceEventDetailResponse, type SeriesContextResponse } from '../api';
@@ -43,6 +43,8 @@ interface EventDetailViewProps {
   ) => void;
   /** #61: удалить это занятие (scope single — серия сохраняется). Капитан/штаб. */
   onDeleteEvent?: (eventId: string, scope: 'single' | 'future') => Promise<void>;
+  /** Изменить дату/время события (scope single). Капитан/штаб (тренер — тренировки/собрания). */
+  onEditTime?: (eventId: string, startISO: string, endISO: string) => Promise<void>;
 }
 
 const PIT_ZONE_LABELS: Record<'NEAR' | 'FAR', string> = {
@@ -80,6 +82,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   onSendEventReminder,
   onAttendeeClick,
   onDeleteEvent,
+  onEditTime,
 }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
@@ -108,6 +111,12 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isSeriesBusy, setIsSeriesBusy] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  // Редактирование времени события: модалка с дата/начало/конец.
+  const [isEditTimeOpen, setIsEditTimeOpen] = useState(false);
+  const [isSavingTime, setIsSavingTime] = useState(false);
+  const [editDate, setEditDate] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
   // #62: фактическая явка (был/не был). draft = текущее состояние тумблеров.
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [attendanceDraft, setAttendanceDraft] = useState<Record<string, boolean>>({});
@@ -135,6 +144,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const isTrainerManageableType = event.type === EventType.TRAINING || event.type === EventType.MEETING;
   const canDeleteEvent =
     Boolean(onDeleteEvent) &&
+    (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
+  const canEditEvent =
+    Boolean(onEditTime) &&
     (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
   // #62: явку отмечает капитан/штаб; тренер — только тренировки/собрания (как на бэкенде).
   const canManageAttendance = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
@@ -287,6 +299,47 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       alert(`Не удалось удалить событие: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setIsDeletingEvent(false);
+    }
+  };
+
+  // Открыть модалку времени: префилл локальной датой/временем из start/end события.
+  const openEditTime = () => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = event.startDate;
+    const end = event.endDate instanceof Date ? event.endDate : event.endAt ? new Date(event.endAt) : null;
+    setEditDate(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`);
+    setEditStartTime(`${pad(start.getHours())}:${pad(start.getMinutes())}`);
+    // Конца нет — по умолчанию +2 часа от старта (как в backend default).
+    const endRef = end ?? new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    setEditEndTime(`${pad(endRef.getHours())}:${pad(endRef.getMinutes())}`);
+    setIsEditTimeOpen(true);
+  };
+
+  const handleSaveTime = async () => {
+    if (!onEditTime) return;
+    if (!editDate || !editStartTime || !editEndTime) {
+      alert('Заполните дату, время начала и окончания');
+      return;
+    }
+    const start = new Date(`${editDate}T${editStartTime}`);
+    const end = new Date(`${editDate}T${editEndTime}`);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      alert('Некорректные дата или время');
+      return;
+    }
+    if (end.getTime() <= start.getTime()) {
+      alert('Окончание должно быть позже начала');
+      return;
+    }
+    setIsSavingTime(true);
+    try {
+      await onEditTime(event.id, start.toISOString(), end.toISOString());
+      setIsEditTimeOpen(false);
+    } catch (error) {
+      console.error('Failed to update event time', error);
+      alert(`Не удалось изменить время: ${error instanceof Error ? error.message : 'unknown error'}`);
+    } finally {
+      setIsSavingTime(false);
     }
   };
 
@@ -713,7 +766,27 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             <h1 className="text-2xl font-black text-white leading-tight mb-2">{event.title}</h1>
             <div className="flex items-center text-pb-subtext">
               <Clock size={16} className="mr-2 text-pb-primary" />
-              <span className="text-lg">{format(event.startDate, 'd MMMM yyyy, HH:mm', { locale: ru })}</span>
+              <span className="text-lg">
+                {format(event.startDate, 'd MMMM yyyy, HH:mm', { locale: ru })}
+                {(() => {
+                  const end = event.endDate instanceof Date ? event.endDate : event.endAt ? new Date(event.endAt) : null;
+                  if (!end || isNaN(end.getTime())) return null;
+                  const sameDay =
+                    end.getFullYear() === event.startDate.getFullYear() &&
+                    end.getMonth() === event.startDate.getMonth() &&
+                    end.getDate() === event.startDate.getDate();
+                  return ` – ${format(end, sameDay ? 'HH:mm' : 'd MMM, HH:mm', { locale: ru })}`;
+                })()}
+              </span>
+              {canEditEvent && (
+                <button
+                  onClick={openEditTime}
+                  className="ml-2 p-1.5 -my-1 rounded-lg text-pb-subtext hover:text-pb-primary hover:bg-white/5 transition-colors"
+                  aria-label="Изменить время"
+                >
+                  <Pencil size={16} />
+                </button>
+              )}
             </div>
             {event.teamTimezone && (
               <div className="mt-2 inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-pb-subtext">
@@ -1344,6 +1417,69 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 className="flex-1 py-3 rounded-xl bg-pb-danger text-white font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
               >
                 {isDeletingEvent ? 'Удаляем…' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditTimeOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsEditTimeOpen(false)}></div>
+          <div className="relative w-full max-w-sm bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
+            <h3 className="text-lg font-bold text-white mb-1">Изменить время</h3>
+            <p className="text-sm text-pb-subtext mb-5">
+              {isSeriesOccurrence
+                ? 'Изменится только это занятие серии.'
+                : 'Новое время увидит вся команда.'}
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Дата</label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Начало</label>
+                  <input
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                  />
+                </div>
+                <div>
+                  <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Окончание</label>
+                  <input
+                    type="time"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => setIsEditTimeOpen(false)}
+                disabled={isSavingTime}
+                className="flex-1 py-3 rounded-xl bg-white/5 text-pb-subtext hover:text-white transition-colors disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTime}
+                disabled={isSavingTime}
+                className="flex-1 py-3 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60"
+              >
+                {isSavingTime ? 'Сохраняем…' : 'Сохранить'}
               </button>
             </div>
           </div>
