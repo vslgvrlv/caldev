@@ -627,6 +627,17 @@ const App: React.FC = () => {
     setSelectedEvent((prev) => (prev && prev.id === eventId ? null : prev));
   };
 
+  // Изменить дату/время события (scope single). Капитан/штаб/админ — гейт на бэкенде.
+  const handleEditEventTime = async (eventId: string, startISO: string, endISO: string) => {
+    await api.updateEventTime(eventId, startISO, endISO);
+    const start = new Date(startISO);
+    const end = new Date(endISO);
+    const apply = (ev: Event): Event => ({ ...ev, startAt: startISO, endAt: endISO, startDate: start, endDate: end });
+    setEvents((prev) => prev.map((e) => (e.id === eventId ? apply(e) : e)));
+    setSelectedEvent((prev) => (prev && prev.id === eventId ? apply(prev) : prev));
+    await loadData({ silent: true });
+  };
+
   const handleCreateEvent = async (eventData: any) => {
     if (!activeTeam) return;
 
@@ -881,6 +892,7 @@ const App: React.FC = () => {
           onUpdateGame={handleUpdateGame}
           onAttendeeClick={handleAttendeeClick}
           onSendEventReminder={handleSendEventReminder}
+          onEditTime={handleEditEventTime}
           onDeleteEvent={handleDeleteEvent}
         />
       );

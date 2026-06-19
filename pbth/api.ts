@@ -657,6 +657,15 @@ export const api = {
     });
   },
 
+  // Изменить дату/время события (scope single). Бэкенд PATCH /events/:id умеет
+  // менять start/end; роль проверяется на сервере (капитан/штаб/админ).
+  async updateEventTime(eventId: string, startAt: string, endAt: string) {
+    return request(`/events/${eventId}`, {
+      method: 'PATCH',
+      body: { scope: 'single', startAt, endAt },
+    });
+  },
+
   // #61: удалить событие. scope 'single' — только это занятие (серия сохраняется),
   // scope 'future' — это и все будущие занятия серии.
   async deleteEvent(
