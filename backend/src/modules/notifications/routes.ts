@@ -420,7 +420,7 @@ notificationsRouter.post(
         `SELECT id, time_label, opponent, pit_zone::text, game_pair::text
          FROM event_games
          WHERE event_id = $1
-         ORDER BY time_label ASC`,
+         ORDER BY lpad(time_label, 5, '0') ASC`,
         [eventId]
       );
       if (!games.rowCount) {
