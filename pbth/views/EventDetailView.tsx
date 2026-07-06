@@ -469,7 +469,14 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     }
   };
 
-  const sortedSchedule = [...(event.schedule || [])].sort((a, b) => a.time.localeCompare(b.time));
+  // Хронологический порядок: time_label — свободный текст («8:00», «12:00»),
+  // localeCompare сортировал лексикографически и «8:00» уходил в конец после «16:00».
+  const timeToMinutes = (time: string) => {
+    const m = String(time).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return Number.MAX_SAFE_INTEGER;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  };
+  const sortedSchedule = [...(event.schedule || [])].sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
   const financeViewModel = financeDetail
     ? buildEventFinanceViewModel({
         currentUserRole,
@@ -929,7 +936,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                       onClick={() => openGameCard(game)}
                       className="w-full flex items-center relative z-0 group text-left"
                     >
-                      <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0">{game.time}</div>
+                      <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0">{normalizeTimeForInput(game.time) || game.time}</div>
 
                       <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
 

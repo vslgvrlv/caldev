@@ -763,7 +763,7 @@ adminRouter.get(
         `SELECT id, event_id, time_label, opponent, score, pit_zone::text, game_pair::text
          FROM event_games
          WHERE event_id = ANY($1::uuid[])
-         ORDER BY time_label ASC`,
+         ORDER BY lpad(time_label, 5, '0') ASC`,
         [eventIds]
       );
       for (const row of gamesResult.rows) {
