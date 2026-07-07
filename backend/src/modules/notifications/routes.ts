@@ -112,23 +112,49 @@ function formatLocationHtml(location?: string | null, locationUrl?: string | nul
   return escapedName;
 }
 
-function formatDateTime(dateIso: string, location?: string | null, locationUrl?: string | null) {
+// Дефолтная таймзона на случай, если у команды не проставлена (в приложении время
+// показывается в таймзоне команды, поэтому напоминание обязано считать так же).
+const DEFAULT_TEAM_TIMEZONE = "Europe/Moscow";
+
+function formatDateTime(
+  dateIso: string,
+  timeZone?: string | null,
+  location?: string | null,
+  locationUrl?: string | null
+) {
   const dt = new Date(dateIso);
-  const date = dt.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  const tz = (timeZone ?? "").trim() || DEFAULT_TEAM_TIMEZONE;
+  let date: string;
+  try {
+    // start_at хранится в UTC; рендерим в таймзоне команды, чтобы совпадало с UI.
+    date = dt.toLocaleString("ru-RU", {
+      timeZone: tz,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    // Некорректная таймзона в БД — не роняем напоминание, откатываемся на дефолт.
+    date = dt.toLocaleString("ru-RU", {
+      timeZone: DEFAULT_TEAM_TIMEZONE,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }
   const locationHtml = formatLocationHtml(location, locationUrl);
   return locationHtml ? `${date} • ${locationHtml}` : date;
 }
 
 function buildEventReminderText(params: {
   template: EventReminderTemplate;
-  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string; team_timezone: string | null };
   game?: {
     id: string;
     time_label: string;
@@ -139,7 +165,7 @@ function buildEventReminderText(params: {
   customText?: string;
 }): ReminderMessage {
   if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location, params.event.location_url);
+  const whenWhere = formatDateTime(params.event.start_at, params.event.team_timezone, params.event.location, params.event.location_url);
   const title = escapeHtml(params.event.title);
   const teamName = escapeHtml(params.event.team_name);
   const game = params.game;
@@ -195,12 +221,12 @@ function isGameReminderTemplate(template: EventReminderTemplate): boolean {
 }
 
 function buildDebtReminderText(params: {
-  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string; team_timezone: string | null };
   amountOutstanding: number;
   customText?: string;
 }): ReminderMessage {
   if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location, params.event.location_url);
+  const whenWhere = formatDateTime(params.event.start_at, params.event.team_timezone, params.event.location, params.event.location_url);
   const text = [
     `Напоминание по оплате события`,
     escapeHtml(params.event.title),
@@ -381,6 +407,7 @@ notificationsRouter.post(
       location_url: string | null;
       type: EventKind;
       team_name: string;
+      team_timezone: string | null;
     }>(
       `SELECT e.id,
               e.team_id,
@@ -393,7 +420,8 @@ notificationsRouter.post(
                  ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
                  LIMIT 1) AS location_url,
               e.type,
-              t.name AS team_name
+              t.name AS team_name,
+              t.timezone AS team_timezone
        FROM events e
        JOIN teams t ON t.id = e.team_id
        WHERE e.id = $1 AND e.is_cancelled = FALSE`,
@@ -693,6 +721,7 @@ notificationsRouter.post(
       location: string | null;
       location_url: string | null;
       team_name: string;
+      team_timezone: string | null;
     }>(
       `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location,
               (SELECT sp.yandex_url FROM saved_places sp
@@ -700,7 +729,8 @@ notificationsRouter.post(
                    AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
                  ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
                  LIMIT 1) AS location_url,
-              t.name AS team_name
+              t.name AS team_name,
+              t.timezone AS team_timezone
        FROM events e
        JOIN teams t ON t.id = e.team_id
        WHERE e.id = $1 AND e.is_cancelled = FALSE`,
