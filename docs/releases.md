@@ -16,11 +16,12 @@ For every production deployment, append one row:
 2026-05-10 | v2026.05.10-b7d1e1b | b7d1e1b90cb77cc867ecb6e9a0f2c958d6afb362 | Claude via Deploy Production run 25618586123 | prod health ok, fixed Telegram outgoing block by restoring `TELEGRAM_BOT_API_BASE_URL` relay support | v2026.03.25-pwa-safe-top1
 2026-05-10 | v2026.05.10-58a9b47 | 58a9b47e24e08e652b79518802e8eb83b98576c8 | Claude via Deploy Production run 25632905818 | prod health ok, Tailwind bundled into Vite build (no more runtime CDN) | v2026.05.10-b7d1e1b
 2026-07-07 | v2026.07.07-783b70c | 783b70c38587bad00bf9b84a92a0ac068a0090a9 | Claude via manual artifact deploy (staging verified first) | prod health ok, release/version ok, migration 027 applied, 3 shared bases seeded (#80/#81) | v2026.07.06-4d7db77
+2026-07-07 | v2026.07.07-183f180 | 183f180828ce4ef0f6bf747b168ae5ea411da6e0 | Claude via manual artifact deploy (staging verified first) | prod health ok, release/version ok, full event edit modal + time-input overlap fix (#83/#84) | v2026.07.07-783b70c
 
 ## Current Rollback Anchors
 
-- `prod`: `v2026.07.06-4d7db77` (previous stable before location-autocomplete release `v2026.07.07-783b70c`).
-- `staging`: `v2026.07.07-783b70c` (commit `783b70c38587bad00bf9b84a92a0ac068a0090a9`, manual artifact deploy).
+- `prod`: `v2026.07.07-783b70c` (previous stable before full-event-edit release `v2026.07.07-183f180`).
+- `staging`: `v2026.07.07-183f180` (commit `183f180828ce4ef0f6bf747b168ae5ea411da6e0`, manual artifact deploy).
 
 ## Network Constraints (2026-05-10)
 
