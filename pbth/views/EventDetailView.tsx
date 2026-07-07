@@ -968,7 +968,18 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               <div className="flex items-center text-pb-subtext mb-1">
                 <MapPin size={14} className="mr-1.5" /> Место
               </div>
-              <div className="font-semibold text-white">{event.location || 'Не указано'}</div>
+              {event.location && event.locationUrl ? (
+                <a
+                  href={event.locationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-pb-primary hover:underline break-words"
+                >
+                  {event.location}
+                </a>
+              ) : (
+                <div className="font-semibold text-white">{event.location || 'Не указано'}</div>
+              )}
             </div>
 
             <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">

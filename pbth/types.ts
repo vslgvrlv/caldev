@@ -88,6 +88,7 @@ export interface Event {
   startDate: Date;
   endDate?: Date;
   location?: string;
+  locationUrl?: string;
   rsvpStatus: RSVPStatus;
   attendeesCount: number;
   maxAttendees?: number;

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { EventType } from '../types';
 import { EVENT_LABELS, EVENT_COLORS } from '../constants';
-import { ChevronLeft, Calendar, MapPin, Type, AlignLeft, DollarSign, Repeat } from 'lucide-react';
+import { ChevronLeft, Calendar, Type, AlignLeft, DollarSign, Repeat } from 'lucide-react';
 import { buildRecurrence, type Weekday } from '../lib/recurrence';
+import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 
 const WEEKDAYS: { key: Weekday; label: string }[] = [
   { key: 'MON', label: 'Пн' },
@@ -26,6 +27,8 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
     date: '',
     time: '19:00',
     location: '',
+    locationUrl: '',
+    locationAddress: '',
     description: '',
     cost: ''
   });
@@ -221,18 +224,19 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
         </div>
 
         {/* Location */}
-        <div className="space-y-2">
-           <label className="text-pb-subtext text-xs uppercase font-bold tracking-wider flex items-center">
-             <MapPin size={14} className="mr-1" /> Место проведения
-           </label>
-           <input 
-             name="location"
-             value={formData.location}
-             onChange={handleChange}
-             placeholder="Адрес или название клуба"
-             className="w-full bg-pb-surface border border-white/10 rounded-xl p-4 text-white focus:border-pb-primary focus:outline-none transition-colors placeholder:text-white/20"
-           />
-        </div>
+        <LocationAutocompleteInput
+          name={formData.location}
+          address={formData.locationAddress}
+          url={formData.locationUrl}
+          onChange={({ name, address, url }) =>
+            setFormData((prev) => ({
+              ...prev,
+              location: name,
+              locationAddress: address,
+              locationUrl: url,
+            }))
+          }
+        />
 
         {/* Cost */}
         <div className="space-y-2">

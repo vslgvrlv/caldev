@@ -655,6 +655,8 @@ const App: React.FC = () => {
 
     const normalizedDescription = String(eventData?.description || '').trim();
     const normalizedLocation = String(eventData?.location || '').trim();
+    const normalizedLocationUrl = String(eventData?.locationUrl || '').trim();
+    const normalizedLocationAddress = String(eventData?.locationAddress || '').trim();
     const normalizedCost =
       typeof eventData?.cost === 'number' && Number.isFinite(eventData.cost) && eventData.cost > 0
         ? eventData.cost
@@ -668,6 +670,8 @@ const App: React.FC = () => {
         description: normalizedDescription || undefined,
         startDate,
         location: normalizedLocation || undefined,
+        locationUrl: normalizedLocationUrl || undefined,
+        locationAddress: normalizedLocationAddress || undefined,
         cost: normalizedCost,
         recurrence: eventData.recurrence,
       });
@@ -689,6 +693,7 @@ const App: React.FC = () => {
           startDate: new Date(rawStart),
           endDate: rawEnd ? new Date(rawEnd) : undefined,
           location: dto.location ?? undefined,
+          locationUrl: dto.locationUrl ?? (normalizedLocationUrl || undefined),
           cost: dto.cost === null || dto.cost === undefined ? undefined : Number(dto.cost),
           rsvpStatus: dto.rsvpStatus || RSVPStatus.UNANSWERED,
           attendeesCount: Number(dto.attendeesCount || 0),
