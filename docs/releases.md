@@ -15,11 +15,12 @@ For every production deployment, append one row:
 2026-03-25 | v2026.03.25-pwa-safe-top1 | 52ee756fda945a33a61bc4067c5ee8af1a97ce0b | Codex via Deploy Production run 23540220050 | prod health ok, prod release/version ok, staging matched before deploy | v2026.03.06-1
 2026-05-10 | v2026.05.10-b7d1e1b | b7d1e1b90cb77cc867ecb6e9a0f2c958d6afb362 | Claude via Deploy Production run 25618586123 | prod health ok, fixed Telegram outgoing block by restoring `TELEGRAM_BOT_API_BASE_URL` relay support | v2026.03.25-pwa-safe-top1
 2026-05-10 | v2026.05.10-58a9b47 | 58a9b47e24e08e652b79518802e8eb83b98576c8 | Claude via Deploy Production run 25632905818 | prod health ok, Tailwind bundled into Vite build (no more runtime CDN) | v2026.05.10-b7d1e1b
+2026-07-07 | v2026.07.07-783b70c | 783b70c38587bad00bf9b84a92a0ac068a0090a9 | Claude via manual artifact deploy (staging verified first) | prod health ok, release/version ok, migration 027 applied, 3 shared bases seeded (#80/#81) | v2026.07.06-4d7db77
 
 ## Current Rollback Anchors
 
-- `prod`: `v2026.05.10-58a9b47` (commit `58a9b47e24e08e652b79518802e8eb83b98576c8`, deployed via `Deploy Production` run `25632905818`).
-- `staging`: `v2026.05.10-58a9b47` (commit `58a9b47e24e08e652b79518802e8eb83b98576c8`, deployed via `Deploy Staging` run `25632875470`).
+- `prod`: `v2026.07.06-4d7db77` (previous stable before location-autocomplete release `v2026.07.07-783b70c`).
+- `staging`: `v2026.07.07-783b70c` (commit `783b70c38587bad00bf9b84a92a0ac068a0090a9`, manual artifact deploy).
 
 ## Network Constraints (2026-05-10)
 
