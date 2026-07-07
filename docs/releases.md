@@ -17,11 +17,12 @@ For every production deployment, append one row:
 2026-05-10 | v2026.05.10-58a9b47 | 58a9b47e24e08e652b79518802e8eb83b98576c8 | Claude via Deploy Production run 25632905818 | prod health ok, Tailwind bundled into Vite build (no more runtime CDN) | v2026.05.10-b7d1e1b
 2026-07-07 | v2026.07.07-783b70c | 783b70c38587bad00bf9b84a92a0ac068a0090a9 | Claude via manual artifact deploy (staging verified first) | prod health ok, release/version ok, migration 027 applied, 3 shared bases seeded (#80/#81) | v2026.07.06-4d7db77
 2026-07-07 | v2026.07.07-183f180 | 183f180828ce4ef0f6bf747b168ae5ea411da6e0 | Claude via manual artifact deploy (staging verified first) | prod health ok, release/version ok, full event edit modal + time-input overlap fix (#83/#84) | v2026.07.07-783b70c
+2026-07-07 | v2026.07.07-8bace02 | 8bace0231a97f1b20d2542a210b30fef6b45f588 | Claude via manual artifact deploy (staging verified first) | prod health ok, reminder time now rendered in team timezone — 16:00 UTC shows as 19:00 МСК (#86/#87) | v2026.07.07-183f180
 
 ## Current Rollback Anchors
 
-- `prod`: `v2026.07.07-783b70c` (previous stable before full-event-edit release `v2026.07.07-183f180`).
-- `staging`: `v2026.07.07-183f180` (commit `183f180828ce4ef0f6bf747b168ae5ea411da6e0`, manual artifact deploy).
+- `prod`: `v2026.07.07-183f180` (previous stable before reminder-timezone release `v2026.07.07-8bace02`).
+- `staging`: `v2026.07.07-8bace02` (commit `8bace0231a97f1b20d2542a210b30fef6b45f588`, manual artifact deploy).
 
 ## Network Constraints (2026-05-10)
 
