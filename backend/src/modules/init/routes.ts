@@ -26,6 +26,7 @@ type RawEvent = {
   start_at: string;
   end_at: string | null;
   location: string | null;
+  location_url: string | null;
   cost: string | null;
   cost_status: "UNKNOWN" | "ESTIMATED" | "FINAL";
   finance_state: "NOT_CALCULATED" | "COLLECTING" | "CLOSED";
@@ -144,6 +145,11 @@ initRouter.get(
               e.start_at,
               e.end_at,
               e.location,
+              (SELECT sp.yandex_url FROM saved_places sp
+                 WHERE lower(sp.name) = lower(e.location)
+                   AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
+                 ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
+                 LIMIT 1) AS location_url,
               e.cost::text,
               e.cost_status::text,
               e.finance_state::text,
@@ -190,6 +196,11 @@ initRouter.get(
               e.start_at,
               e.end_at,
               e.location,
+              (SELECT sp.yandex_url FROM saved_places sp
+                 WHERE lower(sp.name) = lower(e.location)
+                   AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
+                 ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
+                 LIMIT 1) AS location_url,
               e.cost::text,
               e.cost_status::text,
               e.finance_state::text,
@@ -452,6 +463,7 @@ initRouter.get(
         startDate: e.start_at,
         endDate: e.end_at || undefined,
         location: e.location || undefined,
+        locationUrl: e.location_url || undefined,
         cost: e.cost !== null ? Number(e.cost) : undefined,
         costStatus: e.cost_status,
         financeState: e.finance_state,

@@ -18,6 +18,14 @@ export type IcsInfo = {
   hasToken: boolean;
 };
 
+export type SavedPlace = {
+  id: string;
+  name: string;
+  address: string | null;
+  yandexUrl: string | null;
+  usageCount: number;
+};
+
 export type NotificationDeliveryResponse = {
   success: boolean;
   deliveryMode: 'SYNC' | 'QUEUE';
@@ -593,6 +601,11 @@ export const api = {
     };
   },
 
+  async listPlaces(): Promise<SavedPlace[]> {
+    const res: any = await request('/places');
+    return (res?.items || []) as SavedPlace[];
+  },
+
   async createEvent(payload: {
     teamId?: string;
     type: EventType;
@@ -601,6 +614,8 @@ export const api = {
     startDate: Date;
     endDate?: Date;
     location?: string;
+    locationUrl?: string;
+    locationAddress?: string;
     cost?: number;
     costStatus?: 'UNKNOWN' | 'ESTIMATED' | 'FINAL';
     schedule?: Array<{
@@ -639,6 +654,8 @@ export const api = {
         startAt: payload.startDate.toISOString(),
         endAt: payload.endDate ? payload.endDate.toISOString() : undefined,
         location: payload.location,
+        locationUrl: payload.locationUrl,
+        locationAddress: payload.locationAddress,
         cost: payload.cost,
         costStatus: payload.costStatus,
         schedule: payload.schedule,

@@ -34,6 +34,8 @@ const createEventSchema = z.object({
   endDate: z.string().optional(),
   endAt: z.string().optional(),
   location: z.string().optional(),
+  locationUrl: z.string().trim().max(1000).optional(),
+  locationAddress: z.string().trim().max(500).optional(),
   cost: z.number().optional(),
   costStatus: eventCostStatusSchema.optional(),
   schedule: z
@@ -60,6 +62,8 @@ const updateEventSchema = z.object({
   endDate: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
   location: z.string().nullable().optional(),
+  locationUrl: z.string().trim().max(1000).nullable().optional(),
+  locationAddress: z.string().trim().max(500).nullable().optional(),
   cost: z.number().nullable().optional(),
   costStatus: eventCostStatusSchema.optional(),
   schedule: z
@@ -235,6 +239,34 @@ async function getMembershipRole(userId: string, teamId: string): Promise<"CAPTA
   return membership.rows[0]?.role ?? null;
 }
 
+// Запоминает место события в истории команды (для автокомплита) и обновляет
+// адрес/ссылку. Не создаёт дубликат, если такое имя уже есть среди общих баз.
+async function rememberPlace(
+  client: { query: (text: string, params: unknown[]) => Promise<unknown> },
+  teamId: string,
+  name: string | null | undefined,
+  address: string | null | undefined,
+  url: string | null | undefined
+): Promise<void> {
+  const trimmedName = (name ?? "").trim();
+  if (!trimmedName) return;
+  const trimmedAddress = (address ?? "").trim() || null;
+  const trimmedUrl = (url ?? "").trim() || null;
+  await client.query(
+    `INSERT INTO saved_places (team_id, name, address, yandex_url, usage_count)
+     SELECT $1, $2, $3, $4, 1
+     WHERE NOT EXISTS (
+       SELECT 1 FROM saved_places WHERE team_id IS NULL AND lower(name) = lower($2)
+     )
+     ON CONFLICT (team_id, lower(name)) DO UPDATE
+       SET usage_count = saved_places.usage_count + 1,
+           address = COALESCE($3, saved_places.address),
+           yandex_url = COALESCE($4, saved_places.yandex_url),
+           updated_at = NOW()`,
+    [teamId, trimmedName, trimmedAddress, trimmedUrl]
+  );
+}
+
 export const eventsRouter = Router();
 
 eventsRouter.post(
@@ -365,6 +397,8 @@ eventsRouter.post(
 
         }
 
+        await rememberPlace(client, teamId, payload.location, payload.locationAddress, payload.locationUrl);
+
         await client.query("COMMIT");
         await writeAudit(req.authUser!.id, "events.create.recurrence", {
           teamId,
@@ -423,6 +457,8 @@ eventsRouter.post(
           );
         }
       }
+
+      await rememberPlace(client, teamId, payload.location, payload.locationAddress, payload.locationUrl);
 
       await client.query("COMMIT");
 
@@ -638,6 +674,14 @@ eventsRouter.patch(
           );
         }
 
+        await rememberPlace(
+          client,
+          baseEvent.team_id,
+          payload.location === undefined ? baseEvent.location : payload.location,
+          payload.locationAddress,
+          payload.locationUrl
+        );
+
         await client.query("COMMIT");
         await writeAudit(req.authUser!.id, "events.update.future", {
           eventId,
@@ -713,6 +757,14 @@ eventsRouter.patch(
           );
         }
       }
+
+      await rememberPlace(
+        client,
+        baseEvent.team_id,
+        payload.location === undefined ? baseEvent.location : payload.location,
+        payload.locationAddress,
+        payload.locationUrl
+      );
 
       await client.query("COMMIT");
       await writeAudit(req.authUser!.id, "events.update.single", {

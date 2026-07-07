@@ -91,7 +91,28 @@ function classifyTelegramSendError(reason: string): "CHAT_NOT_FOUND" | "BOT_BLOC
   return "SEND_FAILED";
 }
 
-function formatDateTime(dateIso: string, location?: string | null) {
+// Все напоминания отправляются с parse_mode=HTML, поэтому любые пользовательские
+// значения (название, команда, соперник, произвольный текст) обязательно экранируем,
+// а место оформляем кликабельной ссылкой на Яндекс.Карты.
+const TELEGRAM_PARSE_MODE = "HTML" as const;
+type ReminderMessage = { text: string; parseMode: "HTML" };
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function formatLocationHtml(location?: string | null, locationUrl?: string | null): string | null {
+  const name = (location ?? "").trim();
+  if (!name) return null;
+  const url = (locationUrl ?? "").trim();
+  const escapedName = escapeHtml(name);
+  if (url && /^https?:\/\//i.test(url)) {
+    return `<a href="${escapeHtml(url)}">${escapedName}</a>`;
+  }
+  return escapedName;
+}
+
+function formatDateTime(dateIso: string, location?: string | null, locationUrl?: string | null) {
   const dt = new Date(dateIso);
   const date = dt.toLocaleString("ru-RU", {
     day: "2-digit",
@@ -101,12 +122,13 @@ function formatDateTime(dateIso: string, location?: string | null) {
     minute: "2-digit",
     hour12: false,
   });
-  return location ? `${date} • ${location}` : date;
+  const locationHtml = formatLocationHtml(location, locationUrl);
+  return locationHtml ? `${date} • ${locationHtml}` : date;
 }
 
 function buildEventReminderText(params: {
   template: EventReminderTemplate;
-  event: { title: string; start_at: string; location: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string };
   game?: {
     id: string;
     time_label: string;
@@ -115,54 +137,57 @@ function buildEventReminderText(params: {
     game_pair: "FIRST" | "SECOND" | null;
   } | null;
   customText?: string;
-}) {
-  if (params.customText) return params.customText;
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location);
+}): ReminderMessage {
+  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
+  const whenWhere = formatDateTime(params.event.start_at, params.event.location, params.event.location_url);
+  const title = escapeHtml(params.event.title);
+  const teamName = escapeHtml(params.event.team_name);
   const game = params.game;
   const gamePairLabel = game?.game_pair === "FIRST" ? "Первая пара" : game?.game_pair === "SECOND" ? "Вторая пара" : "Пара не указана";
   const pitLabel = game?.pit_zone === "NEAR" ? "Ближняя пит-зона" : game?.pit_zone === "FAR" ? "Дальняя пит-зона" : "Пит-зона не указана";
+  let text: string;
   if (params.template === "GAME_GATHERING" || params.template === "GAME_WARMUP") {
     const header = params.template === "GAME_GATHERING" ? "Сбор перед игрой" : "Начало разминки перед игрой";
-    return [
+    text = [
       header,
-      `${params.event.title}`,
-      `${params.event.team_name}`,
+      title,
+      teamName,
       whenWhere,
       "",
-      `Соперник: ${game?.opponent || "не указан"}`,
-      `Время игры: ${game?.time_label || "не указано"}`,
+      `Соперник: ${escapeHtml(game?.opponent || "не указан")}`,
+      `Время игры: ${escapeHtml(game?.time_label || "не указано")}`,
       `База/пит: ${pitLabel}`,
       `Пара: ${gamePairLabel}`,
     ].join("\n");
-  }
-  if (params.template === "WARMUP_REMINDER") {
-    return [
+  } else if (params.template === "WARMUP_REMINDER") {
+    text = [
       `Разминка перед событием`,
-      `${params.event.title}`,
-      `${params.event.team_name}`,
+      title,
+      teamName,
       whenWhere,
       ``,
       `Проверь экипировку и выезжай заранее.`,
     ].join("\n");
-  }
-  if (params.template === "ROLE_REMINDER") {
-    return [
+  } else if (params.template === "ROLE_REMINDER") {
+    text = [
       `Напоминание по роли/задаче на событии`,
-      `${params.event.title}`,
-      `${params.event.team_name}`,
+      title,
+      teamName,
       whenWhere,
       ``,
       `Проверь свою роль/задачу в событии и подготовься заранее.`,
     ].join("\n");
+  } else {
+    text = [
+      `Напоминание о командном событии`,
+      title,
+      teamName,
+      whenWhere,
+      ``,
+      `Пожалуйста, проверь RSVP и время.`,
+    ].join("\n");
   }
-  return [
-    `Напоминание о командном событии`,
-    `${params.event.title}`,
-    `${params.event.team_name}`,
-    whenWhere,
-    ``,
-    `Пожалуйста, проверь RSVP и время.`,
-  ].join("\n");
+  return { text, parseMode: TELEGRAM_PARSE_MODE };
 }
 
 function isGameReminderTemplate(template: EventReminderTemplate): boolean {
@@ -170,35 +195,37 @@ function isGameReminderTemplate(template: EventReminderTemplate): boolean {
 }
 
 function buildDebtReminderText(params: {
-  event: { title: string; start_at: string; location: string | null; team_name: string };
+  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string };
   amountOutstanding: number;
   customText?: string;
-}) {
-  if (params.customText) return params.customText;
-  const whenWhere = formatDateTime(params.event.start_at, params.event.location);
-  return [
+}): ReminderMessage {
+  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
+  const whenWhere = formatDateTime(params.event.start_at, params.event.location, params.event.location_url);
+  const text = [
     `Напоминание по оплате события`,
-    `${params.event.title}`,
-    `${params.event.team_name}`,
+    escapeHtml(params.event.title),
+    escapeHtml(params.event.team_name),
     whenWhere,
     ``,
     `Осталось сдать: ${Math.round(params.amountOutstanding * 100) / 100} ₽`,
   ].join("\n");
+  return { text, parseMode: TELEGRAM_PARSE_MODE };
 }
 
 function buildTeamDebtReminderText(params: {
   teamName: string;
   amountOutstanding: number;
   customText?: string;
-}) {
-  if (params.customText) return params.customText;
-  return [
+}): ReminderMessage {
+  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
+  const text = [
     `Напоминание по оплате задолженности`,
-    `${params.teamName}`,
+    escapeHtml(params.teamName),
     ``,
     `Осталось сдать: ${Math.round(params.amountOutstanding * 100) / 100} ₽`,
     `Подробности в приложении`,
   ].join("\n");
+  return { text, parseMode: TELEGRAM_PARSE_MODE };
 }
 
 type NotificationDeliveryType = "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER";
@@ -206,6 +233,7 @@ type NotificationDeliveryType = "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM
 type DispatchMessageParams = {
   chatId: string;
   text: string;
+  parseMode?: "HTML" | "MarkdownV2";
   type: NotificationDeliveryType;
   actorUserId: string;
   recipientUserId?: string;
@@ -216,13 +244,14 @@ type DispatchMessageParams = {
 
 async function dispatchNotificationMessage(params: DispatchMessageParams): Promise<{ mode: "SYNC" | "QUEUE" }> {
   if (!isNotificationsQueueEnabled()) {
-    await sendTelegramBotMessage(params.chatId, params.text);
+    await sendTelegramBotMessage(params.chatId, params.text, params.parseMode ? { parseMode: params.parseMode } : undefined);
     return { mode: "SYNC" };
   }
 
   await enqueueTelegramNotification({
     chatId: params.chatId,
     text: params.text,
+    parseMode: params.parseMode,
     context: {
       type: params.type,
       actorUserId: params.actorUserId,
@@ -296,7 +325,7 @@ notificationsRouter.post(
       try {
         const dispatched = await dispatchNotificationMessage({
           chatId: row.telegram_id,
-          text: buildTeamDebtReminderText({
+          ...buildTeamDebtReminderText({
             teamName: team.name,
             amountOutstanding: Number(row.amount_outstanding),
             customText: payload.customText,
@@ -349,6 +378,7 @@ notificationsRouter.post(
       title: string;
       start_at: string;
       location: string | null;
+      location_url: string | null;
       type: EventKind;
       team_name: string;
     }>(
@@ -357,6 +387,11 @@ notificationsRouter.post(
               e.title,
               e.start_at::text,
               e.location,
+              (SELECT sp.yandex_url FROM saved_places sp
+                 WHERE lower(sp.name) = lower(e.location)
+                   AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
+                 ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
+                 LIMIT 1) AS location_url,
               e.type,
               t.name AS team_name
        FROM events e
@@ -436,7 +471,7 @@ notificationsRouter.post(
       }
     }
 
-    const text = buildEventReminderText({
+    const message = buildEventReminderText({
       template: payload.template as EventReminderTemplate,
       event,
       game: gameContext,
@@ -479,7 +514,8 @@ notificationsRouter.post(
       try {
         const dispatched = await dispatchNotificationMessage({
           chatId: row.telegram_id,
-          text,
+          text: message.text,
+          parseMode: message.parseMode,
           type: "EVENT_REMINDER",
           actorUserId: access.userId,
           recipientUserId: row.user_id,
@@ -607,7 +643,7 @@ notificationsRouter.post(
     try {
       dispatched = await dispatchNotificationMessage({
         chatId: row.telegram_id,
-        text: buildTeamDebtReminderText({
+        ...buildTeamDebtReminderText({
           teamName: team.name,
           amountOutstanding: Number(row.amount_outstanding),
           customText: payload.customText,
@@ -655,9 +691,16 @@ notificationsRouter.post(
       title: string;
       start_at: string;
       location: string | null;
+      location_url: string | null;
       team_name: string;
     }>(
-      `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location, t.name AS team_name
+      `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location,
+              (SELECT sp.yandex_url FROM saved_places sp
+                 WHERE lower(sp.name) = lower(e.location)
+                   AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
+                 ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
+                 LIMIT 1) AS location_url,
+              t.name AS team_name
        FROM events e
        JOIN teams t ON t.id = e.team_id
        WHERE e.id = $1 AND e.is_cancelled = FALSE`,
@@ -710,7 +753,7 @@ notificationsRouter.post(
       try {
         const dispatched = await dispatchNotificationMessage({
           chatId: row.telegram_id,
-          text: buildDebtReminderText({
+          ...buildDebtReminderText({
             event,
             amountOutstanding: Number(row.amount_outstanding),
             customText: payload.customText,

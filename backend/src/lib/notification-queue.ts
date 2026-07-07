@@ -19,6 +19,7 @@ type PgBossLike = {
 export type TelegramNotificationJobPayload = {
   chatId: string;
   text: string;
+  parseMode?: "HTML" | "MarkdownV2";
   context?: {
     actorUserId?: string;
     recipientUserId?: string;
@@ -64,7 +65,7 @@ async function processTelegramJob(job: any) {
   }
 
   try {
-    await sendTelegramBotMessage(payload.chatId, payload.text);
+    await sendTelegramBotMessage(payload.chatId, payload.text, payload.parseMode ? { parseMode: payload.parseMode } : undefined);
     logger.info("notifications.queue.job_sent", {
       jobId: job?.id,
       teamId: payload.context?.teamId,
