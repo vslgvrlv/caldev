@@ -638,6 +638,48 @@ const App: React.FC = () => {
     await loadData({ silent: true });
   };
 
+  const handleEditEvent = async (
+    eventId: string,
+    patch: {
+      title: string;
+      location?: string;
+      locationUrl?: string;
+      locationAddress?: string;
+      startISO: string;
+      endISO: string;
+      cost?: number;
+      description?: string;
+    }
+  ) => {
+    await api.updateEvent(eventId, {
+      title: patch.title,
+      location: patch.location ?? null,
+      locationUrl: patch.locationUrl ?? null,
+      locationAddress: patch.locationAddress ?? null,
+      startAt: patch.startISO,
+      endAt: patch.endISO,
+      cost: patch.cost ?? null,
+      description: patch.description ?? null,
+    });
+    const start = new Date(patch.startISO);
+    const end = new Date(patch.endISO);
+    const apply = (ev: Event): Event => ({
+      ...ev,
+      title: patch.title,
+      location: patch.location || undefined,
+      locationUrl: patch.locationUrl || undefined,
+      startAt: patch.startISO,
+      endAt: patch.endISO,
+      startDate: start,
+      endDate: end,
+      cost: patch.cost ?? undefined,
+      description: patch.description || undefined,
+    });
+    setEvents((prev) => prev.map((e) => (e.id === eventId ? apply(e) : e)));
+    setSelectedEvent((prev) => (prev && prev.id === eventId ? apply(prev) : prev));
+    await loadData({ silent: true });
+  };
+
   const handleCreateEvent = async (eventData: any) => {
     if (!activeTeam) return;
 
@@ -898,6 +940,7 @@ const App: React.FC = () => {
           onAttendeeClick={handleAttendeeClick}
           onSendEventReminder={handleSendEventReminder}
           onEditTime={handleEditEventTime}
+          onEditEvent={handleEditEvent}
           onDeleteEvent={handleDeleteEvent}
         />
       );

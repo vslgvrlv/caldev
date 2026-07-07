@@ -13,6 +13,7 @@ import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
 import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
+import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 
 interface EventDetailAttendee {
   userId: string;
@@ -45,6 +46,20 @@ interface EventDetailViewProps {
   onDeleteEvent?: (eventId: string, scope: 'single' | 'future') => Promise<void>;
   /** Изменить дату/время события (scope single). Капитан/штаб (тренер — тренировки/собрания). */
   onEditTime?: (eventId: string, startISO: string, endISO: string) => Promise<void>;
+  /** Полное редактирование события (scope single): название, место, время, стоимость, описание. */
+  onEditEvent?: (
+    eventId: string,
+    patch: {
+      title: string;
+      location?: string;
+      locationUrl?: string;
+      locationAddress?: string;
+      startISO: string;
+      endISO: string;
+      cost?: number;
+      description?: string;
+    }
+  ) => Promise<void>;
 }
 
 const PIT_ZONE_LABELS: Record<'NEAR' | 'FAR', string> = {
@@ -83,6 +98,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   onAttendeeClick,
   onDeleteEvent,
   onEditTime,
+  onEditEvent,
 }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
@@ -111,9 +127,15 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isSeriesBusy, setIsSeriesBusy] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
-  // Редактирование времени события: модалка с дата/начало/конец.
+  // Редактирование события: модалка с названием/местом/датой/временем/стоимостью/описанием.
   const [isEditTimeOpen, setIsEditTimeOpen] = useState(false);
   const [isSavingTime, setIsSavingTime] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editLocationUrl, setEditLocationUrl] = useState('');
+  const [editLocationAddress, setEditLocationAddress] = useState('');
+  const [editCost, setEditCost] = useState('');
+  const [editDescription, setEditDescription] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
@@ -302,11 +324,17 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     }
   };
 
-  // Открыть модалку времени: префилл локальной датой/временем из start/end события.
+  // Открыть модалку редактирования: префилл всеми полями события.
   const openEditTime = () => {
     const pad = (n: number) => String(n).padStart(2, '0');
     const start = event.startDate;
     const end = event.endDate instanceof Date ? event.endDate : event.endAt ? new Date(event.endAt) : null;
+    setEditTitle(event.title || '');
+    setEditLocation(event.location || '');
+    setEditLocationUrl(event.locationUrl || '');
+    setEditLocationAddress('');
+    setEditCost(event.cost !== undefined && event.cost !== null ? String(event.cost) : '');
+    setEditDescription(event.description || '');
     setEditDate(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`);
     setEditStartTime(`${pad(start.getHours())}:${pad(start.getMinutes())}`);
     // Конца нет — по умолчанию +2 часа от старта (как в backend default).
@@ -316,7 +344,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   };
 
   const handleSaveTime = async () => {
-    if (!onEditTime) return;
+    if (!editTitle.trim()) {
+      alert('Введите название события');
+      return;
+    }
     if (!editDate || !editStartTime || !editEndTime) {
       alert('Заполните дату, время начала и окончания');
       return;
@@ -331,13 +362,32 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       alert('Окончание должно быть позже начала');
       return;
     }
+    const costRaw = editCost.trim();
+    const costValue = costRaw ? Number(costRaw) : undefined;
+    if (costRaw && (Number.isNaN(costValue) || (costValue as number) < 0)) {
+      alert('Некорректная стоимость');
+      return;
+    }
     setIsSavingTime(true);
     try {
-      await onEditTime(event.id, start.toISOString(), end.toISOString());
+      if (onEditEvent) {
+        await onEditEvent(event.id, {
+          title: editTitle.trim(),
+          location: editLocation.trim() || undefined,
+          locationUrl: editLocationUrl.trim() || undefined,
+          locationAddress: editLocationAddress.trim() || undefined,
+          startISO: start.toISOString(),
+          endISO: end.toISOString(),
+          cost: costValue,
+          description: editDescription.trim() || undefined,
+        });
+      } else if (onEditTime) {
+        await onEditTime(event.id, start.toISOString(), end.toISOString());
+      }
       setIsEditTimeOpen(false);
     } catch (error) {
-      console.error('Failed to update event time', error);
-      alert(`Не удалось изменить время: ${error instanceof Error ? error.message : 'unknown error'}`);
+      console.error('Failed to update event', error);
+      alert(`Не удалось сохранить событие: ${error instanceof Error ? error.message : 'unknown error'}`);
     } finally {
       setIsSavingTime(false);
     }
@@ -789,7 +839,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 <button
                   onClick={openEditTime}
                   className="ml-2 p-1.5 -my-1 rounded-lg text-pb-subtext hover:text-pb-primary hover:bg-white/5 transition-colors"
-                  aria-label="Изменить время"
+                  aria-label="Изменить событие"
                 >
                   <Pencil size={16} />
                 </button>
@@ -1444,14 +1494,36 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       {isEditTimeOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsEditTimeOpen(false)}></div>
-          <div className="relative w-full max-w-sm bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
-            <h3 className="text-lg font-bold text-white mb-1">Изменить время</h3>
+          <div className="relative w-full max-w-sm max-h-[88vh] overflow-y-auto bg-pb-surface rounded-2xl border border-white/10 shadow-2xl p-6 animate-fade-in">
+            <h3 className="text-lg font-bold text-white mb-1">Изменить событие</h3>
             <p className="text-sm text-pb-subtext mb-5">
               {isSeriesOccurrence
                 ? 'Изменится только это занятие серии.'
-                : 'Новое время увидит вся команда.'}
+                : 'Изменения увидит вся команда.'}
             </p>
             <div className="space-y-4">
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Название</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Название события"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none placeholder:text-white/20"
+                />
+              </div>
+
+              <LocationAutocompleteInput
+                name={editLocation}
+                address={editLocationAddress}
+                url={editLocationUrl}
+                onChange={({ name, address, url }) => {
+                  setEditLocation(name);
+                  setEditLocationAddress(address);
+                  setEditLocationUrl(url);
+                }}
+              />
+
               <div>
                 <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Дата</label>
                 <input
@@ -1462,24 +1534,47 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Начало</label>
                   <input
                     type="time"
                     value={editStartTime}
                     onChange={(e) => setEditStartTime(e.target.value)}
-                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                    className="w-full min-w-0 bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Окончание</label>
                   <input
                     type="time"
                     value={editEndTime}
                     onChange={(e) => setEditEndTime(e.target.value)}
-                    className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
+                    className="w-full min-w-0 bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none [color-scheme:dark]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Стоимость (₽)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={editCost}
+                  onChange={(e) => setEditCost(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none placeholder:text-white/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Описание</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  placeholder="План, снаряжение, заметки…"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none placeholder:text-white/20 resize-none"
+                />
               </div>
             </div>
             <div className="flex gap-2 mt-6">

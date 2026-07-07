@@ -683,6 +683,27 @@ export const api = {
     });
   },
 
+  // Полное редактирование события (scope single): название, место (+ссылка/адрес),
+  // дата/время, стоимость, описание. Роль проверяется на сервере.
+  async updateEvent(
+    eventId: string,
+    patch: {
+      title?: string;
+      location?: string | null;
+      locationUrl?: string | null;
+      locationAddress?: string | null;
+      startAt?: string;
+      endAt?: string;
+      cost?: number | null;
+      description?: string | null;
+    }
+  ) {
+    return request(`/events/${eventId}`, {
+      method: 'PATCH',
+      body: { scope: 'single', ...patch },
+    });
+  },
+
   // #61: удалить событие. scope 'single' — только это занятие (серия сохраняется),
   // scope 'future' — это и все будущие занятия серии.
   async deleteEvent(
