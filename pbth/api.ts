@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType } from './types';
+import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection } from './types';
 import {
   createLocalDevEvent,
   getLocalDevAuthMe,
@@ -672,6 +672,24 @@ export const api = {
       method: 'PATCH',
       body: { scope: 'single', schedule },
     });
+  },
+
+  // --- Рефлексия по гейму (#89) ---
+
+  // Каталог укрытий отдаётся целиком (51 позиция) и не меняется в течение
+  // турнира — тянем один раз на открытие формы, фильтруем на клиенте.
+  async getFieldPositions(): Promise<FieldPosition[]> {
+    const data = await request<{ items: FieldPosition[] }>('/field-positions');
+    return data.items;
+  },
+
+  async getMyReflection(gameId: string): Promise<GameReflection | null> {
+    const data = await request<{ reflection: GameReflection | null }>(`/reflections/games/${gameId}/mine`);
+    return data.reflection;
+  },
+
+  async saveMyReflection(gameId: string, reflection: GameReflection) {
+    return request(`/reflections/games/${gameId}/mine`, { method: 'PUT', body: reflection });
   },
 
   // Изменить дату/время события (scope single). Бэкенд PATCH /events/:id умеет

@@ -67,6 +67,35 @@ export interface Game {
   gamePair?: "FIRST" | "SECOND";
 }
 
+// Каталог укрытий на поле (#89). Максимальная конфигурация, 51 позиция;
+// поле конкретного турнира — подмножество по флагу active.
+export interface FieldPosition {
+  id: string;
+  group: 'grid' | 'snake' | 'envelope';
+  index: string;
+  side: 'NEAR' | 'FAR' | 'CENTER';
+  code: string;
+  depth: number;
+  label: string;
+  active: boolean;
+}
+
+// Фаза — когда это произошло. Одна шкала для поражения и для килла.
+export type ReflectionPhase = 'BREAK' | 'COVER' | 'ROTATION';
+
+export interface ReflectionKill {
+  phase: ReflectionPhase;
+  positionId: string | null;
+}
+
+export interface GameReflection {
+  eliminated: boolean;
+  deathPhase: ReflectionPhase | null;
+  deathPositionId: string | null;
+  kills: ReflectionKill[];
+  note: string | null;
+}
+
 export interface AttendeePreview {
   userId: string;
   name: string;

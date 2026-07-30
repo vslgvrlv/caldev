@@ -14,6 +14,7 @@ import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
+import { ReflectionModal } from '../components/ReflectionModal';
 
 interface EventDetailAttendee {
   userId: string;
@@ -109,6 +110,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [newGamePitZone, setNewGamePitZone] = useState<'NEAR' | 'FAR'>('NEAR');
   const [newGamePair, setNewGamePair] = useState<'FIRST' | 'SECOND'>('FIRST');
 
+  const [reflectionGame, setReflectionGame] = useState<Game | null>(null);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editGameTime, setEditGameTime] = useState('');
   const [editGameOpponent, setEditGameOpponent] = useState('');
@@ -980,33 +982,46 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                   )}
 
                   {sortedSchedule.map((game) => (
-                    <button
-                      key={game.id}
-                      type="button"
-                      onClick={() => openGameCard(game)}
-                      className="w-full flex items-center relative z-0 group text-left"
-                    >
-                      <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0">{normalizeTimeForInput(game.time) || game.time}</div>
+                    <div key={game.id} className="w-full flex items-center relative z-0 group">
+                      <button
+                        type="button"
+                        onClick={() => openGameCard(game)}
+                        className="flex-1 min-w-0 flex items-center text-left"
+                      >
+                        <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0">{normalizeTimeForInput(game.time) || game.time}</div>
 
-                      <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
+                        <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
 
-                      <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors flex justify-between items-start gap-2">
-                        <div className="min-w-0">
-                          <div className="font-bold text-white text-sm truncate">{game.opponent}</div>
-                          <div className="text-xs text-pb-subtext mt-1">
-                            {game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}
+                        <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <div className="font-bold text-white text-sm truncate">{game.opponent}</div>
+                            <div className="text-xs text-pb-subtext mt-1">
+                              {game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}
+                            </div>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-2">
+                            {game.pitZone && (
+                              <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white/10 text-pb-subtext" title={PIT_ZONE_LABELS[game.pitZone]}>
+                                {PIT_ZONE_BADGE[game.pitZone]} пит-зона
+                              </span>
+                            )}
+                            {game.score && <span className="text-pb-warning font-mono font-bold">{game.score}</span>}
                           </div>
                         </div>
-                        <div className="shrink-0 flex items-center gap-2">
-                          {game.pitZone && (
-                            <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white/10 text-pb-subtext" title={PIT_ZONE_LABELS[game.pitZone]}>
-                              {PIT_ZONE_BADGE[game.pitZone]} пит-зона
-                            </span>
-                          )}
-                          {game.score && <span className="text-pb-warning font-mono font-bold">{game.score}</span>}
-                        </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      {/* Рефлексия заполняется сразу после пойнта — вход должен быть в один тап
+                          из расписания, а не через карточку редактирования гейма. */}
+                      <button
+                        type="button"
+                        onClick={() => setReflectionGame(game)}
+                        title="Рефлексия по гейму"
+                        aria-label="Рефлексия по гейму"
+                        className="shrink-0 ml-2 p-3 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
+                      >
+                        <Swords size={16} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1597,6 +1612,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {reflectionGame && (
+        <ReflectionModal isOpen game={reflectionGame} onClose={() => setReflectionGame(null)} />
       )}
 
       {isAddingGame && (
