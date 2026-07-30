@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
-import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2, Pencil } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2, Pencil, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { api, type FinanceEventDetailResponse, type SeriesContextResponse } from '../api';
@@ -15,6 +15,7 @@ import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 import { ReflectionModal } from '../components/ReflectionModal';
+import { CaptainReportModal } from '../components/CaptainReportModal';
 
 interface EventDetailAttendee {
   userId: string;
@@ -111,6 +112,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [newGamePair, setNewGamePair] = useState<'FIRST' | 'SECOND'>('FIRST');
 
   const [reflectionGame, setReflectionGame] = useState<Game | null>(null);
+  const [captainReportGame, setCaptainReportGame] = useState<Game | null>(null);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editGameTime, setEditGameTime] = useState('');
   const [editGameOpponent, setEditGameOpponent] = useState('');
@@ -174,6 +176,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
   // #62: явку отмечает капитан/штаб; тренер — только тренировки/собрания (как на бэкенде).
   const canManageAttendance = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
+  // #89: капитанский разбор — отдельная кнопка. Здесь она только скрывается от
+  // игроков, чтобы не мозолить глаз; право на запись решает бэкенд (canEdit).
+  const canSeeCaptainReport = isAdminOrCaptain || currentUserRole === Role.TRAINER;
   // Явка имеет смысл только когда событие уже началось/прошло.
   const hasEventStarted = event.startDate.getTime() <= Date.now();
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
@@ -1021,6 +1026,18 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                       >
                         <Swords size={16} />
                       </button>
+
+                      {canSeeCaptainReport && (
+                        <button
+                          type="button"
+                          onClick={() => setCaptainReportGame(game)}
+                          title="Разбор капитана"
+                          aria-label="Разбор капитана"
+                          className="shrink-0 ml-2 p-3 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
+                        >
+                          <ClipboardList size={16} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1616,6 +1633,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
       {reflectionGame && (
         <ReflectionModal isOpen game={reflectionGame} onClose={() => setReflectionGame(null)} />
+      )}
+
+      {captainReportGame && (
+        <CaptainReportModal isOpen game={captainReportGame} onClose={() => setCaptainReportGame(null)} />
       )}
 
       {isAddingGame && (

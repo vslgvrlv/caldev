@@ -24,13 +24,24 @@ type Props = {
   onClose: () => void;
 };
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
+
+// Самооценка (§8.3): оценивается работа, а не исход пойнта — выбитый может
+// отработать задачу на пять, доживший — простоять в укрытии.
+const SELF_RATINGS: Array<{ value: number; label: string }> = [
+  { value: 1, label: 'провалил' },
+  { value: 2, label: 'слабо' },
+  { value: 3, label: 'норм' },
+  { value: 4, label: 'хорошо' },
+  { value: 5, label: 'отлично' },
+];
 
 const emptyReflection: GameReflection = {
   eliminated: false,
   deathPhase: null,
   deathPositionId: null,
   kills: [],
+  selfRating: null,
   note: null,
 };
 
@@ -256,6 +267,42 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
 
           {!isLoading && step === 4 && (
             <div className="space-y-4">
+              <p className="text-sm text-pb-subtext">Как ты отработал этот пойнт?</p>
+              <div className="grid grid-cols-5 gap-2">
+                {SELF_RATINGS.map((rating) => (
+                  <button
+                    key={rating.value}
+                    type="button"
+                    // Повторный тап снимает оценку: пропустить экран — валидный ответ.
+                    onClick={() =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        selfRating: prev.selfRating === rating.value ? null : rating.value,
+                      }))
+                    }
+                    className={`py-3 rounded-xl border transition-colors flex flex-col items-center gap-1 ${
+                      draft.selfRating === rating.value
+                        ? 'bg-pb-primary text-pb-background border-pb-primary'
+                        : 'bg-white/5 text-white border-white/10'
+                    }`}
+                  >
+                    <span className="font-bold">{rating.value}</span>
+                    <span className="text-[9px] opacity-70 leading-none">{rating.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(5)}
+                className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background"
+              >
+                {draft.selfRating ? 'Дальше' : 'Пропустить'}
+              </button>
+            </div>
+          )}
+
+          {!isLoading && step === 5 && (
+            <div className="space-y-4">
               <p className="text-sm text-pb-subtext">Что ещё было важного? Необязательно.</p>
               <textarea
                 value={draft.note ?? ''}
@@ -282,7 +329,7 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
             <button type="button" onClick={goBack}>
               {step > 1 ? 'Назад' : 'Отмена'}
             </button>
-            <span>Шаг {step} из 4</span>
+            <span>Шаг {step} из 5</span>
           </div>
         </div>
       </div>

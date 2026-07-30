@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection } from './types';
+import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport } from './types';
 import {
   createLocalDevEvent,
   getLocalDevAuthMe,
@@ -690,6 +690,25 @@ export const api = {
 
   async saveMyReflection(gameId: string, reflection: GameReflection) {
     return request(`/reflections/games/${gameId}/mine`, { method: 'PUT', body: reflection });
+  },
+
+  // canEdit считает сервер по роли в команде — на клиенте роль не выводим,
+  // от неё зависит доступ к записи.
+  async getCaptainReport(gameId: string): Promise<{ report: CaptainReport | null; canEdit: boolean }> {
+    return request<{ report: CaptainReport | null; canEdit: boolean }>(`/reflections/games/${gameId}/captain`);
+  },
+
+  async saveCaptainReport(gameId: string, report: CaptainReport) {
+    const { initiative, ...rest } = report;
+    return request(`/reflections/games/${gameId}/captain`, {
+      method: 'PUT',
+      body: {
+        ...rest,
+        initiativeSnake: initiative.snake,
+        initiativeCenter: initiative.center,
+        initiativeEnvelope: initiative.envelope,
+      },
+    });
   },
 
   // Изменить дату/время события (scope single). Бэкенд PATCH /events/:id умеет

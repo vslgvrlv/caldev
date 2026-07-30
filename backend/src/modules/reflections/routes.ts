@@ -27,6 +27,8 @@ const reflectionSchema = z
     deathPhase: phaseSchema.nullable().optional(),
     deathPositionId: z.string().max(64).nullable().optional(),
     kills: z.array(killSchema).max(20).default([]),
+    // Самооценка 1–5 (§8.3). Необязательна: экран пропускаемый, NULL = «не оценил».
+    selfRating: z.number().int().min(1).max(5).nullable().optional(),
     note: z.string().trim().max(2000).nullable().optional(),
   })
   .superRefine((value, ctx) => {
@@ -73,6 +75,7 @@ type ReflectionRow = {
   eliminated: boolean;
   death_phase: string | null;
   death_position_id: string | null;
+  self_rating: number | null;
   note: string | null;
   updated_at: string;
 };
@@ -86,6 +89,7 @@ function serializeReflection(row: ReflectionRow, kills: KillRow[]) {
     eliminated: row.eliminated,
     deathPhase: row.death_phase,
     deathPositionId: row.death_position_id,
+    selfRating: row.self_rating,
     note: row.note,
     updatedAt: row.updated_at,
     kills: kills
@@ -120,7 +124,7 @@ reflectionsRouter.get(
     }
 
     const result = await query<ReflectionRow>(
-      `SELECT id, user_id, eliminated, death_phase, death_position_id, note, updated_at
+      `SELECT id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at
        FROM game_reflections
        WHERE game_id = $1 AND user_id = $2`,
       [gameId, userId]
@@ -154,12 +158,13 @@ reflectionsRouter.put(
       await client.query("BEGIN");
 
       const saved = await client.query<{ id: string }>(
-        `INSERT INTO game_reflections (game_id, user_id, eliminated, death_phase, death_position_id, note)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO game_reflections (game_id, user_id, eliminated, death_phase, death_position_id, self_rating, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (game_id, user_id) DO UPDATE
            SET eliminated        = EXCLUDED.eliminated,
                death_phase       = EXCLUDED.death_phase,
                death_position_id = EXCLUDED.death_position_id,
+               self_rating       = EXCLUDED.self_rating,
                note              = EXCLUDED.note,
                updated_at        = NOW()
          RETURNING id`,
@@ -169,6 +174,7 @@ reflectionsRouter.put(
           payload.eliminated,
           payload.eliminated ? payload.deathPhase! : null,
           payload.eliminated ? payload.deathPositionId ?? null : null,
+          payload.selfRating ?? null,
           payload.note?.length ? payload.note : null,
         ]
       );
@@ -325,7 +331,7 @@ reflectionsRouter.get(
     }
 
     const reflections = await query<ReflectionRow>(
-      `SELECT id, user_id, eliminated, death_phase, death_position_id, note, updated_at
+      `SELECT id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at
        FROM game_reflections
        WHERE game_id = $1`,
       [gameId]

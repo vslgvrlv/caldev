@@ -67,6 +67,30 @@ describe("game_reflections schema", () => {
     ).rejects.toThrow(/game_reflections_death_consistency_check/);
   });
 
+  // Ноль как «не оценил» сломал бы средние: 0 — не оценка, а отсутствие ответа,
+  // поэтому пропуск экрана хранится как NULL и в шкалу не попадает.
+  it("самооценка — только 1–5, ноль и шестёрка не проходят", async () => {
+    for (const rating of [0, 6]) {
+      await expect(
+        pool.query(
+          `INSERT INTO game_reflections (game_id, user_id, eliminated, self_rating)
+           VALUES ($1, $2, FALSE, $3)`,
+          [fixture.gameId, fixture.userId, rating]
+        )
+      ).rejects.toThrow(/game_reflections_self_rating_check/);
+    }
+  });
+
+  it("самооценку можно не ставить — экран пропускаемый", async () => {
+    const saved = await pool.query<{ id: string; self_rating: number | null }>(
+      `INSERT INTO game_reflections (game_id, user_id, eliminated) VALUES ($1, $2, FALSE)
+       RETURNING id, self_rating`,
+      [fixture.gameId, fixture.userId]
+    );
+    expect(saved.rows[0].self_rating).toBeNull();
+    await pool.query(`DELETE FROM game_reflections WHERE id = $1`, [saved.rows[0].id]);
+  });
+
   // Укрытие может быть неизвестно: на разбежке игрок не всегда видит, откуда прилетело.
   it("выбили без укрытия — валидный ответ", async () => {
     const r = await pool.query<{ id: string }>(
