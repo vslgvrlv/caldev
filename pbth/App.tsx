@@ -23,6 +23,29 @@ import { api, type NotificationDeliveryResponse } from './api'; // Import API
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
+type ScheduleItemPayload = {
+  id?: string;
+  time: string;
+  opponent: string;
+  score?: string;
+  pitZone?: 'NEAR' | 'FAR';
+  gamePair?: 'FIRST' | 'SECOND';
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// PATCH расписания обновляет геймы по id, а не пересоздаёт их: на гейме висят
+// рефлексии (#89). Локальные id старого формата (`g-<timestamp>`) сервер не
+// примет — для них id не отправляем, гейм заведётся заново.
+const toScheduleItemPayload = (game: Game): ScheduleItemPayload => ({
+  id: UUID_RE.test(game.id) ? game.id : undefined,
+  time: game.time,
+  opponent: game.opponent,
+  score: game.score,
+  pitZone: game.pitZone,
+  gamePair: game.gamePair,
+});
+
 const App: React.FC = () => {
   const logoutGuardKey = 'pbth:skip-auto-auth-after-logout';
   const logoutGuardCookie = 'pbth_logout_guard';
@@ -778,7 +801,9 @@ const App: React.FC = () => {
 
   const handleAddGame = async (eventId: string, game: Omit<Game, 'id'>) => {
     const createdGame: Game = {
-      id: `g-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      // Настоящий UUID, а не `g-<timestamp>`: id уезжает на сервер и становится
+      // постоянным id гейма. На гейме висят рефлексии (#89) — он не должен меняться.
+      id: crypto.randomUUID(),
       time: game.time,
       opponent: game.opponent,
       score: game.score,
@@ -786,19 +811,13 @@ const App: React.FC = () => {
       gamePair: game.gamePair,
     };
 
-    let nextScheduleForApi: Array<{ time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }> = [];
+    let nextScheduleForApi: ScheduleItemPayload[] = [];
 
     const applyAddGame = (sourceEvent: Event): Event => {
       const nextSchedule = [...(sourceEvent.schedule || []), createdGame].sort((a, b) =>
         a.time.localeCompare(b.time)
       );
-      nextScheduleForApi = nextSchedule.map((item) => ({
-        time: item.time,
-        opponent: item.opponent,
-        score: item.score,
-        pitZone: item.pitZone,
-        gamePair: item.gamePair,
-      }));
+      nextScheduleForApi = nextSchedule.map(toScheduleItemPayload);
       return { ...sourceEvent, schedule: nextSchedule };
     };
 
@@ -819,7 +838,7 @@ const App: React.FC = () => {
     gameId: string,
     patch: { time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }
   ) => {
-    let nextScheduleForApi: Array<{ time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }> = [];
+    let nextScheduleForApi: ScheduleItemPayload[] = [];
 
     const applyGamePatch = (sourceEvent: Event): Event => {
       const nextSchedule = (sourceEvent.schedule || []).map((game) =>
@@ -827,13 +846,7 @@ const App: React.FC = () => {
           ? { ...game, time: patch.time, opponent: patch.opponent, score: patch.score, pitZone: patch.pitZone, gamePair: patch.gamePair }
           : game
       );
-      nextScheduleForApi = nextSchedule.map((game) => ({
-        time: game.time,
-        opponent: game.opponent,
-        score: game.score,
-        pitZone: game.pitZone,
-        gamePair: game.gamePair,
-      }));
+      nextScheduleForApi = nextSchedule.map(toScheduleItemPayload);
       return { ...sourceEvent, schedule: nextSchedule };
     };
 

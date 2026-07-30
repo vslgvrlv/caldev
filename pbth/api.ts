@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType } from './types';
+import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport } from './types';
 import {
   createLocalDevEvent,
   getLocalDevAuthMe,
@@ -666,11 +666,48 @@ export const api = {
 
   async updateEventSchedule(
     eventId: string,
-    schedule: Array<{ time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }>
+    schedule: Array<{ id?: string; time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }>
   ) {
     return request(`/events/${eventId}`, {
       method: 'PATCH',
       body: { scope: 'single', schedule },
+    });
+  },
+
+  // --- Рефлексия по гейму (#89) ---
+
+  // Каталог укрытий отдаётся целиком (51 позиция) и не меняется в течение
+  // турнира — тянем один раз на открытие формы, фильтруем на клиенте.
+  async getFieldPositions(): Promise<FieldPosition[]> {
+    const data = await request<{ items: FieldPosition[] }>('/field-positions');
+    return data.items;
+  },
+
+  async getMyReflection(gameId: string): Promise<GameReflection | null> {
+    const data = await request<{ reflection: GameReflection | null }>(`/reflections/games/${gameId}/mine`);
+    return data.reflection;
+  },
+
+  async saveMyReflection(gameId: string, reflection: GameReflection) {
+    return request(`/reflections/games/${gameId}/mine`, { method: 'PUT', body: reflection });
+  },
+
+  // canEdit считает сервер по роли в команде — на клиенте роль не выводим,
+  // от неё зависит доступ к записи.
+  async getCaptainReport(gameId: string): Promise<{ report: CaptainReport | null; canEdit: boolean }> {
+    return request<{ report: CaptainReport | null; canEdit: boolean }>(`/reflections/games/${gameId}/captain`);
+  },
+
+  async saveCaptainReport(gameId: string, report: CaptainReport) {
+    const { initiative, ...rest } = report;
+    return request(`/reflections/games/${gameId}/captain`, {
+      method: 'PUT',
+      body: {
+        ...rest,
+        initiativeSnake: initiative.snake,
+        initiativeCenter: initiative.center,
+        initiativeEnvelope: initiative.envelope,
+      },
     });
   },
 

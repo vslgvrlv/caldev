@@ -67,6 +67,54 @@ export interface Game {
   gamePair?: "FIRST" | "SECOND";
 }
 
+// Каталог укрытий на поле (#89). Максимальная конфигурация, 51 позиция;
+// поле конкретного турнира — подмножество по флагу active.
+export interface FieldPosition {
+  id: string;
+  group: 'grid' | 'snake' | 'envelope';
+  index: string;
+  side: 'NEAR' | 'FAR' | 'CENTER';
+  code: string;
+  depth: number;
+  label: string;
+  active: boolean;
+}
+
+// Фаза — когда это произошло. Одна шкала для поражения и для килла.
+export type ReflectionPhase = 'BREAK' | 'COVER' | 'ROTATION';
+
+export interface ReflectionKill {
+  phase: ReflectionPhase;
+  positionId: string | null;
+}
+
+export interface GameReflection {
+  eliminated: boolean;
+  deathPhase: ReflectionPhase | null;
+  deathPositionId: string | null;
+  kills: ReflectionKill[];
+  // Самооценка 1–5. null = экран пропущен, это не ноль.
+  selfRating: number | null;
+  note: string | null;
+}
+
+// Комбинация — план на пойнт (§3.2 спеки).
+export type GameCombination = 'ENVELOPE_ATTACK' | 'SNAKE_ATTACK' | 'ACTIVE_SNAKE' | 'ACTIVE_ENVELOPE';
+export type BreakWidth = 'NARROW' | 'WIDE';
+
+// Капитанский отчёт: верхнеуровневый взгляд на тот же пойнт. Существует ровно
+// один на гейм, редактируют капитан и тренер.
+export interface CaptainReport {
+  combination: GameCombination | null;
+  breakWidth: BreakWidth | null;
+  opponentBreakWidth: BreakWidth | null;
+  // Инициатива по трём линиям: -1 у них, 0 поровну, +1 у нас (§2.2).
+  initiative: { snake: number | null; center: number | null; envelope: number | null };
+  deltaOtb: number | null;
+  result: 'WIN' | 'LOSS' | null;
+  note: string | null;
+}
+
 export interface AttendeePreview {
   userId: string;
   name: string;

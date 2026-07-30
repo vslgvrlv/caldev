@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { compareDeltaOtb, computeDeltaOtb } from "../../lib/reflection-analytics.js";
+
+// Формула §2.1 спеки — её Василий правил дважды, поэтому тест сторожит именно
+// четыре ситуации из таблицы, а не «работает ли вычитание».
+describe("computeDeltaOtb", () => {
+  it("никого не потеряли и никого не отстрелили — равные составы", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [
+          { eliminated: false, deathPhase: null },
+          { eliminated: true, deathPhase: "COVER" },
+        ],
+        kills: [{ phase: "COVER" }, { phase: "ROTATION" }],
+      })
+    ).toEqual({ ourOtbLosses: 0, opponentOtbLosses: 0, deltaOtb: 0 });
+  });
+
+  it("отстреляли двоих, своих не потеряли — большинство +2", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [{ eliminated: false, deathPhase: null }],
+        kills: [{ phase: "BREAK" }, { phase: "BREAK" }, { phase: "COVER" }],
+      }).deltaOtb
+    ).toBe(2);
+  });
+
+  it("потеряли своего, никого не отстреляли — меньшинство −1", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [
+          { eliminated: true, deathPhase: "BREAK" },
+          { eliminated: true, deathPhase: "ROTATION" },
+        ],
+        kills: [{ phase: "ROTATION" }],
+      }).deltaOtb
+    ).toBe(-1);
+  });
+
+  // Главная причина правки формулы: обоюдный отстрел на разбежке — это НЕ
+  // «равные составы» и не «размен», а разница по количеству.
+  it("двое наших против одного их на разбежке — это −1, а не размен", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [
+          { eliminated: true, deathPhase: "BREAK" },
+          { eliminated: true, deathPhase: "BREAK" },
+          { eliminated: false, deathPhase: null },
+        ],
+        kills: [{ phase: "BREAK" }],
+      })
+    ).toEqual({ ourOtbLosses: 2, opponentOtbLosses: 1, deltaOtb: -1 });
+  });
+
+  // Поражение за укрытием/на перемещении к разбежке отношения не имеет —
+  // иначе дельта поехала бы на любом гейме.
+  it("фазы COVER и ROTATION в дельту не входят ни с одной стороны", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [{ eliminated: true, deathPhase: "COVER" }],
+        kills: [{ phase: "COVER" }, { phase: "ROTATION" }],
+      })
+    ).toEqual({ ourOtbLosses: 0, opponentOtbLosses: 0, deltaOtb: 0 });
+  });
+});
+
+describe("compareDeltaOtb", () => {
+  it("капитан не проставил дельту — это не согласие, а отсутствие ответа", () => {
+    expect(compareDeltaOtb(0, null)).toBeNull();
+    expect(compareDeltaOtb(2, undefined)).toBeNull();
+  });
+
+  it("совпало — расхождения нет, разошлось — есть", () => {
+    expect(compareDeltaOtb(-1, -1)).toBe(false);
+    expect(compareDeltaOtb(-1, 0)).toBe(true);
+    expect(compareDeltaOtb(0, 0)).toBe(false);
+  });
+});
