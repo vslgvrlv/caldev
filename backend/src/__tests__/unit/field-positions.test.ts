@@ -42,16 +42,24 @@ describe("field_positions catalog", () => {
     expect(r.rows).toHaveLength(2);
   });
 
-  it("у числовых задана линия глубины, у змей и конвертов — фланг", async () => {
+  it("у числовых задана линия глубины", async () => {
     const grid = await pool.query<{ count: string }>(
       `SELECT count(*) AS count FROM field_positions WHERE figure_group = 'grid' AND depth IS NULL`
     );
     expect(Number(grid.rows[0].count)).toBe(0);
+  });
 
-    const flanks = await pool.query<{ count: string }>(
-      `SELECT count(*) AS count FROM field_positions
-       WHERE figure_group IN ('snake', 'envelope') AND flank IS NULL`
+  // Короткая запись — то, что игрок реально набирает в форме: Z2Б, K4Д, 3000Б.
+  it("короткий код уникален и собран из группы, номера и стороны", async () => {
+    const r = await pool.query<{ id: string; code: string }>(
+      `SELECT id, code FROM field_positions
+       WHERE id IN ('snake.2.far', 'envelope.4.near', 'grid.3000.near') ORDER BY id`
     );
-    expect(Number(flanks.rows[0].count)).toBe(0);
+    expect(r.rows.map((x) => x.code)).toEqual(["K4Б", "3000Б", "Z2Д"]);
+
+    const dup = await pool.query<{ count: string }>(
+      `SELECT count(*) AS count FROM (SELECT code FROM field_positions GROUP BY 1 HAVING count(*) > 1) d`
+    );
+    expect(Number(dup.rows[0].count)).toBe(0);
   });
 });

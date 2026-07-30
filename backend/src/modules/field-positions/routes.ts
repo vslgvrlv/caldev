@@ -20,13 +20,13 @@ fieldPositionsRouter.get(
       figure_group: string;
       figure_index: string;
       side: string;
-      flank: string | null;
+      code: string;
       depth: number | null;
       label: string;
       aliases: string[];
       active: boolean;
     }>(
-      `SELECT id, figure_group, figure_index, side, flank, depth, label, aliases, active
+      `SELECT id, figure_group, figure_index, side, code, depth, label, aliases, active
        FROM field_positions
        WHERE $1::boolean OR active
        ORDER BY sort_order`,
@@ -38,7 +38,7 @@ fieldPositionsRouter.get(
       group: r.figure_group,
       index: r.figure_index,
       side: r.side,
-      flank: r.flank,
+      code: r.code,
       depth: r.depth,
       label: r.label,
       aliases: r.aliases,
