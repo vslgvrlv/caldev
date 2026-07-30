@@ -23,10 +23,9 @@ fieldPositionsRouter.get(
       code: string;
       depth: number | null;
       label: string;
-      aliases: string[];
       active: boolean;
     }>(
-      `SELECT id, figure_group, figure_index, side, code, depth, label, aliases, active
+      `SELECT id, figure_group, figure_index, side, code, depth, label, active
        FROM field_positions
        WHERE $1::boolean OR active
        ORDER BY sort_order`,
@@ -41,7 +40,6 @@ fieldPositionsRouter.get(
       code: r.code,
       depth: r.depth,
       label: r.label,
-      aliases: r.aliases,
       active: r.active,
     }));
 

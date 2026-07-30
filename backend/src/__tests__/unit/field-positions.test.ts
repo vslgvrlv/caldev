@@ -42,14 +42,25 @@ describe("field_positions catalog", () => {
     expect(r.rows).toHaveLength(2);
   });
 
-  it("у числовых задана линия глубины", async () => {
-    const grid = await pool.query<{ count: string }>(
-      `SELECT count(*) AS count FROM field_positions WHERE figure_group = 'grid' AND depth IS NULL`
+  // depth — номер ряда на схеме поля. Схема рисуется от базы вглубь, поэтому
+  // ряд должен быть задан у всех фигур, иначе фланговую нечем позиционировать.
+  it("линия глубины задана у всех фигур, Z1/K1 в первом ряду, Z4/K4 в дальнем", async () => {
+    const missing = await pool.query<{ count: string }>(
+      `SELECT count(*) AS count FROM field_positions WHERE depth IS NULL`
     );
-    expect(Number(grid.rows[0].count)).toBe(0);
+    expect(Number(missing.rows[0].count)).toBe(0);
+
+    const flanks = await pool.query<{ code: string; depth: number }>(
+      `SELECT code, depth FROM field_positions
+       WHERE side = 'NEAR' AND figure_group IN ('snake', 'envelope') ORDER BY code`
+    );
+    expect(flanks.rows.map((x) => [x.code, x.depth])).toEqual([
+      ["K1Б", 1], ["K2Б", 10], ["K3Б", 100], ["K4Б", 1000],
+      ["Z1Б", 1], ["Z2Б", 10], ["Z3Б", 100], ["Z4Б", 1000],
+    ]);
   });
 
-  // Короткая запись — то, что игрок реально набирает в форме: Z2Б, K4Д, 3000Б.
+  // Короткая запись — подпись на кнопке схемы: Z2Б, K4Д, 3000Б.
   it("короткий код уникален и собран из группы, номера и стороны", async () => {
     const r = await pool.query<{ id: string; code: string }>(
       `SELECT id, code FROM field_positions
