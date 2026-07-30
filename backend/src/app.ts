@@ -11,6 +11,7 @@ import { authRouter } from "./modules/auth/routes.js";
 import { yandexRouter } from "./modules/auth/yandex-routes.js";
 import { identitiesRouter } from "./modules/auth/identities-routes.js";
 import { eventsRouter } from "./modules/events/routes.js";
+import { fieldPositionsRouter } from "./modules/field-positions/routes.js";
 import { financeRouter } from "./modules/finance/routes.js";
 import { icsRouter } from "./modules/ics/routes.js";
 import { initRouter } from "./modules/init/routes.js";
@@ -105,6 +106,7 @@ function mountApiV1(router: express.Router) {
   router.use("/init", initRouter);
   router.use("/events", writeRateLimiter, eventsRouter);
   router.use("/places", placesRouter);
+  router.use("/field-positions", fieldPositionsRouter);
   router.use("/rsvp", writeRateLimiter, rsvpRouter);
   router.use("/finance", writeRateLimiter, financeRouter);
   router.use("/transactions", writeRateLimiter, financeRouter);
