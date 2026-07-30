@@ -104,6 +104,9 @@ const adminEventPatchSchema = z.object({
   schedule: z
     .array(
       z.object({
+        // id существующего гейма — см. комментарий в events/routes.ts: на гейме
+        // висят рефлексии (#89), пересоздавать его при правке расписания нельзя.
+        id: z.string().uuid().optional(),
         time: z.string().min(1).max(40),
         opponent: z.string().min(1).max(200),
         score: z.string().max(40).optional(),
@@ -1211,14 +1214,41 @@ adminRouter.patch(
       );
 
       if (payload.schedule !== undefined) {
-        await client.query(`DELETE FROM event_games WHERE event_id = $1`, [eventId]);
+        // Upsert по id, а не DELETE+INSERT: гейм — якорь рефлексий (#89).
+        const keptGameIds: string[] = [];
         for (const game of payload.schedule) {
-          await client.query(
-            `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [eventId, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null]
+          const saved = await client.query<{ id: string }>(
+            `INSERT INTO event_games (id, event_id, time_label, opponent, score, pit_zone, game_pair)
+             VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE
+               SET time_label = EXCLUDED.time_label,
+                   opponent   = EXCLUDED.opponent,
+                   score      = EXCLUDED.score,
+                   pit_zone   = EXCLUDED.pit_zone,
+                   game_pair  = EXCLUDED.game_pair,
+                   updated_at = NOW()
+             WHERE event_games.event_id = EXCLUDED.event_id
+             RETURNING id`,
+            [
+              game.id ?? null,
+              eventId,
+              game.time,
+              game.opponent,
+              game.score ?? null,
+              game.pitZone ?? null,
+              game.gamePair ?? null,
+            ]
           );
+          if (!saved.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ detail: "Game does not belong to this event" });
+          }
+          keptGameIds.push(saved.rows[0].id);
         }
+        await client.query(`DELETE FROM event_games WHERE event_id = $1 AND NOT (id = ANY($2::uuid[]))`, [
+          eventId,
+          keptGameIds,
+        ]);
       }
 
       const shouldUpsertRegistration =

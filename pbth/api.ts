@@ -666,7 +666,7 @@ export const api = {
 
   async updateEventSchedule(
     eventId: string,
-    schedule: Array<{ time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }>
+    schedule: Array<{ id?: string; time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }>
   ) {
     return request(`/events/${eventId}`, {
       method: 'PATCH',

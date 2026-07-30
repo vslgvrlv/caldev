@@ -69,6 +69,9 @@ const updateEventSchema = z.object({
   schedule: z
     .array(
       z.object({
+        // id присылается для уже существующего гейма. На гейме висят рефлексии (#89),
+        // поэтому правка расписания не должна пересоздавать его заново.
+        id: z.string().uuid().optional(),
         time: z.string(),
         opponent: z.string(),
         score: z.string().optional(),
@@ -748,14 +751,43 @@ eventsRouter.patch(
       );
 
       if (payload.schedule !== undefined) {
-        await client.query(`DELETE FROM event_games WHERE event_id = $1`, [eventId]);
+        // Не DELETE+INSERT: id гейма — якорь рефлексий (#89), пересоздание расписания
+        // унесло бы их каскадом. Присланные геймы обновляем по id, отсутствующие удаляем.
+        const keptGameIds: string[] = [];
         for (const game of payload.schedule) {
-          await client.query(
-            `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [eventId, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null]
+          const saved = await client.query<{ id: string }>(
+            `INSERT INTO event_games (id, event_id, time_label, opponent, score, pit_zone, game_pair)
+             VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (id) DO UPDATE
+               SET time_label = EXCLUDED.time_label,
+                   opponent   = EXCLUDED.opponent,
+                   score      = EXCLUDED.score,
+                   pit_zone   = EXCLUDED.pit_zone,
+                   game_pair  = EXCLUDED.game_pair,
+                   updated_at = NOW()
+             WHERE event_games.event_id = EXCLUDED.event_id
+             RETURNING id`,
+            [
+              game.id ?? null,
+              eventId,
+              game.time,
+              game.opponent,
+              game.score ?? null,
+              game.pitZone ?? null,
+              game.gamePair ?? null,
+            ]
           );
+          // Пусто = прислали id гейма из другого события. Молча создавать дубль нельзя.
+          if (!saved.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ detail: "Game does not belong to this event" });
+          }
+          keptGameIds.push(saved.rows[0].id);
         }
+        await client.query(`DELETE FROM event_games WHERE event_id = $1 AND NOT (id = ANY($2::uuid[]))`, [
+          eventId,
+          keptGameIds,
+        ]);
       }
 
       await rememberPlace(
