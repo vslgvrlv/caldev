@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Send, ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '../api';
+import { EventSummarySection } from './EventSummarySection';
 import type { BreakWidth, EventTable, EventTablePoint, GameCombination, ReflectionPhase } from '../types';
 
 // Таблица разбора по событию (#89) — то место, где тренер читает результат и
@@ -137,6 +138,7 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  const [tab, setTab] = useState<'summary' | 'points'>('summary');
 
   // Выгрузка всегда уходит файлом в чат с ботом. Скачивание внутри Telegram
   // открывает файл окном поверх приложения, из которого нет пути назад
@@ -188,7 +190,7 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
       <div className="relative w-full max-w-lg bg-pb-surface rounded-t-2xl sm:rounded-2xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-pb-surface border-b border-white/5 px-5 py-4 z-10 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-white truncate">Таблица разбора</h3>
+            <h3 className="text-base font-bold text-white truncate">Разбор</h3>
             <p className="text-pb-subtext text-xs mt-0.5 truncate">{table?.eventTitle ?? ''}</p>
           </div>
           <button type="button" onClick={onClose} className="text-xs text-pb-subtext shrink-0 pt-1">
@@ -203,13 +205,35 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
             </div>
           )}
 
+          {/* Итоги открываются первыми: 15 игроков на 8 пойнтов дают простыню,
+              с которой нельзя работать глазами. Детали — на второй вкладке. */}
+          {!isLoading && table && hasPoints && (
+            <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+              {(['summary', 'points'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
+                    tab === value ? 'bg-pb-primary text-pb-background' : 'text-pb-subtext'
+                  }`}
+                >
+                  {value === 'summary' ? 'Итоги' : 'По пойнтам'}
+                </button>
+              ))}
+            </div>
+          )}
+
           {!isLoading && table && !hasPoints && (
             <p className="text-sm text-pb-subtext">
               Пойнтов пока нет. Они появятся, когда у геймов будет проставлен счёт.
             </p>
           )}
 
+          {!isLoading && table && hasPoints && tab === 'summary' && <EventSummarySection summary={table.summary} />}
+
           {!isLoading &&
+            tab === 'points' &&
             table?.games.map((game) => (
               <div key={game.gameId} className="bg-white/5 rounded-2xl border border-white/5 px-4 py-2">
                 <div className="flex items-baseline justify-between gap-2 py-2">

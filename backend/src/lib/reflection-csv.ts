@@ -10,6 +10,7 @@ import {
   initiativeLabel,
   labelOf,
 } from "./reflection-labels.js";
+import type { EventSummary } from "./reflection-summary.js";
 
 // Структурный тип: сюда приходит ровно то, что отдаёт эндпоинт таблицы.
 export type ReflectionCsvTable = {
@@ -141,6 +142,102 @@ export function renderTableCsv(table: ReflectionCsvTable): string {
       }
     }
   }
+
+  return lines.join("\r\n");
+}
+
+// Сводка отдельным файлом, а не блоком поверх таблицы: если положить её сверху,
+// строка заголовка детальной таблицы перестаёт быть первой и в Excel ломаются
+// фильтр и сводная. Два файла — две чистые таблицы.
+const LINE_LABEL: Record<string, string> = {
+  snake: "змея",
+  center: "центр",
+  envelope: "конверты",
+};
+
+// Проценты без размера выборки врут, поэтому winrate и «на скольких пойнтах»
+// всегда идут парой — в отдельных колонках, чтобы по ним можно было сортировать.
+function rateCells(rate: { wins: number; losses: number; total: number; winRate: number | null }) {
+  return [rate.total, rate.wins, rate.losses, rate.winRate === null ? "" : `${rate.winRate}%`];
+}
+
+const RATE_HEADER = ["Пойнтов", "Выиграли", "Проиграли", "Winrate"];
+
+export function renderSummaryCsv(summary: EventSummary, eventTitle: string): string {
+  const lines: string[] = [];
+  const push = (cells: unknown[]) => lines.push(cells.map(csvCell).join(";"));
+  const section = (title: string, header: string[]) => {
+    if (lines.length) lines.push("");
+    push([title]);
+    push(header);
+  };
+
+  push([`Сводка разбора: ${eventTitle}`]);
+  lines.push("");
+  push(["Пойнтов всего", summary.coverage.points]);
+  push(["Размечено по результату", summary.coverage.marked]);
+  push(["С рефлексиями игроков", summary.coverage.withReflections]);
+  push(["С разбором капитана", summary.coverage.withCaptainReport]);
+
+  section("Реализация численного преимущества (дельта разбежки)", ["Дельта", ...RATE_HEADER]);
+  if (!summary.deltaOtb.length) push(["нет данных"]);
+  for (const row of summary.deltaOtb) {
+    push([row.delta > 0 ? `+${row.delta}` : String(row.delta), ...rateCells(row)]);
+  }
+
+  section(`Инициатива в равных составах (пойнтов с дельтой 0: ${summary.equalSquads.points})`, [
+    "Линия",
+    "Инициатива",
+    ...RATE_HEADER,
+  ]);
+  for (const line of summary.equalSquads.lines) {
+    push([LINE_LABEL[line.line] ?? line.line, "забрали мы", ...rateCells(line.ours)]);
+    push([LINE_LABEL[line.line] ?? line.line, "забрал соперник", ...rateCells(line.theirs)]);
+    push([LINE_LABEL[line.line] ?? line.line, "поровну", ...rateCells(line.even)]);
+  }
+
+  section("Комбинации", ["Комбинация", ...RATE_HEADER]);
+  if (!summary.combinations.length) push(["нет данных"]);
+  for (const row of summary.combinations) {
+    push([labelOf(COMBINATION_LABEL, row.combination), ...rateCells(row)]);
+  }
+
+  section("Разбежка", ["Наша", "Соперника", ...RATE_HEADER]);
+  if (!summary.breakWidth.length) push(["нет данных"]);
+  for (const row of summary.breakWidth) {
+    push([labelOf(BREAK_WIDTH_LABEL, row.ours), labelOf(BREAK_WIDTH_LABEL, row.theirs), ...rateCells(row)]);
+  }
+
+  section("Игроки", [
+    "Игрок",
+    "Ник",
+    "Пойнтов заполнено",
+    "Выбит",
+    "На разбежке",
+    "За укрытием",
+    "На перемещении",
+    "Киллов",
+    "Самооценка средняя",
+    "Самооценка в проигранных",
+  ]);
+  if (!summary.players.length) push(["нет данных"]);
+  for (const player of summary.players) {
+    push([
+      player.name,
+      player.nickname,
+      player.points,
+      player.eliminated,
+      player.deathPhases.BREAK ?? 0,
+      player.deathPhases.COVER ?? 0,
+      player.deathPhases.ROTATION ?? 0,
+      player.kills,
+      player.avgSelfRating ?? "",
+      player.avgSelfRatingInLosses ?? "",
+    ]);
+  }
+
+  section("Расхождение капитана с расчётом дельты", ["Сравнено пойнтов", "Разошлось"]);
+  push([summary.captainMismatch.compared, summary.captainMismatch.mismatched]);
 
   return lines.join("\r\n");
 }

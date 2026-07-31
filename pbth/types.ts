@@ -155,11 +155,52 @@ export interface EventTablePoint {
   reflections: Array<GameReflection & { userId: string; name: string; nickname: string }>;
 }
 
+// Winrate всегда ходит с размером выборки: «85%» из трёх пойнтов выглядит как
+// знание, но это гадание. total обязателен к показу рядом с процентом.
+export interface Rate {
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number | null;
+}
+
+export interface InitiativeLineSummary {
+  line: 'snake' | 'center' | 'envelope';
+  ours: Rate;
+  theirs: Rate;
+  even: Rate;
+}
+
+export interface PlayerSummary {
+  userId: string;
+  name: string;
+  nickname: string;
+  points: number;
+  eliminated: number;
+  deathPhases: Record<string, number>;
+  kills: number;
+  killPhases: Record<string, number>;
+  avgSelfRating: number | null;
+  avgSelfRatingInLosses: number | null;
+}
+
+// Сводка по событию — ответы на вопросы спеки, а не показ данных.
+export interface EventSummary {
+  coverage: { points: number; marked: number; withReflections: number; withCaptainReport: number };
+  deltaOtb: Array<{ delta: number } & Rate>;
+  equalSquads: { points: number; lines: InitiativeLineSummary[] };
+  combinations: Array<{ combination: GameCombination } & Rate>;
+  breakWidth: Array<{ ours: BreakWidth; theirs: BreakWidth } & Rate>;
+  players: PlayerSummary[];
+  captainMismatch: { compared: number; mismatched: number };
+}
+
 export interface EventTable {
   eventId: string;
   eventTitle: string;
   // id укрытия -> код для чтения человеком («grid.300.far» -> «300Д»).
   positions: Record<string, string>;
+  summary: EventSummary;
   games: Array<{
     gameId: string;
     time: string;

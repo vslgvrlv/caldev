@@ -7,7 +7,8 @@ import { writeAudit } from "../../lib/audit.js";
 import { sendError } from "../../lib/http-error.js";
 import { compareDeltaOtb, computeDeltaOtb, type ReflectionPhase } from "../../lib/reflection-analytics.js";
 import { checkPointResults, parseScore } from "../../lib/game-points.js";
-import { renderTableCsv } from "../../lib/reflection-csv.js";
+import { renderSummaryCsv, renderTableCsv } from "../../lib/reflection-csv.js";
+import { buildEventSummary } from "../../lib/reflection-summary.js";
 import { sendTelegramBotDocument } from "../../lib/telegram-bot.js";
 
 // Рефлексия (#89). Единица — ПОЙНТ, а не гейм: гейм со счётом 4:3 состоит из
@@ -575,7 +576,10 @@ reflectionsRouter.get(
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
     }
 
-    return res.json(await buildEventTable(eventId, membership.rows[0].title));
+    // Сводка едет вместе с таблицей, а не отдельным запросом: экран разбора
+    // открывается сразу с ответами, а данные для них те же самые.
+    const table = await buildEventTable(eventId, membership.rows[0].title);
+    return res.json({ ...table, summary: buildEventSummary(table) });
   })
 );
 
@@ -662,9 +666,9 @@ async function buildEventTable(eventId: string, eventTitle: string) {
 
 // Имя файла для человека: он ищет выгрузку среди других файлов в телефоне,
 // и «reflections-8f3a-...csv» там не находится.
-function csvFileName(eventTitle: string): string {
+function csvFileName(prefix: string, eventTitle: string): string {
   const safe = eventTitle.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
-  return `Разбор — ${safe || "событие"}.csv`;
+  return `${prefix} — ${safe || "событие"}.csv`;
 }
 
 async function loadTableForUser(eventId: string, userId: string) {
@@ -681,7 +685,12 @@ async function loadTableForUser(eventId: string, userId: string) {
   const title = membership.rows[0].title;
   const table = await buildEventTable(eventId, title);
   // BOM: без него Excel открывает кириллицу в CP1251 и получается каша.
-  return { title, telegramId: membership.rows[0].telegram_id, csv: `\uFEFF${renderTableCsv(table)}` };
+  return {
+    title,
+    telegramId: membership.rows[0].telegram_id,
+    csv: `\uFEFF${renderTableCsv(table)}`,
+    summaryCsv: `\uFEFF${renderSummaryCsv(buildEventSummary(table), title)}`,
+  };
 }
 
 // Выгрузка той же таблицы в CSV: разбор продолжается в таблице, а не в
@@ -699,7 +708,7 @@ reflectionsRouter.get(
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="reflections-${eventId}.csv"; filename*=UTF-8''${encodeURIComponent(csvFileName(loaded.title))}`
+      `attachment; filename="reflections-${eventId}.csv"; filename*=UTF-8''${encodeURIComponent(csvFileName("Разбор", loaded.title))}`
     );
     return res.send(loaded.csv);
   })
@@ -725,8 +734,14 @@ reflectionsRouter.post(
     }
 
     try {
-      await sendTelegramBotDocument(loaded.telegramId, csvFileName(loaded.title), loaded.csv, {
-        caption: `Разбор: ${loaded.title}`,
+      // Сводка идёт первой и отдельным файлом: с неё начинают разбор, а
+      // детальная простыня нужна только чтобы проверить конкретный пойнт.
+      await sendTelegramBotDocument(loaded.telegramId, csvFileName("Сводка", loaded.title), loaded.summaryCsv, {
+        caption: `Сводка разбора: ${loaded.title}`,
+        mimeType: "text/csv; charset=utf-8",
+      });
+      await sendTelegramBotDocument(loaded.telegramId, csvFileName("Разбор", loaded.title), loaded.csv, {
+        caption: "Детально по пойнтам",
         mimeType: "text/csv; charset=utf-8",
       });
     } catch (error) {
