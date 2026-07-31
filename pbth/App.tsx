@@ -946,6 +946,7 @@ const App: React.FC = () => {
         <EventDetailView
           event={selectedEvent}
           currentUserRole={selectedEvent.viewerRole || activeTeam!.role}
+          teamName={activeTeam!.name}
           onBack={() => setSelectedEvent(null)}
           onRsvp={handleRsvp}
           onAddGame={handleAddGame}

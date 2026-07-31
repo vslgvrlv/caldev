@@ -15,6 +15,7 @@ import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 import { GamePointsModal } from '../components/GamePointsModal';
+import { GameScoreLine } from '../components/GameScoreLine';
 import { EventTableModal } from '../components/EventTableModal';
 
 interface EventDetailAttendee {
@@ -30,6 +31,8 @@ interface EventDetailAttendee {
 interface EventDetailViewProps {
   event: Event;
   currentUserRole: Role;
+  /** Имя своей команды — в расписании счёт показывается как «мы N:N соперник». */
+  teamName: string;
   onBack: () => void;
   onRsvp: (id: string, status: RSVPStatus) => void;
   onAddGame: (eventId: string, game: Omit<Game, 'id'>) => void;
@@ -92,6 +95,7 @@ const pluralizeOccurrence = (count: number): string => {
 export const EventDetailView: React.FC<EventDetailViewProps> = ({
   event,
   currentUserRole,
+  teamName,
   onBack,
   onRsvp,
   onAddGame,
@@ -1003,48 +1007,45 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                   )}
 
                   {sortedSchedule.map((game) => (
-                    <div key={game.id} className="w-full flex items-center relative z-0 group">
-                      <button
-                        type="button"
-                        onClick={() => openGameCard(game)}
-                        className="flex-1 min-w-0 flex items-center text-left"
-                      >
-                        <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0">{normalizeTimeForInput(game.time) || game.time}</div>
+                    <div key={game.id} className="w-full flex items-start relative z-0 group">
+                      <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0 pt-2">
+                        {normalizeTimeForInput(game.time) || game.time}
+                      </div>
 
-                        <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 mt-4 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
 
-                        {/* Соперник — главное в строке, поэтому занимает всю ширину
-                            карточки. Пара, пит-зона и счёт уходят строкой ниже:
-                            раньше они стояли рядом и как shrink-0 съедали имя до
-                            «Ш…» (Василий, 2026-07-31). */}
-                        <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors">
-                          <div className="flex items-baseline gap-2">
-                            <div className="flex-1 min-w-0 font-bold text-white text-sm truncate">{game.opponent}</div>
-                            {game.score && <span className="shrink-0 text-pb-warning font-mono font-bold text-sm">{game.score}</span>}
-                          </div>
-                          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-pb-subtext mt-1.5">
+                      {/* Строка читается как на regevent.ru, откуда капитан переносит
+                          результаты: «наша команда [очки][очки] соперник». Имена берут
+                          всю ширину карточки и переносятся по словам — раньше пит-зона
+                          стояла рядом как shrink-0 и съедала соперника до «Ш…»
+                          (Василий, 2026-07-31). Пара и пит-зона — метаданными ниже. */}
+                      <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors">
+                        <button type="button" onClick={() => openGameCard(game)} className="w-full text-left">
+                          <GameScoreLine teamName={teamName} opponent={game.opponent} score={game.score} />
+                        </button>
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-pb-subtext">
                             <span>{game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}</span>
                             {game.pitZone && (
-                              <>
-                                <span className="text-white/20">·</span>
-                                <span title={PIT_ZONE_LABELS[game.pitZone]}>{PIT_ZONE_BADGE[game.pitZone]} пит-зона</span>
-                              </>
+                              <span title={PIT_ZONE_LABELS[game.pitZone]}>
+                                · {PIT_ZONE_BADGE[game.pitZone]} пит-зона
+                              </span>
                             )}
                           </div>
-                        </div>
-                      </button>
 
-                      {/* Один вход на гейм — список его пойнтов. Рефлексия и разбор
-                          капитана живут внутри, за конкретным пойнтом. */}
-                      <button
-                        type="button"
-                        onClick={() => setPointsGame(game)}
-                        title="Пойнты и рефлексия"
-                        aria-label="Пойнты и рефлексия"
-                        className="shrink-0 ml-1.5 p-2.5 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
-                      >
-                        <Swords size={16} />
-                      </button>
+                          {/* Один вход на гейм — список его пойнтов. Рефлексия и разбор
+                              капитана живут внутри, за конкретным пойнтом. Иконка без
+                              подписи не читалась — поэтому кнопка с текстом. */}
+                          <button
+                            type="button"
+                            onClick={() => setPointsGame(game)}
+                            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
+                          >
+                            <Swords size={12} /> Пойнты
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1638,7 +1639,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         </div>
       )}
 
-      {pointsGame && <GamePointsModal isOpen game={pointsGame} onClose={() => setPointsGame(null)} />}
+      {pointsGame && (
+        <GamePointsModal isOpen game={pointsGame} teamName={teamName} onClose={() => setPointsGame(null)} />
+      )}
 
       {isTableOpen && <EventTableModal isOpen eventId={event.id} onClose={() => setIsTableOpen(false)} />}
 
