@@ -2,6 +2,15 @@
 // обмена: разбор продолжается в таблице, а не в приложении, и раскладка колонок
 // должна быть покрыта тестами — сдвиг на одну колонку заметят через месяц.
 
+import {
+  BREAK_WIDTH_LABEL,
+  COMBINATION_LABEL,
+  PHASE_LABEL,
+  POINT_RESULT_LABEL,
+  initiativeLabel,
+  labelOf,
+} from "./reflection-labels.js";
+
 // Структурный тип: сюда приходит ровно то, что отдаёт эндпоинт таблицы.
 export type ReflectionCsvTable = {
   positions: Record<string, string>;
@@ -48,7 +57,7 @@ export const CSV_HEADER = [
   "Фаза поражения",
   "Укрытие поражения",
   "Киллов",
-  "Киллы (фаза@укрытие)",
+  "Киллы (фаза · укрытие)",
   "Самооценка",
   "Заметка игрока",
   "Дельта разбежки (расчёт)",
@@ -80,18 +89,18 @@ export function renderTableCsv(table: ReflectionCsvTable): string {
         game.opponent,
         game.score,
         point.ordinal,
-        point.result === "WIN" ? "выиграли" : point.result === "LOSS" ? "проиграли" : "",
+        labelOf(POINT_RESULT_LABEL, point.result),
       ];
       const captain = [
         point.deltaOtb,
         point.captainReport?.deltaOtb ?? "",
         point.deltaOtbMismatch === null ? "" : point.deltaOtbMismatch ? "да" : "нет",
-        point.captainReport?.combination ?? "",
-        point.captainReport?.breakWidth ?? "",
-        point.captainReport?.opponentBreakWidth ?? "",
-        point.captainReport?.initiative.snake ?? "",
-        point.captainReport?.initiative.center ?? "",
-        point.captainReport?.initiative.envelope ?? "",
+        labelOf(COMBINATION_LABEL, point.captainReport?.combination),
+        labelOf(BREAK_WIDTH_LABEL, point.captainReport?.breakWidth),
+        labelOf(BREAK_WIDTH_LABEL, point.captainReport?.opponentBreakWidth),
+        initiativeLabel(point.captainReport?.initiative.snake),
+        initiativeLabel(point.captainReport?.initiative.center),
+        initiativeLabel(point.captainReport?.initiative.envelope),
         point.captainReport?.note ?? "",
       ];
 
@@ -109,14 +118,19 @@ export function renderTableCsv(table: ReflectionCsvTable): string {
             reflection.name,
             reflection.nickname,
             reflection.eliminated ? "да" : "нет",
-            reflection.deathPhase ?? "",
+            labelOf(PHASE_LABEL, reflection.deathPhase),
             reflection.deathPositionId
               ? table.positions[reflection.deathPositionId] ?? reflection.deathPositionId
               : "",
             reflection.kills.length,
             reflection.kills
-              .map((k) => `${k.phase}@${k.positionId ? table.positions[k.positionId] ?? k.positionId : "?"}`)
-              .join(" "),
+              .map(
+                (k) =>
+                  `${labelOf(PHASE_LABEL, k.phase)} · ${
+                    k.positionId ? table.positions[k.positionId] ?? k.positionId : "укрытие не указано"
+                  }`
+              )
+              .join("; "),
             reflection.selfRating ?? "",
             reflection.note ?? "",
             ...captain,

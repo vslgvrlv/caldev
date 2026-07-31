@@ -66,8 +66,22 @@ describe("renderTableCsv", () => {
   it("укрытия подставляются кодами, а не идентификаторами", () => {
     const line = rows()[1];
     expect(line).toContain("300Д");
-    expect(line).toContain("COVER@Z2Б");
+    expect(line).toContain("за укрытием · Z2Б");
     expect(line).not.toContain("grid.300.far");
+  });
+
+  // Выгрузку читает человек: «ROTATION» и «-1» он расшифровать не может
+  // (Василий, 2026-07-31). Ни один код справочника не должен доехать до файла.
+  it("коды справочников переводятся в подписи", () => {
+    const line = rows()[1];
+    expect(line).toContain("на разбежке");
+    expect(line).toContain("атака по змеям");
+    expect(line).toContain("широкая");
+    // Инициатива: +1 — мы, 0 — поровну, −1 — они.
+    expect(line).toContain("мы;поровну;они");
+    for (const code of ["BREAK", "COVER", "ROTATION", "SNAKE_ATTACK", "NARROW", "WIDE"]) {
+      expect(line).not.toContain(code);
+    }
   });
 
   it("результат пойнта пишется словом, разметка пропущена — пусто", () => {
