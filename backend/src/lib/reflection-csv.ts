@@ -176,7 +176,12 @@ export function renderSummaryCsv(summary: EventSummary, eventTitle: string): str
   lines.push("");
   push(["Пойнтов всего", summary.coverage.points]);
   push(["Размечено по результату", summary.coverage.marked]);
+  push(["Выиграно", summary.overall.wins]);
+  push(["Проиграно", summary.overall.losses]);
+  push(["Winrate турнира", summary.overall.winRate === null ? "" : `${summary.overall.winRate}%`]);
   push(["С рефлексиями игроков", summary.coverage.withReflections]);
+  push(["Обычный состав на пойнте (форм)", summary.coverage.squadSize]);
+  push(["Пойнтов с полным составом форм", summary.coverage.withFullSquad]);
   push(["С разбором капитана", summary.coverage.withCaptainReport]);
 
   section("Реализация численного преимущества (дельта разбежки)", ["Дельта", ...RATE_HEADER]);
@@ -206,6 +211,34 @@ export function renderSummaryCsv(summary: EventSummary, eventTitle: string): str
   if (!summary.breakWidth.length) push(["нет данных"]);
   for (const row of summary.breakWidth) {
     push([labelOf(BREAK_WIDTH_LABEL, row.ours), labelOf(BREAK_WIDTH_LABEL, row.theirs), ...rateCells(row)]);
+  }
+
+  // Матрица «зона × фаза»: из неё прямо следует упражнение на тренировку —
+  // «змея не проходит разбежку» читается как клетка, а не как список фигур.
+  section("Где выбивают (зона × фаза)", ["Зона", "На разбежке", "За укрытием", "На перемещении", "Всего"]);
+  if (!summary.deaths.total) push(["нет данных"]);
+  else {
+    for (const zone of summary.deaths.zones) {
+      push([
+        LINE_LABEL[zone.zone] ?? zone.zone,
+        zone.byPhase.BREAK ?? 0,
+        zone.byPhase.COVER ?? 0,
+        zone.byPhase.ROTATION ?? 0,
+        zone.total,
+      ]);
+    }
+    const unknown =
+      summary.deaths.total - summary.deaths.zones.reduce((sum, zone) => sum + zone.total, 0);
+    push([
+      "всего",
+      summary.deaths.byPhase.BREAK ?? 0,
+      summary.deaths.byPhase.COVER ?? 0,
+      summary.deaths.byPhase.ROTATION ?? 0,
+      summary.deaths.total,
+    ]);
+    // Укрытие не обязательно, поэтому часть выбиваний в зоны не раскладывается.
+    // Прятать этот остаток нельзя: иначе сумма по матрице не сходится с итогом.
+    if (unknown > 0) push(["укрытие не указано", "", "", "", unknown]);
   }
 
   section("Игроки", [

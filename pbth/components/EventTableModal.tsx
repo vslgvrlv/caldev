@@ -230,7 +230,9 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
             </p>
           )}
 
-          {!isLoading && table && hasPoints && tab === 'summary' && <EventSummarySection summary={table.summary} />}
+          {!isLoading && table && hasPoints && tab === 'summary' && (
+            <EventSummarySection summary={table.summary} games={table.games} />
+          )}
 
           {!isLoading &&
             tab === 'points' &&

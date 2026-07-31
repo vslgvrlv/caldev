@@ -60,7 +60,14 @@ describe("buildEventSummary", () => {
     const summary = summaryOf([point({ deltaOtb: 1, result: "WIN" }), point({ deltaOtb: 1, result: null })]);
 
     expect(summary.deltaOtb).toEqual([{ delta: 1, wins: 1, losses: 0, total: 1, winRate: 100 }]);
-    expect(summary.coverage).toEqual({ points: 2, marked: 1, withReflections: 2, withCaptainReport: 0 });
+    expect(summary.coverage).toEqual({
+      points: 2,
+      marked: 1,
+      withReflections: 2,
+      withCaptainReport: 0,
+      squadSize: 1,
+      withFullSquad: 2,
+    });
   });
 
   it("пойнт без форм в дельту не попадает", () => {
@@ -177,9 +184,100 @@ describe("buildEventSummary", () => {
   it("пустое событие не падает и не выдумывает проценты", () => {
     const summary = buildEventSummary({ games: [] });
 
-    expect(summary.coverage).toEqual({ points: 0, marked: 0, withReflections: 0, withCaptainReport: 0 });
+    expect(summary.coverage).toEqual({
+      points: 0,
+      marked: 0,
+      withReflections: 0,
+      withCaptainReport: 0,
+      squadSize: 0,
+      withFullSquad: 0,
+    });
     expect(summary.deltaOtb).toEqual([]);
     expect(summary.players).toEqual([]);
+    expect(summary.overall.winRate).toBeNull();
+    expect(summary.deaths).toEqual({
+      total: 0,
+      byPhase: { BREAK: 0, COVER: 0, ROTATION: 0 },
+      zones: [
+        { zone: "snake", total: 0, byPhase: { BREAK: 0, COVER: 0, ROTATION: 0 } },
+        { zone: "center", total: 0, byPhase: { BREAK: 0, COVER: 0, ROTATION: 0 } },
+        { zone: "envelope", total: 0, byPhase: { BREAK: 0, COVER: 0, ROTATION: 0 } },
+      ],
+    });
     expect(summary.equalSquads.lines.every((line) => line.ours.winRate === null)).toBe(true);
+  });
+
+  it("пойнт с неполной пятёркой форм в дельту не идёт", () => {
+    // Главный подвох: дельта выводится из форм, и при одной заполненной форме
+    // (1 килл, 1 смерть) она равна нулю — пойнт уехал бы в «равные составы»
+    // и потянул за собой всю инициативу. Обычный состав берётся из самих данных.
+    const squad = (over: Partial<Reflection> = {}) =>
+      [1, 2, 3, 4, 5].map((n) => reflection({ userId: `u${n}`, nickname: `p${n}`, ...over }));
+
+    const summary = summaryOf([
+      point({ deltaOtb: 0, result: "WIN", reflections: squad() }),
+      point({ deltaOtb: 0, result: "WIN", reflections: squad() }),
+      point({ deltaOtb: 0, result: "WIN", reflections: squad() }),
+      // Заполнил один человек: формально дельта 0, фактически данных нет.
+      point({
+        deltaOtb: 0,
+        result: "LOSS",
+        captainReport: captainReport({ initiative: { snake: -1, center: -1, envelope: -1 } }),
+        reflections: [reflection()],
+      }),
+    ]);
+
+    expect(summary.coverage.squadSize).toBe(5);
+    expect(summary.coverage.withReflections).toBe(4);
+    expect(summary.coverage.withFullSquad).toBe(3);
+    expect(summary.equalSquads.points).toBe(3);
+    expect(summary.deltaOtb).toEqual([{ delta: 0, wins: 3, losses: 0, total: 3, winRate: 100 }]);
+    // Инициатива с недозаполненного пойнта не должна была просочиться.
+    expect(summary.equalSquads.lines.every((line) => line.theirs.total === 0)).toBe(true);
+  });
+
+  it("winrate турнира считается по всем размеченным пойнтам, а не только по заполненным", () => {
+    // Якорь, с которым сравниваются проценты блоков: он не зависит от того,
+    // насколько прилежно команда заполняла формы.
+    const summary = summaryOf([
+      point({ result: "WIN", reflections: [] }),
+      point({ result: "LOSS", reflections: [] }),
+      point({ result: "WIN" }),
+      point({ result: null }),
+    ]);
+
+    expect(summary.overall).toEqual({ wins: 2, losses: 1, total: 3, winRate: 67 });
+  });
+
+  it("выбивания раскладываются по зонам и фазам, укрытие без зоны остаётся в итоге", () => {
+    // 51 фигура на 75 выбиваний за турнир даёт 1-2 наблюдения на фигуру,
+    // поэтому агрегат идёт по трём зонам. Смерти без укрытия не выбрасываются:
+    // иначе сумма по матрице разойдётся с общим числом выбиваний.
+    const summary = buildEventSummary({
+      positionZones: { "snake.1.near": "snake", "grid.300.far": "center" },
+      games: [
+        {
+          points: [
+            point({
+              reflections: [
+                reflection({ eliminated: true, deathPhase: "BREAK", deathPositionId: "snake.1.near" }),
+                reflection({ userId: "u2", eliminated: true, deathPhase: "COVER", deathPositionId: "grid.300.far" }),
+                reflection({ userId: "u3", eliminated: true, deathPhase: "COVER", deathPositionId: null }),
+              ],
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(summary.deaths.total).toBe(3);
+    expect(summary.deaths.byPhase).toEqual({ BREAK: 1, COVER: 2, ROTATION: 0 });
+    expect(summary.deaths.zones.find((zone) => zone.zone === "snake")).toEqual({
+      zone: "snake",
+      total: 1,
+      byPhase: { BREAK: 1, COVER: 0, ROTATION: 0 },
+    });
+    expect(summary.deaths.zones.find((zone) => zone.zone === "center")?.total).toBe(1);
+    expect(summary.deaths.zones.find((zone) => zone.zone === "envelope")?.total).toBe(0);
   });
 });
