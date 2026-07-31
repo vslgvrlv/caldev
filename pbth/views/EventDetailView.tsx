@@ -1013,20 +1013,23 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
                         <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
 
-                        <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors flex justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <div className="font-bold text-white text-sm truncate">{game.opponent}</div>
-                            <div className="text-xs text-pb-subtext mt-1">
-                              {game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}
-                            </div>
+                        {/* Соперник — главное в строке, поэтому занимает всю ширину
+                            карточки. Пара, пит-зона и счёт уходят строкой ниже:
+                            раньше они стояли рядом и как shrink-0 съедали имя до
+                            «Ш…» (Василий, 2026-07-31). */}
+                        <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors">
+                          <div className="flex items-baseline gap-2">
+                            <div className="flex-1 min-w-0 font-bold text-white text-sm truncate">{game.opponent}</div>
+                            {game.score && <span className="shrink-0 text-pb-warning font-mono font-bold text-sm">{game.score}</span>}
                           </div>
-                          <div className="shrink-0 flex items-center gap-2">
+                          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-pb-subtext mt-1.5">
+                            <span>{game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}</span>
                             {game.pitZone && (
-                              <span className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white/10 text-pb-subtext" title={PIT_ZONE_LABELS[game.pitZone]}>
-                                {PIT_ZONE_BADGE[game.pitZone]} пит-зона
-                              </span>
+                              <>
+                                <span className="text-white/20">·</span>
+                                <span title={PIT_ZONE_LABELS[game.pitZone]}>{PIT_ZONE_BADGE[game.pitZone]} пит-зона</span>
+                              </>
                             )}
-                            {game.score && <span className="text-pb-warning font-mono font-bold">{game.score}</span>}
                           </div>
                         </div>
                       </button>
@@ -1038,7 +1041,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                         onClick={() => setPointsGame(game)}
                         title="Пойнты и рефлексия"
                         aria-label="Пойнты и рефлексия"
-                        className="shrink-0 ml-2 p-3 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
+                        className="shrink-0 ml-1.5 p-2.5 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
                       >
                         <Swords size={16} />
                       </button>
