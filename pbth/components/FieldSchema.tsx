@@ -25,7 +25,9 @@ export const FieldSchema: React.FC<Props> = ({ positions, value, onChange, swapp
       <button
         type="button"
         key={position.id}
-        title={position.label}
+        // Половина поля подписана заголовком схемы, поэтому на кнопке короткий
+        // код без Б/Д. Полный код остаётся в подсказке — им говорят на разборе.
+        title={`${position.label} · ${position.code}`}
         onClick={() => onChange(selected ? null : position.id)}
         className={`h-9 rounded-lg text-[11px] font-mono font-bold transition-colors border ${
           selected
@@ -33,7 +35,7 @@ export const FieldSchema: React.FC<Props> = ({ positions, value, onChange, swapp
             : 'bg-white/5 text-pb-subtext border-white/10 hover:border-pb-primary/40'
         }`}
       >
-        {position.code}
+        {position.shortCode}
       </button>
     );
   };

@@ -21,11 +21,12 @@ fieldPositionsRouter.get(
       figure_index: string;
       side: string;
       code: string;
+      short_code: string;
       depth: number | null;
       label: string;
       active: boolean;
     }>(
-      `SELECT id, figure_group, figure_index, side, code, depth, label, active
+      `SELECT id, figure_group, figure_index, side, code, short_code, depth, label, active
        FROM field_positions
        WHERE $1::boolean OR active
        ORDER BY sort_order`,
@@ -38,6 +39,9 @@ fieldPositionsRouter.get(
       index: r.figure_index,
       side: r.side,
       code: r.code,
+      // Подпись на кнопке схемы: половина поля уже подписана заголовком,
+      // поэтому суффикс Б/Д на кнопке лишний. Домен по-прежнему в code.
+      shortCode: r.short_code,
       depth: r.depth,
       label: r.label,
       active: r.active,

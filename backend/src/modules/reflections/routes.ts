@@ -6,8 +6,12 @@ import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { sendError } from "../../lib/http-error.js";
 import { compareDeltaOtb, computeDeltaOtb, type ReflectionPhase } from "../../lib/reflection-analytics.js";
+import { checkPointResults, parseScore } from "../../lib/game-points.js";
+import { renderTableCsv } from "../../lib/reflection-csv.js";
 
-// Рефлексия по гейму (#89). Единица — гейм `event_games`; в спеке он же «пойнт».
+// Рефлексия (#89). Единица — ПОЙНТ, а не гейм: гейм со счётом 4:3 состоит из
+// семи пойнтов, и форма заполняется за каждый (исправление модели 2026-07-31,
+// см. миграцию 031).
 // Спека: vault 02_PROJECTS/Paintball TeamHub/06_specs/
 //        player_reflection_analytics_v1_2026_07_12_telegram.md
 
@@ -40,6 +44,7 @@ const reflectionSchema = z
     }
   });
 
+// Результата пойнта здесь нет: он объективен и живёт в game_points.
 const captainReportSchema = z.object({
   combination: z.enum(["ENVELOPE_ATTACK", "SNAKE_ATTACK", "ACTIVE_SNAKE", "ACTIVE_ENVELOPE"]).nullable().optional(),
   breakWidth: z.enum(["NARROW", "WIDE"]).nullable().optional(),
@@ -48,17 +53,31 @@ const captainReportSchema = z.object({
   initiativeCenter: z.number().int().min(-1).max(1).nullable().optional(),
   initiativeEnvelope: z.number().int().min(-1).max(1).nullable().optional(),
   deltaOtb: z.number().int().min(-10).max(10).nullable().optional(),
-  result: z.enum(["WIN", "LOSS"]).nullable().optional(),
   note: z.string().trim().max(2000).nullable().optional(),
 });
 
-type GameAccess = { gameId: string; eventId: string; teamId: string; role: "CAPTAIN" | "TRAINER" | "PLAYER" };
+const pointResultsSchema = z.object({
+  points: z
+    .array(
+      z.object({
+        ordinal: z.number().int().min(1).max(30),
+        result: z.enum(["WIN", "LOSS"]).nullable(),
+      })
+    )
+    .max(30),
+});
 
-// Доступ к рефлексии = членство в команде, которой принадлежит событие гейма.
-// Роль возвращаем здесь же: капитанская форма её требует.
+type Role = "CAPTAIN" | "TRAINER" | "PLAYER";
+type GameAccess = { gameId: string; eventId: string; teamId: string; role: Role; score: string | null };
+type PointAccess = GameAccess & { pointId: string; ordinal: number; result: "WIN" | "LOSS" | null };
+
+const canEditTeamData = (role: Role) => role === "CAPTAIN" || role === "TRAINER";
+
+// Доступ = членство в команде, которой принадлежит событие. Роль возвращаем
+// здесь же: от неё зависит право размечать пойнты и вести капитанский разбор.
 async function loadGameAccess(gameId: string, userId: string): Promise<GameAccess | null> {
-  const result = await query<{ game_id: string; event_id: string; team_id: string; role: GameAccess["role"] }>(
-    `SELECT g.id AS game_id, e.id AS event_id, e.team_id, tm.role
+  const result = await query<{ event_id: string; team_id: string; role: Role; score: string | null }>(
+    `SELECT e.id AS event_id, e.team_id, tm.role, g.score
      FROM event_games g
      JOIN events e ON e.id = g.event_id
      JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
@@ -66,8 +85,171 @@ async function loadGameAccess(gameId: string, userId: string): Promise<GameAcces
     [gameId, userId]
   );
   const row = result.rows[0];
-  return row ? { gameId: row.game_id, eventId: row.event_id, teamId: row.team_id, role: row.role } : null;
+  return row ? { gameId, eventId: row.event_id, teamId: row.team_id, role: row.role, score: row.score } : null;
 }
+
+async function loadPointAccess(pointId: string, userId: string): Promise<PointAccess | null> {
+  const result = await query<{
+    game_id: string;
+    ordinal: number;
+    result: "WIN" | "LOSS" | null;
+    event_id: string;
+    team_id: string;
+    role: Role;
+    score: string | null;
+  }>(
+    `SELECT p.game_id, p.ordinal, p.result, e.id AS event_id, e.team_id, tm.role, g.score
+     FROM game_points p
+     JOIN event_games g ON g.id = p.game_id
+     JOIN events e ON e.id = g.event_id
+     JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
+     WHERE p.id = $1 AND e.is_cancelled = FALSE`,
+    [pointId, userId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    pointId,
+    ordinal: row.ordinal,
+    result: row.result,
+    gameId: row.game_id,
+    eventId: row.event_id,
+    teamId: row.team_id,
+    role: row.role,
+    score: row.score,
+  };
+}
+
+type PointRow = { id: string; ordinal: number; result: "WIN" | "LOSS" | null };
+
+// Пойнты — производная от счёта, поэтому материализуются лениво: как только у
+// гейма появился разборчивый счёт, строки создаются под него. Отдельной кнопки
+// «создать пойнты» нет — она была бы ручной синхронизацией того, что и так
+// однозначно следует из счёта.
+async function ensurePoints(gameId: string, score: string | null): Promise<PointRow[]> {
+  const parsed = parseScore(score);
+  const existing = await query<PointRow>(
+    `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+    [gameId]
+  );
+  if (!parsed) return existing.rows;
+  if (existing.rows.length >= parsed.total) return existing.rows;
+
+  // Счёт исправили в большую сторону — дописываем недостающие пойнты.
+  // Лишние не удаляем: за ними могут стоять заполненные формы, и молча
+  // потерять их хуже, чем показать лишнюю строку.
+  const missing: number[] = [];
+  for (let ordinal = existing.rows.length + 1; ordinal <= parsed.total; ordinal += 1) missing.push(ordinal);
+
+  await query(
+    `INSERT INTO game_points (game_id, ordinal)
+     SELECT $1, ordinal FROM unnest($2::smallint[]) AS ordinal
+     ON CONFLICT (game_id, ordinal) DO NOTHING`,
+    [gameId, missing]
+  );
+
+  const refreshed = await query<PointRow>(
+    `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+    [gameId]
+  );
+  return refreshed.rows;
+}
+
+// Список пойнтов гейма с прогрессом заполнения — экран выбора «за какой пойнт
+// заполняю». Без него игрок отвечал бы за весь матч сразу.
+reflectionsRouter.get(
+  "/games/:gameId/points",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gameId = z.string().uuid().parse(req.params.gameId);
+    const userId = req.authUser!.id;
+
+    const access = await loadGameAccess(gameId, userId);
+    if (!access) {
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+    }
+
+    const points = await ensurePoints(gameId, access.score);
+    const parsed = parseScore(access.score);
+
+    const stats = await query<{ point_id: string; filled: string; mine: string }>(
+      `SELECT point_id, COUNT(*)::text AS filled, COUNT(*) FILTER (WHERE user_id = $2)::text AS mine
+       FROM game_reflections
+       WHERE point_id = ANY($1::uuid[])
+       GROUP BY point_id`,
+      [points.map((p) => p.id), userId]
+    );
+    const captains = await query<{ point_id: string }>(
+      `SELECT point_id FROM game_captain_reports WHERE point_id = ANY($1::uuid[])`,
+      [points.map((p) => p.id)]
+    );
+    const statsByPoint = new Map(stats.rows.map((r) => [r.point_id, r]));
+    const captainByPoint = new Set(captains.rows.map((r) => r.point_id));
+
+    return res.json({
+      gameId,
+      score: access.score,
+      canMarkResults: canEditTeamData(access.role),
+      expected: parsed ? { wins: parsed.our, losses: parsed.opponent, total: parsed.total } : null,
+      resultsMatchScore: parsed ? checkPointResults(parsed, points.map((p) => p.result)).matchesScore : null,
+      points: points.map((point) => ({
+        id: point.id,
+        ordinal: point.ordinal,
+        result: point.result,
+        filledCount: Number(statsByPoint.get(point.id)?.filled ?? 0),
+        mineFilled: Number(statsByPoint.get(point.id)?.mine ?? 0) > 0,
+        captainFilled: captainByPoint.has(point.id),
+      })),
+    });
+  })
+);
+
+// Разметка «какие пойнты выиграли». Из счёта известно только количество побед,
+// а не их порядок, поэтому это ручной шаг капитана.
+reflectionsRouter.put(
+  "/games/:gameId/points",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const gameId = z.string().uuid().parse(req.params.gameId);
+    const payload = pointResultsSchema.parse(req.body);
+    const userId = req.authUser!.id;
+
+    const access = await loadGameAccess(gameId, userId);
+    if (!access) {
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+    }
+    if (!canEditTeamData(access.role)) {
+      return sendError(req, res, 403, "ROLE_REQUIRED", "Point results are editable by captain or trainer only");
+    }
+
+    await ensurePoints(gameId, access.score);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const point of payload.points) {
+        await client.query(
+          `UPDATE game_points SET result = $3, updated_at = NOW() WHERE game_id = $1 AND ordinal = $2`,
+          [gameId, point.ordinal, point.result]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await writeAudit(userId, "reflection.point_results", { gameId, points: payload.points.length });
+
+    const points = await query<PointRow>(
+      `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+      [gameId]
+    );
+    return res.json({ success: true, points: points.rows });
+  })
+);
 
 type ReflectionRow = {
   id: string;
@@ -110,47 +292,50 @@ async function loadKills(reflectionIds: string[]): Promise<KillRow[]> {
   return result.rows;
 }
 
-// Своя форма за гейм. Пусто — игрок ещё не заполнял.
+const REFLECTION_COLUMNS = `id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at`;
+
+// Своя форма за пойнт. Пусто — игрок ещё не заполнял.
 reflectionsRouter.get(
-  "/games/:gameId/mine",
+  "/points/:pointId/mine",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const gameId = z.string().uuid().parse(req.params.gameId);
+    const pointId = z.string().uuid().parse(req.params.pointId);
     const userId = req.authUser!.id;
 
-    const access = await loadGameAccess(gameId, userId);
+    const access = await loadPointAccess(pointId, userId);
     if (!access) {
-      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
 
     const result = await query<ReflectionRow>(
-      `SELECT id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at
-       FROM game_reflections
-       WHERE game_id = $1 AND user_id = $2`,
-      [gameId, userId]
+      `SELECT ${REFLECTION_COLUMNS} FROM game_reflections WHERE point_id = $1 AND user_id = $2`,
+      [pointId, userId]
     );
     const row = result.rows[0];
     if (!row) {
-      return res.json({ reflection: null });
+      return res.json({ reflection: null, point: { id: pointId, ordinal: access.ordinal, result: access.result } });
     }
 
-    return res.json({ reflection: serializeReflection(row, await loadKills([row.id])) });
+    return res.json({
+      reflection: serializeReflection(row, await loadKills([row.id])),
+      point: { id: pointId, ordinal: access.ordinal, result: access.result },
+    });
   })
 );
 
 // Сохранение формы игрока. Идемпотентно: переоткрыл форму — перезаписал ответ,
 // киллы заменяются целиком (их порядок в форме и есть ordinal).
 reflectionsRouter.put(
-  "/games/:gameId/mine",
+  "/points/:pointId/mine",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const gameId = z.string().uuid().parse(req.params.gameId);
+    const pointId = z.string().uuid().parse(req.params.pointId);
     const payload = reflectionSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadGameAccess(gameId, userId);
+    const access = await loadPointAccess(pointId, userId);
     if (!access) {
-      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
 
     const client = await pool.connect();
@@ -158,9 +343,9 @@ reflectionsRouter.put(
       await client.query("BEGIN");
 
       const saved = await client.query<{ id: string }>(
-        `INSERT INTO game_reflections (game_id, user_id, eliminated, death_phase, death_position_id, self_rating, note)
+        `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase, death_position_id, self_rating, note)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (game_id, user_id) DO UPDATE
+         ON CONFLICT (point_id, user_id) DO UPDATE
            SET eliminated        = EXCLUDED.eliminated,
                death_phase       = EXCLUDED.death_phase,
                death_position_id = EXCLUDED.death_position_id,
@@ -169,7 +354,7 @@ reflectionsRouter.put(
                updated_at        = NOW()
          RETURNING id`,
         [
-          gameId,
+          pointId,
           userId,
           payload.eliminated,
           payload.eliminated ? payload.deathPhase! : null,
@@ -198,55 +383,60 @@ reflectionsRouter.put(
     }
 
     await writeAudit(userId, "reflection.submit", {
-      gameId,
+      pointId,
+      gameId: access.gameId,
       eliminated: payload.eliminated,
       kills: payload.kills.length,
     });
 
-    return res.json({ success: true, gameId });
+    return res.json({ success: true, pointId });
   })
 );
 
-// Капитанский отчёт по гейму. Читать может вся команда — на нём строится
+// Капитанский разбор пойнта. Читать может вся команда — на нём строится
 // сравнение «капитан сказал X, игроки показали Y».
 reflectionsRouter.get(
-  "/games/:gameId/captain",
+  "/points/:pointId/captain",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const gameId = z.string().uuid().parse(req.params.gameId);
-    const access = await loadGameAccess(gameId, req.authUser!.id);
+    const pointId = z.string().uuid().parse(req.params.pointId);
+    const access = await loadPointAccess(pointId, req.authUser!.id);
     if (!access) {
-      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
 
-    const report = await loadCaptainReport(gameId);
-    return res.json({ report, canEdit: access.role === "CAPTAIN" || access.role === "TRAINER" });
+    const report = await loadCaptainReport(pointId);
+    return res.json({
+      report,
+      canEdit: canEditTeamData(access.role),
+      point: { id: pointId, ordinal: access.ordinal, result: access.result },
+    });
   })
 );
 
 reflectionsRouter.put(
-  "/games/:gameId/captain",
+  "/points/:pointId/captain",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const gameId = z.string().uuid().parse(req.params.gameId);
+    const pointId = z.string().uuid().parse(req.params.pointId);
     const payload = captainReportSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadGameAccess(gameId, userId);
+    const access = await loadPointAccess(pointId, userId);
     if (!access) {
-      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
-    if (access.role !== "CAPTAIN" && access.role !== "TRAINER") {
+    if (!canEditTeamData(access.role)) {
       return sendError(req, res, 403, "ROLE_REQUIRED", "Captain report is editable by captain or trainer only");
     }
 
     await query(
       `INSERT INTO game_captain_reports (
-         game_id, author_user_id, combination, break_width, opponent_break_width,
-         initiative_snake, initiative_center, initiative_envelope, delta_otb, result, note
+         point_id, author_user_id, combination, break_width, opponent_break_width,
+         initiative_snake, initiative_center, initiative_envelope, delta_otb, note
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       ON CONFLICT (game_id) DO UPDATE
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (point_id) DO UPDATE
          SET author_user_id       = EXCLUDED.author_user_id,
              combination          = EXCLUDED.combination,
              break_width          = EXCLUDED.break_width,
@@ -255,11 +445,10 @@ reflectionsRouter.put(
              initiative_center    = EXCLUDED.initiative_center,
              initiative_envelope  = EXCLUDED.initiative_envelope,
              delta_otb            = EXCLUDED.delta_otb,
-             result               = EXCLUDED.result,
              note                 = EXCLUDED.note,
              updated_at           = NOW()`,
       [
-        gameId,
+        pointId,
         userId,
         payload.combination ?? null,
         payload.breakWidth ?? null,
@@ -268,40 +457,34 @@ reflectionsRouter.put(
         payload.initiativeCenter ?? null,
         payload.initiativeEnvelope ?? null,
         payload.deltaOtb ?? null,
-        payload.result ?? null,
         payload.note?.length ? payload.note : null,
       ]
     );
 
-    await writeAudit(userId, "reflection.captain_report", { gameId, result: payload.result ?? null });
+    await writeAudit(userId, "reflection.captain_report", { pointId, gameId: access.gameId });
 
-    return res.json({ success: true, gameId });
+    return res.json({ success: true, pointId });
   })
 );
 
-async function loadCaptainReport(gameId: string) {
-  const result = await query<{
-    author_user_id: string;
-    combination: string | null;
-    break_width: string | null;
-    opponent_break_width: string | null;
-    initiative_snake: number | null;
-    initiative_center: number | null;
-    initiative_envelope: number | null;
-    delta_otb: number | null;
-    result: string | null;
-    note: string | null;
-    updated_at: string;
-  }>(
-    `SELECT author_user_id, combination, break_width, opponent_break_width,
-            initiative_snake, initiative_center, initiative_envelope,
-            delta_otb, result, note, updated_at
-     FROM game_captain_reports
-     WHERE game_id = $1`,
-    [gameId]
-  );
-  const row = result.rows[0];
-  if (!row) return null;
+type CaptainReportRow = {
+  point_id: string;
+  author_user_id: string;
+  combination: string | null;
+  break_width: string | null;
+  opponent_break_width: string | null;
+  initiative_snake: number | null;
+  initiative_center: number | null;
+  initiative_envelope: number | null;
+  delta_otb: number | null;
+  note: string | null;
+  updated_at: string;
+};
+
+const CAPTAIN_COLUMNS = `point_id, author_user_id, combination, break_width, opponent_break_width,
+                         initiative_snake, initiative_center, initiative_envelope, delta_otb, note, updated_at`;
+
+function serializeCaptainReport(row: CaptainReportRow) {
   return {
     authorUserId: row.author_user_id,
     combination: row.combination,
@@ -313,28 +496,34 @@ async function loadCaptainReport(gameId: string) {
       envelope: row.initiative_envelope,
     },
     deltaOtb: row.delta_otb,
-    result: row.result,
     note: row.note,
     updatedAt: row.updated_at,
   };
 }
 
-// Сводка по гейму: расчётная дельта разбежки + расхождение с капитаном (§2.1, §6).
+async function loadCaptainReport(pointId: string) {
+  const result = await query<CaptainReportRow>(
+    `SELECT ${CAPTAIN_COLUMNS} FROM game_captain_reports WHERE point_id = $1`,
+    [pointId]
+  );
+  const row = result.rows[0];
+  return row ? serializeCaptainReport(row) : null;
+}
+
+// Сводка по пойнту: расчётная дельта разбежки + расхождение с капитаном (§2.1, §6).
 reflectionsRouter.get(
-  "/games/:gameId/summary",
+  "/points/:pointId/summary",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const gameId = z.string().uuid().parse(req.params.gameId);
-    const access = await loadGameAccess(gameId, req.authUser!.id);
+    const pointId = z.string().uuid().parse(req.params.pointId);
+    const access = await loadPointAccess(pointId, req.authUser!.id);
     if (!access) {
-      return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
 
     const reflections = await query<ReflectionRow>(
-      `SELECT id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at
-       FROM game_reflections
-       WHERE game_id = $1`,
-      [gameId]
+      `SELECT ${REFLECTION_COLUMNS} FROM game_reflections WHERE point_id = $1`,
+      [pointId]
     );
     const kills = await loadKills(reflections.rows.map((r) => r.id));
 
@@ -346,19 +535,156 @@ reflectionsRouter.get(
       kills: kills.map((k) => ({ phase: k.phase as ReflectionPhase })),
     });
 
-    const report = await loadCaptainReport(gameId);
-    const deltaOtbMismatch = compareDeltaOtb(deltaOtb, report?.deltaOtb);
+    const report = await loadCaptainReport(pointId);
 
     return res.json({
-      gameId,
+      pointId,
+      ordinal: access.ordinal,
+      result: access.result,
       submitted: reflections.rows.length,
       ourOtbLosses,
       opponentOtbLosses,
       deltaOtb,
       totalKills: kills.length,
       captainReport: report,
-      deltaOtbMismatch,
+      deltaOtbMismatch: compareDeltaOtb(deltaOtb, report?.deltaOtb),
       reflections: reflections.rows.map((row) => serializeReflection(row, kills)),
     });
+  })
+);
+
+// Таблица по всему событию — рабочая поверхность тренера. Отдаётся одним
+// запросом: разбор идёт по турниру целиком, а не по одному пойнту, и дёргать
+// эндпоинт на каждый пойнт значит собирать таблицу из десятков ответов.
+reflectionsRouter.get(
+  "/events/:eventId/table",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const userId = req.authUser!.id;
+
+    const membership = await query<{ role: Role; title: string }>(
+      `SELECT tm.role, e.title
+       FROM events e
+       JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
+       WHERE e.id = $1`,
+      [eventId, userId]
+    );
+    if (!membership.rows.length) {
+      return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
+    }
+
+    return res.json(await buildEventTable(eventId, membership.rows[0].title));
+  })
+);
+
+async function buildEventTable(eventId: string, eventTitle: string) {
+  const games = await query<{ id: string; time_label: string; opponent: string; score: string | null }>(
+    `SELECT id, time_label, opponent, score FROM event_games WHERE event_id = $1 ORDER BY time_label`,
+    [eventId]
+  );
+
+  const points = await query<{ id: string; game_id: string; ordinal: number; result: "WIN" | "LOSS" | null }>(
+    `SELECT p.id, p.game_id, p.ordinal, p.result
+     FROM game_points p
+     JOIN event_games g ON g.id = p.game_id
+     WHERE g.event_id = $1
+     ORDER BY p.ordinal`,
+    [eventId]
+  );
+  const pointIds = points.rows.map((p) => p.id);
+
+  const reflections = await query<ReflectionRow & { point_id: string; name: string; nickname: string }>(
+    `SELECT r.point_id, ${REFLECTION_COLUMNS.split(", ").map((c) => `r.${c}`).join(", ")}, u.name, u.nickname
+     FROM game_reflections r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.point_id = ANY($1::uuid[])
+     ORDER BY u.nickname`,
+    [pointIds]
+  );
+  const kills = await loadKills(reflections.rows.map((r) => r.id));
+
+  const reports = await query<CaptainReportRow>(
+    `SELECT ${CAPTAIN_COLUMNS} FROM game_captain_reports WHERE point_id = ANY($1::uuid[])`,
+    [pointIds]
+  );
+  const reportByPoint = new Map(reports.rows.map((r) => [r.point_id, r]));
+
+  // Подписи укрытий тянем один раз: в таблице «grid.300.far» нечитаемо.
+  const positions = await query<{ id: string; code: string }>(`SELECT id, code FROM field_positions`);
+  const codeById = new Map(positions.rows.map((p) => [p.id, p.code]));
+
+  return {
+    eventId,
+    eventTitle,
+    positions: Object.fromEntries(codeById),
+    games: games.rows.map((game) => {
+      const gamePoints = points.rows.filter((p) => p.game_id === game.id);
+      return {
+        gameId: game.id,
+        time: game.time_label,
+        opponent: game.opponent,
+        score: game.score,
+        points: gamePoints.map((point) => {
+          const pointReflections = reflections.rows.filter((r) => r.point_id === point.id);
+          const { ourOtbLosses, opponentOtbLosses, deltaOtb } = computeDeltaOtb({
+            reflections: pointReflections.map((r) => ({
+              eliminated: r.eliminated,
+              deathPhase: r.death_phase as ReflectionPhase | null,
+            })),
+            kills: kills
+              .filter((k) => pointReflections.some((r) => r.id === k.reflection_id))
+              .map((k) => ({ phase: k.phase as ReflectionPhase })),
+          });
+          const report = reportByPoint.get(point.id);
+          return {
+            pointId: point.id,
+            ordinal: point.ordinal,
+            result: point.result,
+            submitted: pointReflections.length,
+            ourOtbLosses,
+            opponentOtbLosses,
+            deltaOtb,
+            captainReport: report ? serializeCaptainReport(report) : null,
+            deltaOtbMismatch: compareDeltaOtb(deltaOtb, report?.delta_otb),
+            reflections: pointReflections.map((row) => ({
+              ...serializeReflection(row, kills),
+              name: row.name,
+              nickname: row.nickname,
+            })),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+// Выгрузка той же таблицы в CSV: разбор продолжается в таблице, а не в
+// приложении — «дальше с этим как-то работать» (Василий, 2026-07-31).
+reflectionsRouter.get(
+  "/events/:eventId/table.csv",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const userId = req.authUser!.id;
+
+    const membership = await query<{ role: Role; title: string }>(
+      `SELECT tm.role, e.title
+       FROM events e
+       JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
+       WHERE e.id = $1`,
+      [eventId, userId]
+    );
+    if (!membership.rows.length) {
+      return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
+    }
+
+    const table = await buildEventTable(eventId, membership.rows[0].title);
+    const csv = renderTableCsv(table);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="reflections-${eventId}.csv"`);
+    // BOM: без него Excel открывает кириллицу в CP1251 и получается каша.
+    return res.send(`\uFEFF${csv}`);
   })
 );

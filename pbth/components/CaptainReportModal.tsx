@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { api } from '../api';
-import type { BreakWidth, CaptainReport, Game, GameCombination } from '../types';
+import type { BreakWidth, CaptainReport, Game, GameCombination, GamePoint } from '../types';
 
-// Капитанский отчёт по гейму (#89, спека §2.2, §3.1–3.3). Отдельная форма от
+// Капитанский отчёт по пойнту (#89, спека §2.2, §3.1–3.3). Отдельная форма от
 // игроцкой: она верхнеуровневая — взгляд одного человека на весь пойнт.
 // Смысл двух форм — расхождение между ними, поэтому капитан отвечает своими
 // словами, а не смотрит на агрегат игроков (иначе меряли бы эхо).
+//
+// Вопроса «выиграли или проиграли» здесь нет: результат пойнта объективен и
+// размечается один раз в списке пойнтов, спрашивать его второй раз — шум.
 //
 // Читать отчёт может вся команда, писать — капитан и тренер: право приходит с
 // сервера в canEdit, роль на клиенте не выводим.
@@ -42,11 +45,12 @@ const DELTA_VALUES = [-3, -2, -1, 0, 1, 2, 3];
 
 type Props = {
   game: Game;
+  point: GamePoint;
   isOpen: boolean;
   onClose: () => void;
 };
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
 const emptyReport: CaptainReport = {
   combination: null,
@@ -54,11 +58,10 @@ const emptyReport: CaptainReport = {
   opponentBreakWidth: null,
   initiative: { snake: null, center: null, envelope: null },
   deltaOtb: null,
-  result: null,
   note: null,
 };
 
-export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
+export const CaptainReportModal: React.FC<Props> = ({ game, point, isOpen, onClose }) => {
   const [draft, setDraft] = useState<CaptainReport>(emptyReport);
   const [canEdit, setCanEdit] = useState(false);
   const [step, setStep] = useState<Step>(1);
@@ -73,7 +76,7 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
     setError(null);
     setStep(1);
     api
-      .getCaptainReport(game.id)
+      .getCaptainReport(point.id)
       .then(({ report, canEdit: editable }) => {
         if (cancelled) return;
         setDraft(report ?? emptyReport);
@@ -88,13 +91,13 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
     return () => {
       cancelled = true;
     };
-  }, [isOpen, game.id]);
+  }, [isOpen, point.id]);
 
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
     try {
-      await api.saveCaptainReport(game.id, draft);
+      await api.saveCaptainReport(point.id, draft);
       onClose();
     } catch {
       setError('Не удалось сохранить отчёт');
@@ -129,8 +132,13 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
       <div className="relative w-full max-w-md bg-pb-surface rounded-t-2xl sm:rounded-2xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-pb-surface border-b border-white/5 px-5 py-4 z-10">
-          <h3 className="text-base font-bold text-white">Разбор капитана · {game.time}</h3>
-          <p className="text-pb-subtext text-xs mt-0.5 truncate">{game.opponent}</p>
+          <h3 className="text-base font-bold text-white">
+            Разбор · пойнт {point.ordinal}
+            {point.result ? (point.result === 'WIN' ? ' · выиграли' : ' · проиграли') : ''}
+          </h3>
+          <p className="text-pb-subtext text-xs mt-0.5 truncate">
+            {game.opponent} · {game.time}
+          </p>
         </div>
 
         <div className="p-5 space-y-5">
@@ -146,17 +154,7 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
 
           {!isLoading && step === 1 && (
             <div className="space-y-4">
-              <p className="text-sm text-pb-subtext">Чем закончился пойнт?</p>
-              <div className="grid grid-cols-2 gap-2">
-                {chip(draft.result === 'WIN', 'Выиграли', () =>
-                  setDraft((prev) => ({ ...prev, result: pick(prev.result, 'WIN') }))
-                )}
-                {chip(draft.result === 'LOSS', 'Проиграли', () =>
-                  setDraft((prev) => ({ ...prev, result: pick(prev.result, 'LOSS') }))
-                )}
-              </div>
-
-              <p className="text-sm text-pb-subtext pt-2">Какую комбинацию разыгрывали?</p>
+              <p className="text-sm text-pb-subtext">Какую комбинацию разыгрывали?</p>
               <div className="grid grid-cols-2 gap-2">
                 {COMBINATIONS.map((combination) =>
                   chip(
@@ -168,21 +166,9 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background"
-              >
-                Дальше
-              </button>
-            </div>
-          )}
-
-          {!isLoading && step === 2 && (
-            <div className="space-y-4">
               {/* Ширина обеих разбежек нужна вместе: «мы узко, они широко» — это
                   отдельная гипотеза о том, почему пойнт сложился так (§3.3). */}
-              <p className="text-sm text-pb-subtext">Наша разбежка</p>
+              <p className="text-sm text-pb-subtext pt-2">Наша разбежка</p>
               <div className="grid grid-cols-2 gap-2">
                 {BREAK_WIDTHS.map((width) =>
                   chip(draft.breakWidth === width.value, width.label, () =>
@@ -225,7 +211,7 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
 
               <button
                 type="button"
-                onClick={() => setStep(3)}
+                onClick={() => setStep(2)}
                 className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background"
               >
                 Дальше
@@ -233,7 +219,7 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
             </div>
           )}
 
-          {!isLoading && step === 3 && (
+          {!isLoading && step === 2 && (
             <div className="space-y-4">
               <p className="text-sm text-pb-subtext">Кто первым занял ключевые укрытия?</p>
               {INITIATIVE_LINES.map((line) => (
@@ -281,7 +267,7 @@ export const CaptainReportModal: React.FC<Props> = ({ game, isOpen, onClose }) =
             <button type="button" onClick={() => (step === 1 ? onClose() : setStep((step - 1) as Step))}>
               {step > 1 ? 'Назад' : 'Закрыть'}
             </button>
-            <span>Шаг {step} из 3</span>
+            <span>Шаг {step} из 2</span>
           </div>
         </div>
       </div>
