@@ -184,13 +184,33 @@ export interface PlayerSummary {
   avgSelfRatingInLosses: number | null;
 }
 
+export type FieldZone = 'snake' | 'center' | 'envelope';
+
+// Выбивания по зоне поля: это часть-от-целого, а не сравнение winrate.
+export interface ZoneDeaths {
+  zone: FieldZone;
+  total: number;
+  byPhase: Record<string, number>;
+}
+
 // Сводка по событию — ответы на вопросы спеки, а не показ данных.
 export interface EventSummary {
-  coverage: { points: number; marked: number; withReflections: number; withCaptainReport: number };
+  coverage: {
+    points: number;
+    marked: number;
+    withReflections: number;
+    withCaptainReport: number;
+    // Обычный состав на пойнте, выведенный из самих данных (мода числа форм).
+    squadSize: number;
+    withFullSquad: number;
+  };
+  // Winrate турнира целиком — якорь, с которым сравниваются проценты блоков.
+  overall: Rate;
   deltaOtb: Array<{ delta: number } & Rate>;
   equalSquads: { points: number; lines: InitiativeLineSummary[] };
   combinations: Array<{ combination: GameCombination } & Rate>;
   breakWidth: Array<{ ours: BreakWidth; theirs: BreakWidth } & Rate>;
+  deaths: { total: number; byPhase: Record<string, number>; zones: ZoneDeaths[] };
   players: PlayerSummary[];
   captainMismatch: { compared: number; mismatched: number };
 }
@@ -200,6 +220,8 @@ export interface EventTable {
   eventTitle: string;
   // id укрытия -> код для чтения человеком («grid.300.far» -> «300Д»).
   positions: Record<string, string>;
+  // id укрытия -> зона поля. Нужна сводке, чтобы свести 51 фигуру к трём зонам.
+  positionZones: Record<string, FieldZone>;
   summary: EventSummary;
   games: Array<{
     gameId: string;

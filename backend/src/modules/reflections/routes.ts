@@ -616,13 +616,21 @@ async function buildEventTable(eventId: string, eventTitle: string) {
   const reportByPoint = new Map(reports.rows.map((r) => [r.point_id, r]));
 
   // Подписи укрытий тянем один раз: в таблице «grid.300.far» нечитаемо.
-  const positions = await query<{ id: string; code: string }>(`SELECT id, code FROM field_positions`);
+  // Заодно зону: figure_group это и есть snake / grid (центр) / envelope, и по
+  // ней сводка собирает матрицу «зона × фаза» вместо 51 отдельной фигуры.
+  const positions = await query<{ id: string; code: string; figure_group: string }>(
+    `SELECT id, code, figure_group FROM field_positions`
+  );
   const codeById = new Map(positions.rows.map((p) => [p.id, p.code]));
+  const zoneById = Object.fromEntries(
+    positions.rows.map((p) => [p.id, p.figure_group === "grid" ? "center" : p.figure_group])
+  );
 
   return {
     eventId,
     eventTitle,
     positions: Object.fromEntries(codeById),
+    positionZones: zoneById,
     games: games.rows.map((game) => {
       const gamePoints = points.rows.filter((p) => p.game_id === game.id);
       return {
