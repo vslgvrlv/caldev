@@ -3,6 +3,7 @@ import { Loader2, Check, ClipboardList, ChevronRight } from 'lucide-react';
 import { api } from '../api';
 import { ReflectionModal } from './ReflectionModal';
 import { CaptainReportModal } from './CaptainReportModal';
+import { GameScoreLine } from './GameScoreLine';
 import type { Game, GamePoint, GamePointsResponse, PointResult } from '../types';
 
 // Выбор пойнта — вход в рефлексию (#89). Гейм со счётом 4:3 это семь пойнтов,
@@ -14,6 +15,8 @@ import type { Game, GamePoint, GamePointsResponse, PointResult } from '../types'
 
 type Props = {
   game: Game;
+  /** Имя своей команды — чтобы в шапке было видно, чей счёт слева. */
+  teamName: string;
   isOpen: boolean;
   onClose: () => void;
 };
@@ -24,7 +27,7 @@ const RESULT_LABEL: Record<PointResult, string> = { WIN: 'Выиграли', LOS
 const nextResult = (current: PointResult | null): PointResult | null =>
   current === null ? 'WIN' : current === 'WIN' ? 'LOSS' : null;
 
-export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
+export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClose }) => {
   const [data, setData] = useState<GamePointsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,17 +104,16 @@ export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
       <div className="relative w-full max-w-md bg-pb-surface rounded-t-2xl sm:rounded-2xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-pb-surface border-b border-white/5 px-5 py-4 z-10 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-white truncate">{game.opponent}</h3>
-            <p className="text-pb-subtext text-xs mt-0.5">
-              {game.time}
-              {game.score ? ` · счёт ${game.score}` : ''}
-            </p>
+        <div className="sticky top-0 bg-pb-surface border-b border-white/5 px-5 py-4 z-10">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-pb-subtext text-xs">{game.time}</p>
+            <button type="button" onClick={onClose} className="text-xs text-pb-subtext shrink-0">
+              Закрыть
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="text-xs text-pb-subtext shrink-0 pt-1">
-            Закрыть
-          </button>
+          <div className="mt-2">
+            <GameScoreLine teamName={teamName} opponent={game.opponent} score={game.score} size="md" />
+          </div>
         </div>
 
         <div className="p-5 space-y-3">
@@ -146,16 +148,38 @@ export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
                 ))}
 
               {data.points.map((point) => (
-                <div key={point.id} className="flex items-center gap-2">
+                <div key={point.id} className="flex items-stretch gap-2">
+                  {/* Результат пойнта — первое, что делает капитан, поэтому кнопка
+                      стоит слева, а не третьей справа, как было. Игроку показывается
+                      тот же бейдж, только не нажимается. */}
+                  <button
+                    type="button"
+                    onClick={() => void cycleResult(point)}
+                    disabled={!data.canMarkResults}
+                    title={data.canMarkResults ? 'Отметить результат пойнта' : 'Результат отмечает капитан'}
+                    className={`shrink-0 w-14 rounded-xl border flex flex-col items-center justify-center leading-none transition-colors disabled:cursor-default ${
+                      point.result === 'WIN'
+                        ? 'bg-pb-primary text-pb-background border-pb-primary'
+                        : point.result === 'LOSS'
+                          ? 'bg-pb-danger/20 text-pb-danger border-pb-danger/40'
+                          : 'bg-white/5 text-pb-subtext border-white/10'
+                    }`}
+                  >
+                    <span className="font-mono text-[10px] opacity-70">{point.ordinal}</span>
+                    <span className="text-sm font-bold mt-0.5">
+                      {point.result === 'WIN' ? 'W' : point.result === 'LOSS' ? 'L' : '—'}
+                    </span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setReflectionPoint(point)}
                     className="flex-1 min-w-0 flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-left hover:border-pb-primary/40 transition-colors"
                   >
-                    <span className="font-mono font-bold text-pb-primary shrink-0">{point.ordinal}</span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-bold text-white truncate">
-                        {point.result ? RESULT_LABEL[point.result] : 'Результат не отмечен'}
+                      <span className="block text-sm font-bold text-white">
+                        Пойнт {point.ordinal}
+                        {point.result ? ` · ${RESULT_LABEL[point.result]}` : ''}
                       </span>
                       <span className="block text-[11px] text-pb-subtext mt-0.5">
                         {point.mineFilled ? 'Твоя рефлексия заполнена' : 'Твоя рефлексия не заполнена'}
@@ -171,35 +195,19 @@ export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
                   </button>
 
                   {data.canMarkResults && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void cycleResult(point)}
-                        title="Отметить результат пойнта"
-                        className={`shrink-0 w-11 h-11 rounded-xl border text-xs font-bold transition-colors ${
-                          point.result === 'WIN'
-                            ? 'bg-pb-primary text-pb-background border-pb-primary'
-                            : point.result === 'LOSS'
-                              ? 'bg-pb-danger/20 text-pb-danger border-pb-danger/40'
-                              : 'bg-white/5 text-pb-subtext border-white/10'
-                        }`}
-                      >
-                        {point.result === 'WIN' ? 'W' : point.result === 'LOSS' ? 'L' : '—'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCaptainPoint(point)}
-                        title="Разбор капитана"
-                        aria-label="Разбор капитана"
-                        className={`shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center transition-colors ${
-                          point.captainFilled
-                            ? 'bg-white/10 text-pb-primary border-pb-primary/40'
-                            : 'bg-white/5 text-pb-subtext border-white/10'
-                        }`}
-                      >
-                        <ClipboardList size={16} />
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => setCaptainPoint(point)}
+                      title="Разбор капитана"
+                      aria-label="Разбор капитана"
+                      className={`shrink-0 w-11 rounded-xl border flex items-center justify-center transition-colors ${
+                        point.captainFilled
+                          ? 'bg-white/10 text-pb-primary border-pb-primary/40'
+                          : 'bg-white/5 text-pb-subtext border-white/10'
+                      }`}
+                    >
+                      <ClipboardList size={16} />
+                    </button>
                   )}
                 </div>
               ))}
