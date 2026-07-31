@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, Send, ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '../api';
 import type { BreakWidth, EventTable, EventTablePoint, GameCombination, ReflectionPhase } from '../types';
 
@@ -138,23 +138,20 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
   const [isExporting, setIsExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
 
-  // Внутри Telegram файл уходит в чат: скачивание там открывает файл окном
-  // поверх приложения, из которого нет пути назад (Василий, 2026-07-31).
-  const inTelegram = Boolean((window as any).Telegram?.WebApp?.initData);
-
+  // Выгрузка всегда уходит файлом в чат с ботом. Скачивание внутри Telegram
+  // открывает файл окном поверх приложения, из которого нет пути назад
+  // (Василий, 2026-07-31). Детект «мы внутри Telegram» пробовали — он не
+  // сработал, и ветка со скачиванием всё равно выигрывала; отдельное поведение
+  // для браузера тут не нужно: файл в чате доступен с любого устройства.
   const exportCsv = async () => {
     setIsExporting(true);
     setError(null);
     setExportNote(null);
     try {
-      if (inTelegram) {
-        await api.sendEventTableCsv(eventId);
-        setExportNote('Файл отправлен в чат с ботом.');
-      } else {
-        await api.downloadEventTableCsv(eventId, `Разбор — ${table?.eventTitle ?? 'событие'}.csv`);
-      }
+      await api.sendEventTableCsv(eventId);
+      setExportNote('Файл отправлен в чат с ботом.');
     } catch {
-      setError('Не удалось выгрузить CSV');
+      setError('Не удалось отправить файл');
     } finally {
       setIsExporting(false);
     }
@@ -241,8 +238,8 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
             disabled={isExporting}
             className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-            {inTelegram ? 'Прислать CSV в чат' : 'Скачать CSV'}
+            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            Отправить в чат
           </button>
           {exportNote && <p className="text-xs text-pb-primary text-center">{exportNote}</p>}
         </div>
