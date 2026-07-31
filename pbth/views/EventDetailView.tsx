@@ -999,7 +999,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
 
               <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 relative overflow-hidden">
-                <div className="absolute top-4 bottom-4 left-[5.5rem] w-px bg-white/10"></div>
+                <div className="absolute top-4 bottom-4 left-[3.8rem] w-px bg-white/10"></div>
 
                 <div className="space-y-6 relative">
                   {sortedSchedule.length === 0 && (
@@ -1008,18 +1008,20 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
                   {sortedSchedule.map((game) => (
                     <div key={game.id} className="w-full flex items-start relative z-0 group">
-                      <div className="w-16 font-mono font-bold text-pb-primary text-lg text-right pr-4 shrink-0 pt-2">
+                      {/* Колонка времени и отступ до карточки ужаты: на 390px каждому
+                          имени доставалось по 60px, и «Ястребы» ломались посреди слова. */}
+                      <div className="w-14 font-mono font-bold text-pb-primary text-base text-right pr-2 shrink-0 pt-2">
                         {normalizeTimeForInput(game.time) || game.time}
                       </div>
 
-                      <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-4 z-10 mt-4 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-pb-background border-2 border-pb-primary shrink-0 mr-2 z-10 mt-4 shadow-[0_0_10px_rgba(0,230,118,0.5)]"></div>
 
                       {/* Строка читается как на regevent.ru, откуда капитан переносит
                           результаты: «наша команда [очки][очки] соперник». Имена берут
                           всю ширину карточки и переносятся по словам — раньше пит-зона
                           стояла рядом как shrink-0 и съедала соперника до «Ш…»
                           (Василий, 2026-07-31). Пара и пит-зона — метаданными ниже. */}
-                      <div className="flex-1 min-w-0 bg-white/5 p-3 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors">
+                      <div className="flex-1 min-w-0 bg-white/5 p-2.5 rounded-xl border border-white/5 group-hover:border-pb-primary/40 transition-colors">
                         <button type="button" onClick={() => openGameCard(game)} className="w-full text-left">
                           <GameScoreLine teamName={teamName} opponent={game.opponent} score={game.score} />
                         </button>

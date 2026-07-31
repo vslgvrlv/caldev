@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PaintBall Team Hub — инструкция для игрока</title>
+<meta name="description" content="Как пользоваться приложением PaintBall Team Hub: ответить на событие, разметить пойнты, заполнить рефлексию, посмотреть статистику и казну.">
+<meta name="theme-color" content="#0F0F0F">
+<style>
+  :root{
+    --bg:#0F0F0F;
+    --surface:#1E1E2E;
+    --surface-2:#181826;
+    --primary:#00E676;
+    --danger:#FF1744;
+    --warning:#FF6D00;
+    --text:#FFFFFF;
+    --subtext:#A0A0B0;
+    --line:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:64px;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 18px}
+
+  /* ---------- шапка ---------- */
+  header.hero{
+    background:radial-gradient(120% 90% at 50% 0%,rgba(0,230,118,.16) 0%,rgba(15,15,15,0) 65%);
+    padding:48px 0 34px;
+    border-bottom:1px solid var(--line);
+  }
+  .badge{
+    display:inline-block;padding:5px 12px;border-radius:999px;
+    background:rgba(0,230,118,.14);border:1px solid rgba(0,230,118,.35);
+    color:var(--primary);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  }
+  h1{font-size:34px;line-height:1.15;margin:16px 0 10px;letter-spacing:-.02em}
+  .lead{color:var(--subtext);font-size:16px;margin:0}
+
+  /* ---------- оглавление ---------- */
+  nav.toc{
+    margin:26px 0 0;padding:16px 18px;
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  }
+  nav.toc h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--subtext);margin:0 0 10px}
+  nav.toc ol{margin:0;padding-left:22px;color:var(--subtext)}
+  nav.toc li{margin:5px 0}
+  nav.toc a{color:var(--text);text-decoration:none;border-bottom:1px solid transparent}
+  nav.toc a:hover{border-bottom-color:var(--primary)}
+
+  /* ---------- секции ---------- */
+  section{padding:38px 0 6px;border-top:1px solid var(--line);margin-top:32px}
+  section:first-of-type{border-top:0}
+  .num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:30px;height:30px;border-radius:9px;
+    background:var(--primary);color:#0F0F0F;font-weight:900;font-size:15px;
+    margin-right:10px;flex:0 0 auto;
+  }
+  h2.sec{display:flex;align-items:center;font-size:24px;margin:0 0 14px;letter-spacing:-.01em}
+  h3{font-size:17px;margin:26px 0 8px}
+  p{margin:12px 0}
+  ul,ol.steps{margin:12px 0;padding-left:22px}
+  li{margin:6px 0}
+  strong{color:#fff}
+  .muted{color:var(--subtext)}
+  code,.kbd{
+    background:rgba(255,255,255,.07);border:1px solid var(--line);
+    border-radius:6px;padding:1px 6px;font-size:14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+
+  /* ---------- скриншоты ---------- */
+  figure{margin:20px 0}
+  figure img{
+    display:block;width:100%;height:auto;border-radius:14px;
+    border:1px solid var(--line);background:var(--surface-2);
+  }
+  figure img.narrow{max-width:420px;margin:0 auto}
+  figcaption{color:var(--subtext);font-size:13px;margin-top:8px;text-align:center}
+  .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:20px 0}
+  .shots figure{margin:0}
+
+  /* ---------- плашки ---------- */
+  .note,.warn,.tip{
+    border-radius:14px;padding:14px 16px;margin:18px 0;font-size:15px;
+    border:1px solid var(--line);background:var(--surface);
+  }
+  .note{border-left:3px solid var(--primary)}
+  .warn{border-left:3px solid var(--warning);background:rgba(255,109,0,.08)}
+  .tip{border-left:3px solid #6E7BFF;background:rgba(110,123,255,.08)}
+  .note b,.warn b,.tip b{display:block;margin-bottom:4px}
+
+  /* ---------- цветные чипы ---------- */
+  .chip{display:inline-block;padding:2px 9px;border-radius:8px;font-size:13px;font-weight:700;line-height:1.5}
+  .chip.win{background:var(--primary);color:#0F0F0F}
+  .chip.loss{background:rgba(255,23,68,.2);color:var(--danger);border:1px solid rgba(255,23,68,.4)}
+  .chip.none{background:rgba(255,255,255,.1);color:var(--subtext);border:1px solid var(--line)}
+
+  /* ---------- итоговая памятка ---------- */
+  .cheat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 18px 14px;margin:20px 0}
+  .cheat .row{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .cheat .row:last-child{border-bottom:0}
+  .cheat .when{flex:0 0 40%;color:var(--primary);font-weight:700;font-size:14px}
+  .cheat .what{flex:1;font-size:14px;color:var(--text)}
+
+  footer{margin-top:48px;padding:26px 0 40px;border-top:1px solid var(--line);color:var(--subtext);font-size:13px;text-align:center}
+  footer a{color:var(--primary)}
+
+  @media (max-width:520px){
+    h1{font-size:27px}
+    h2.sec{font-size:20px}
+    .cheat .when{flex-basis:45%}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="badge">Инструкция · Игрок</span>
+    <h1>PaintBall Team Hub<br>для игрока</h1>
+    <p class="lead">Всё, что нужно уметь: ответить на тренировку, разобрать турнир по пойнтам, заполнить рефлексию и посмотреть свою статистику. Читается за 10 минут, дальше — по картинкам.</p>
+
+    <nav class="toc">
+      <h2>Что внутри</h2>
+      <ol>
+        <li><a href="#s1">Зачем это приложение</a></li>
+        <li><a href="#s2">Вход</a></li>
+        <li><a href="#s3">Главный экран</a></li>
+        <li><a href="#s4">Ответить на событие</a></li>
+        <li><a href="#s5">Календарь</a></li>
+        <li><a href="#s6">Экран турнира и счёт</a></li>
+        <li><a href="#s7">Пойнты</a></li>
+        <li><a href="#s8">Рефлексия — 5 шагов</a></li>
+        <li><a href="#s9">Команда и статистика</a></li>
+        <li><a href="#s10">Казна</a></li>
+        <li><a href="#s11">Профиль и календарь в телефоне</a></li>
+        <li><a href="#s12">Памятка</a></li>
+      </ol>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- 1 -->
+<section id="s1">
+  <h2 class="sec"><span class="num">1</span>Зачем это приложение</h2>
+  <p>Раньше всё жило в чате: кто едет, во сколько сбор, сколько сдавать, кто в каком гейме что напортачил. Чат забывает. Приложение — нет.</p>
+  <p>От тебя нужно ровно три вещи:</p>
+  <ul>
+    <li><strong>Отвечать на события</strong> — идёшь ты или нет. Капитан планирует состав по этим ответам, а не по «вроде Никита говорил, что будет».</li>
+    <li><strong>Заполнять рефлексию после турнира</strong> — по каждому пойнту: где тебя выбили, скольких выбил ты, как отработал.</li>
+    <li><strong>Смотреть свою статистику</strong> — посещаемость, количество игр, K/D. Это твоя картина, а не чьё-то мнение.</li>
+  </ul>
+  <div class="note">
+    <b>Приложение открывается в браузере</b>
+    Ставить ничего не надо. Открой ссылку, войди через Telegram и добавь на домашний экран («Поделиться» → «На экран Домой» на iPhone, «⋮» → «Добавить на главный экран» на Android) — будет как обычное приложение, с иконкой.
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <h2 class="sec"><span class="num">2</span>Вход</h2>
+  <p>Одна кнопка — <strong>«Продолжить с Telegram»</strong>. Telegram спросит подтверждение, приложение узнает тебя по нику и подтянет в твою команду. Ни логинов, ни паролей.</p>
+  <figure>
+    <img class="narrow" src="img/login.webp" alt="Экран входа с кнопкой «Продолжить с Telegram»">
+    <figcaption>Экран входа</figcaption>
+  </figure>
+  <div class="warn">
+    <b>Тебя не пустило или не видно команду</b>
+    Значит капитан ещё не добавил твой Telegram в состав. Напиши ему — это чинится за минуту.
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <h2 class="sec"><span class="num">3</span>Главный экран</h2>
+  <p>Первое, что видишь после входа. Сверху — <strong>твоё имя и роль</strong> в команде, дальше три блока.</p>
+  <figure>
+    <img src="img/dashboard.webp" alt="Главный экран: ближайшее событие с таймером и список событий, требующих ответа">
+    <figcaption>Главный экран</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Ближайшее событие</strong> — крупная карточка с обратным отсчётом (дни : часы : минуты). Если ты ещё не ответил, висит оранжевая плашка <em>«Ждет ответа»</em> и кнопка <strong>«Открыть и ответить»</strong>.</li>
+    <li><strong>Требуют ответа</strong> — очередь событий, которые ждут твоего решения. Цифра справа — сколько их. Задача простая: свести к нулю.</li>
+    <li><strong>На этой неделе</strong> — что уже подтверждено и стоит в ближайших днях.</li>
+  </ul>
+  <p>Внизу экрана — навигация из пяти вкладок: <span class="chip none">Главная</span> <span class="chip none">Календарь</span> <span class="chip none">Казна</span> <span class="chip none">Команда</span> <span class="chip none">Профиль</span>. Она есть на всех экранах.</p>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <h2 class="sec"><span class="num">4</span>Ответить на событие</h2>
+  <p>Самое частое действие. Отвечать можно прямо из блока «Требуют ответа», не заходя внутрь события.</p>
+  <figure>
+    <img src="img/need-answer.webp" alt="Блок «Требуют ответа» с кнопками Иду, Не иду и Иду на серию">
+    <figcaption>Ответ в один тап — прямо из списка</figcaption>
+  </figure>
+  <p>Внутри самого события кнопок три:</p>
+  <figure>
+    <img src="img/decision.webp" alt="Кнопки: Иду, Не иду, Думаю">
+    <figcaption>Блок «Ваше решение» на экране события</figcaption>
+  </figure>
+  <ul>
+    <li><span class="chip win">Иду</span> — тебя считают в составе.</li>
+    <li><span class="chip loss">Не иду</span> — капитан ищет замену заранее, а не в день игры.</li>
+    <li><span class="chip none">Думаю</span> — честный вариант, когда правда не знаешь. Но событие остаётся в очереди «Требуют ответа», пока не определишься.</li>
+  </ul>
+
+  <h3>«Иду на серию» — для тренировок</h3>
+  <p>Тренировки обычно ставятся серией: каждый вторник, пять занятий вперёд. Чтобы не тапать по каждой, есть <strong>«Иду на все»</strong> — одна кнопка записывает тебя на всю серию сразу.</p>
+  <figure>
+    <img src="img/training.webp" alt="Экран тренировки: бейджи «Тренировка» и «Серия», блок «Это серия занятий» с кнопкой «Иду на все», списки участников">
+    <figcaption>Экран тренировки из серии</figcaption>
+  </figure>
+  <p>На экране события также видно <strong>место</strong>, <strong>время</strong> и <strong>кто идёт</strong>: три группы — «Идут», «Молчат», «Не идут». Полезно посмотреть перед ответом: если в «Идут» пусто, а игра завтра — самое время расшевелить чат.</p>
+  <div class="tip">
+    <b>Отвечай сразу, как пришло уведомление</b>
+    В команде за поздний ответ бывает штраф в казну (см. раздел «Казна»). Пять секунд на кнопку дешевле.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <h2 class="sec"><span class="num">5</span>Календарь</h2>
+  <p>Вкладка <strong>«Календарь»</strong> — тот же список событий, но по месяцам. Под датой стоит точка: <span style="color:var(--primary)">зелёная</span> — тренировка, <span style="color:var(--danger)">красная</span> — турнир.</p>
+  <div class="shots">
+    <figure>
+      <img src="img/calendar.webp" alt="Календарь на месяц с точками под датами событий">
+      <figcaption>Месяц целиком</figcaption>
+    </figure>
+    <figure>
+      <img src="img/calendar-day.webp" alt="Выбран день 26 июля — под календарём карточка турнира">
+      <figcaption>Тап по дате → события этого дня</figcaption>
+    </figure>
+  </div>
+  <p>Тап по дню — снизу появляются события этой даты. Тап по карточке — откроется экран события.</p>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <h2 class="sec"><span class="num">6</span>Экран турнира и как читать счёт</h2>
+  <p>У турнира, в отличие от тренировки, есть <strong>расписание игр</strong>: во сколько какой гейм, против кого и в какой пит-зоне.</p>
+  <figure>
+    <img src="img/tournament.webp" alt="Экран турнира: расписание игр с временем, счётом и кнопками «Пойнты»">
+    <figcaption>Экран турнира «Кубок Столицы, этап 3»</figcaption>
+  </figure>
+
+  <h3>Строка гейма</h3>
+  <figure>
+    <img class="narrow" src="img/game-row.webp" alt="Строка гейма: Молния 4 : 3 Красная линия">
+    <figcaption>Слева всегда наша команда, справа — соперник</figcaption>
+  </figure>
+  <p>Читается как на regevent.ru, откуда капитан переносит результаты:</p>
+  <ul>
+    <li><strong>Слева — мы, справа — соперник.</strong> Всегда, без исключений.</li>
+    <li><span class="chip win">4</span> зелёный бейдж — сторона, которая выиграла гейм.</li>
+    <li><span class="chip loss">3</span> красный — проиграла.</li>
+    <li><span class="chip none">–</span> серый прочерк — счёт ещё не проставлен капитаном.</li>
+  </ul>
+  <p>Под строкой — <em>«Первая пара · Ближняя пит-зона»</em>: в какой паре и с какой стороны поля играем. Справа кнопка <strong>«Пойнты»</strong> — вход в разбор гейма.</p>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <h2 class="sec"><span class="num">7</span>Пойнты</h2>
+  <p>Гейм состоит из пойнтов. Счёт <strong>4:3</strong> — это <strong>семь пойнтов</strong>: четыре наших, три соперника. Приложение раскладывает счёт на эти семь строк автоматически.</p>
+  <figure>
+    <img src="img/points.webp" alt="Список пойнтов гейма: 7 строк с бейджами W и L и статусом рефлексии">
+    <figcaption>Список пойнтов гейма 4:3</figcaption>
+  </figure>
+  <p>Что в строке:</p>
+  <ul>
+    <li><strong>Слева бейдж</strong> — номер пойнта и результат: <span class="chip win">W</span> выиграли, <span class="chip loss">L</span> проиграли, <span class="chip none">—</span> ещё не размечено.</li>
+    <li><strong>Середина</strong> — статус твоей рефлексии: «Твоя рефлексия заполнена» или «не заполнена». Рядом <em>«всего 5»</em> — сколько человек из команды уже заполнили этот пойнт, и <em>«есть разбор»</em> — если капитан оставил свой комментарий.</li>
+    <li><span style="color:var(--primary)">✓</span> справа — твоя рефлексия за этот пойнт готова.</li>
+  </ul>
+  <div class="warn">
+    <b>Кто ставит W и L</b>
+    Из счёта известно только <em>сколько</em> пойнтов выиграно, но не в каком порядке. Порядок размечает <strong>капитан</strong> — тапом по бейджу. У тебя эта кнопка не нажимается, и это нормально: жди, пока капитан разметит, и заполняй рефлексию.
+  </div>
+  <p>Тап по строке пойнта — открывается рефлексия.</p>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <h2 class="sec"><span class="num">8</span>Рефлексия — 5 шагов</h2>
+  <p>Это главное, ради чего всё затевалось. Пять коротких экранов на каждый пойнт. Заполняется за полминуты, если делать по горячим следам.</p>
+
+  <h3>Шаг 1. Чем закончился пойнт для тебя</h3>
+  <figure>
+    <img class="narrow" src="img/refl-1.webp" alt="Шаг 1: кнопки «Меня выбили» и «Дожил до конца»">
+    <figcaption>Шаг 1 из 5</figcaption>
+  </figure>
+  <p>Два варианта: <strong>«Меня выбили»</strong> или <strong>«Дожил до конца»</strong>. Если дожил — шаг 2 пропускается, потому что рассказывать про своё поражение нечего.</p>
+
+  <h3>Шаг 2. Где и когда тебя выбили</h3>
+  <figure>
+    <img src="img/refl-2.webp" alt="Шаг 2: фаза (На разбежке / За укрытием / На перемещении) и схема поля с укрытиями">
+    <figcaption>Шаг 2 из 5 — фаза и точка на поле</figcaption>
+  </figure>
+  <p>Сначала <strong>фаза</strong>:</p>
+  <ul>
+    <li><strong>На разбежке</strong> — поймали на старте, до укрытия не доехал.</li>
+    <li><strong>За укрытием</strong> — стоял в точке и выбили там.</li>
+    <li><strong>На перемещении</strong> — снялся и не доехал.</li>
+  </ul>
+  <p>Потом <strong>точка на поле</strong>. Схема сверху вниз: <em>БАЗА ПРОТИВНИКА</em> → <em>ЦЕНТР · ОБЩАЯ</em> → <em>НАША БАЗА</em>. Ткни то укрытие, где это случилось.</p>
+  <div class="tip">
+    <b>«Поменять фланги местами»</b>
+    Кнопка под схемой. Если стартовали с другой стороны и схема мысленно не сходится — переверни её, чтобы тыкать в реальные, а не в зеркальные точки.
+  </div>
+
+  <h3>Шаг 3. Скольких выбил ты</h3>
+  <figure>
+    <img class="narrow" src="img/refl-3.webp" alt="Шаг 3: варианты 0, 1, 2, 3+">
+    <figcaption>Шаг 3 из 5</figcaption>
+  </figure>
+  <p>Выбираешь <strong>0 / 1 / 2 / 3+</strong>. Если больше нуля — раскрывается блок на каждый килл: та же фаза и та же схема поля, но теперь про соперника.</p>
+  <figure>
+    <img src="img/refl-kill.webp" alt="Раскрытый блок КИЛЛ 1: фаза «За укрытием» и схема поля">
+    <figcaption>Выбрал «1» — появился блок «КИЛЛ 1»</figcaption>
+  </figure>
+  <p>Отмечаешь, <strong>откуда</strong> ты его снял и <strong>где</strong> он стоял. Из этих точек потом собирается карта: где команда реально забирает пойнты, а где регулярно горит.</p>
+
+  <h3>Шаг 4. Как отработал</h3>
+  <figure>
+    <img class="narrow" src="img/refl-4.webp" alt="Шаг 4: оценка от 1 (провалил) до 5 (отлично)">
+    <figcaption>Шаг 4 из 5</figcaption>
+  </figure>
+  <p>Честная самооценка от <strong>1 — провалил</strong> до <strong>5 — отлично</strong>. Это про <em>твою работу</em>, а не про результат пойнта: можно проиграть пойнт и отработать на 5, можно выиграть и отработать на 2.</p>
+
+  <h3>Шаг 5. Что ещё было важного</h3>
+  <figure>
+    <img class="narrow" src="img/refl-5.webp" alt="Шаг 5: текстовое поле и кнопка «Сохранить»">
+    <figcaption>Шаг 5 из 5 — необязательный</figcaption>
+  </figure>
+  <p>Свободный текст, можно пропустить. Но именно сюда стоит писать то, что кнопками не выразишь: <em>«остался на тридцатке, хотя надо было идти на 3000»</em>, «не услышал перекличку», «сорвал темп на своём фланге».</p>
+  <p>Жмёшь <strong>«Сохранить»</strong> — появляется подтверждение: <em>«Рефлексия за пойнт сохранена. Её видят капитан и тренер. Вернуться и поправить можно в любой момент.»</em></p>
+  <div class="note">
+    <b>Ошибся — просто зайди заново</b>
+    Рефлексию можно переписать в любое время. Она не «запечатывается».
+  </div>
+  <div class="warn">
+    <b>Заполняй в тот же день</b>
+    Через неделю ты не вспомнишь, за каким укрытием тебя сняли в четвёртом пойнте третьего гейма. Идеально — между геймами, пока ждёшь свою пару.
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <h2 class="sec"><span class="num">9</span>Команда и статистика</h2>
+  <p>Вкладка <strong>«Команда»</strong>, две подвкладки.</p>
+
+  <h3>Состав</h3>
+  <figure>
+    <img src="img/team.webp" alt="Вкладка «Состав»: руководство, тренерский штаб, основной состав, резерв">
+    <figcaption>Кто есть кто в команде</figcaption>
+  </figure>
+  <p>Люди сгруппированы: <strong>Руководство</strong> (капитаны) → <strong>Тренерский штаб</strong> → <strong>Основной состав</strong> → <strong>Резерв / другие</strong>. У каждого ник, роль и статус: «В строю», «Отпуск», «Запас». Сверху — поиск по имени.</p>
+
+  <h3>Статистика</h3>
+  <figure>
+    <img src="img/team-stats.webp" alt="Вкладка «Статистика»: список игроков с посещаемостью, количеством игр и K/D">
+    <figcaption>Вся команда в одном списке</figcaption>
+  </figure>
+  <p>По каждому игроку три числа:</p>
+  <ul>
+    <li><strong>Посещаемость</strong> — процент и полоса, например <em>82% (18/22)</em>. Считается по подтверждённым «Иду». Ещё один довод отвечать вовремя.</li>
+    <li><strong>Игр</strong> — сколько матчей сыграно.</li>
+    <li><strong>K/D ratio</strong> — выбил / выбили. Собирается из рефлексий. Не заполняешь — цифра не растёт.</li>
+  </ul>
+
+  <h3>Карточка игрока</h3>
+  <figure>
+    <img src="img/player-card.webp" alt="Карточка игрока: посещаемость 82%, 22 игры, MVP, баланс по казне">
+    <figcaption>Тап по игроку — его карточка</figcaption>
+  </figure>
+  <p>То же самое крупно, плюс <strong>MVP</strong> (сколько раз признавали лучшим) и <strong>баланс по казне</strong>. Карточки открыты у всех — видно и свою, и чужие.</p>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2 class="sec"><span class="num">10</span>Казна</h2>
+  <figure>
+    <img src="img/finance.webp" alt="Экран казны: общий баланс, история операций, вкладка «Должники»">
+    <figcaption>Вкладка «Казна»</figcaption>
+  </figure>
+  <p>Сверху — <strong>общий баланс</strong> команды и <strong>долг игроков</strong> общей суммой. Ниже две вкладки:</p>
+  <ul>
+    <li><strong>История</strong> — все движения: взносы, оплата турниров, закупка шаров, штрафы. <span style="color:var(--primary)">Зелёное со знаком +</span> — деньги пришли, <span style="color:var(--danger)">красное с −</span> — потратили. Указано, кто именно внёс.</li>
+    <li><strong>Должники</strong> — кто сколько должен.</li>
+  </ul>
+  <p>Ты казну <strong>только смотришь</strong> — правки вносит капитан. Твоя задача: раз в месяц заглянуть, нет ли тебя в должниках.</p>
+</section>
+
+<!-- 11 -->
+<section id="s11">
+  <h2 class="sec"><span class="num">11</span>Профиль и календарь в телефоне</h2>
+  <figure>
+    <img src="img/profile.webp" alt="Профиль: имя, ник, подключённый Telegram, способы входа, интеграция календаря">
+    <figcaption>Вкладка «Профиль»</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Редактировать</strong> — имя, ник, аватар.</li>
+    <li><strong>Способы входа</strong> — Telegram уже привязан. Можно добавить Яндекс, чтобы заходить и им тоже.</li>
+    <li><strong>Интеграция календаря</strong> — самое полезное.</li>
+  </ul>
+  <h3>Как затащить события в календарь телефона</h3>
+  <ol class="steps">
+    <li>Скопируй ссылку <code>webcal://…</code> (иконка копирования справа).</li>
+    <li><strong>iPhone:</strong> Настройки → Календарь → Учётные записи → Добавить → Другое → Подписной календарь → вставь ссылку.<br>
+        <strong>Android / Google:</strong> calendar.google.com → «Другие календари» → «Подписаться по URL» → вставь ссылку.</li>
+    <li>Готово: тренировки и турниры сами появляются в календаре и напоминают о себе.</li>
+  </ol>
+  <p class="muted">Есть и кнопка <strong>«Скачать .ics»</strong> — но это разовый снимок расписания, он не обновляется. Подписка лучше.</p>
+</section>
+
+<!-- 12 -->
+<section id="s12">
+  <h2 class="sec"><span class="num">12</span>Памятка</h2>
+  <div class="cheat">
+    <div class="row"><div class="when">Пришло уведомление о событии</div><div class="what">Открыл → <strong>Иду / Не иду</strong>. Серия тренировок — <strong>«Иду на все»</strong>.</div></div>
+    <div class="row"><div class="when">Перед турниром</div><div class="what">Проверил в календаре время и место, глянул расписание игр.</div></div>
+    <div class="row"><div class="when">Между геймами</div><div class="what">Открыл гейм → <strong>«Пойнты»</strong> → заполнил рефлексию по своим пойнтам.</div></div>
+    <div class="row"><div class="when">Вечером после турнира</div><div class="what">Догнал незаполненное: в списке пойнтов сразу видно, где нет ✓.</div></div>
+    <div class="row"><div class="when">Раз в неделю</div><div class="what">«Требуют ответа» = 0.</div></div>
+    <div class="row"><div class="when">Раз в месяц</div><div class="what">Заглянул в <strong>Казну</strong> — нет ли долга. И в <strong>Статистику</strong> — как идёт посещаемость и K/D.</div></div>
+  </div>
+  <div class="note">
+    <b>Не понял, куда тыкать</b>
+    Пиши капитану. Если что-то работает не так, как здесь написано — это баг, и его чинят: скажи капитану, он передаст.
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    PaintBall Team Hub · инструкция для игрока<br>
+    Скриншоты сняты на демо-данных, у тебя будут свои цифры и имена.
+  </div>
+</footer>
+
+</body>
+</html>

@@ -35,10 +35,10 @@ export const GameScoreLine: React.FC<Props> = ({ teamName, opponent, score, size
   const theirs = parsed ? parsed.theirs : null;
 
   const nameClass = size === 'md' ? 'text-base font-bold' : 'text-sm font-bold';
-  const badgeSize = size === 'md' ? 'w-8 h-8 text-sm' : 'w-7 h-7 text-xs';
+  const badgeSize = size === 'md' ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs';
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
+    <div className="flex items-center gap-1 min-w-0">
       <span className={`flex-1 min-w-0 text-right text-white break-words ${nameClass}`}>{teamName}</span>
       <span className="flex items-center gap-0.5 shrink-0">
         <span
