@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { api } from '../api';
 import { FieldSchema } from './FieldSchema';
-import type { FieldPosition, Game, GameReflection, ReflectionKill, ReflectionPhase } from '../types';
+import type { FieldPosition, Game, GamePoint, GameReflection, ReflectionKill, ReflectionPhase } from '../types';
 
-// Форма рефлексии игрока по гейму (#89, спека §7.5). Бюджет — 60–90 сек,
+// Форма рефлексии игрока по пойнту (#89, спека §7.5). Бюджет — 60–90 сек,
 // 4–8 тапов. Клавиатура открывается ровно один раз и только по желанию —
 // в последнем поле «что ещё было важного».
+//
+// Заполняется за пойнт, а не за гейм: в гейме со счётом 4:3 семь разных
+// эпизодов, и усреднять их в одну форму — терять ровно то, ради чего рефлексия.
 
 const PHASES: Array<{ value: ReflectionPhase; label: string }> = [
   { value: 'BREAK', label: 'На разбежке' },
@@ -20,11 +23,14 @@ const SWAP_KEY = 'pbth:field-schema-swapped';
 
 type Props = {
   game: Game;
+  point: GamePoint;
   isOpen: boolean;
   onClose: () => void;
 };
 
-type Step = 1 | 2 | 3 | 4 | 5;
+// 6 — экран подтверждения. Без него игрок не понимал, что форма ушла:
+// модалка просто закрывалась, и это читалось как «ничего не произошло».
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 // Самооценка (§8.3): оценивается работа, а не исход пойнта — выбитый может
 // отработать задачу на пять, доживший — простоять в укрытии.
@@ -45,7 +51,7 @@ const emptyReflection: GameReflection = {
   note: null,
 };
 
-export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
+export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose }) => {
   const [positions, setPositions] = useState<FieldPosition[]>([]);
   const [draft, setDraft] = useState<GameReflection>(emptyReflection);
   const [step, setStep] = useState<Step>(1);
@@ -60,7 +66,7 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
     setIsLoading(true);
     setError(null);
     setStep(1);
-    Promise.all([api.getFieldPositions(), api.getMyReflection(game.id)])
+    Promise.all([api.getFieldPositions(), api.getMyReflection(point.id)])
       .then(([catalog, saved]) => {
         if (cancelled) return;
         setPositions(catalog);
@@ -75,7 +81,7 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, game.id]);
+  }, [isOpen, point.id]);
 
   const toggleSwap = () => {
     setSwapped((prev) => {
@@ -113,8 +119,8 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
     setIsSaving(true);
     setError(null);
     try {
-      await api.saveMyReflection(game.id, draft);
-      onClose();
+      await api.saveMyReflection(point.id, draft);
+      setStep(6);
     } catch {
       setError('Не удалось сохранить рефлексию');
     } finally {
@@ -151,8 +157,13 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
       <div className="relative w-full max-w-md bg-pb-surface rounded-t-2xl sm:rounded-2xl border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-pb-surface border-b border-white/5 px-5 py-4 z-10">
-          <h3 className="text-base font-bold text-white">Рефлексия · {game.time}</h3>
-          <p className="text-pb-subtext text-xs mt-0.5 truncate">{game.opponent}</p>
+          <h3 className="text-base font-bold text-white">
+            Пойнт {point.ordinal}
+            {point.result ? (point.result === 'WIN' ? ' · выиграли' : ' · проиграли') : ''}
+          </h3>
+          <p className="text-pb-subtext text-xs mt-0.5 truncate">
+            {game.opponent} · {game.time}
+          </p>
         </div>
 
         <div className="p-5 space-y-5">
@@ -323,14 +334,33 @@ export const ReflectionModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
             </div>
           )}
 
+          {!isLoading && step === 6 && (
+            <div className="space-y-4 py-6 text-center">
+              <div className="mx-auto w-14 h-14 rounded-full bg-pb-primary/20 flex items-center justify-center">
+                <Check size={28} className="text-pb-primary" />
+              </div>
+              <p className="text-sm font-bold text-white">Рефлексия за пойнт {point.ordinal} сохранена</p>
+              <p className="text-xs text-pb-subtext">Её видят капитан и тренер. Вернуться и поправить можно в любой момент.</p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background"
+              >
+                К списку пойнтов
+              </button>
+            </div>
+          )}
+
           {error && <p className="text-xs text-pb-danger text-center">{error}</p>}
 
-          <div className="flex justify-between text-xs text-pb-subtext pt-2">
-            <button type="button" onClick={goBack}>
-              {step > 1 ? 'Назад' : 'Отмена'}
-            </button>
-            <span>Шаг {step} из 5</span>
-          </div>
+          {step < 6 && (
+            <div className="flex justify-between text-xs text-pb-subtext pt-2">
+              <button type="button" onClick={goBack}>
+                {step > 1 ? 'Назад' : 'Отмена'}
+              </button>
+              <span>Шаг {step} из 5</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

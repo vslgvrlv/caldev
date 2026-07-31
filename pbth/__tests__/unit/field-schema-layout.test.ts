@@ -11,7 +11,20 @@ function catalog(): FieldPosition[] {
     side: FieldPosition['side'],
     code: string,
     depth: number
-  ) => items.push({ id: `${group}.${index}.${side.toLowerCase()}`, group, index, side, code, depth, label: code, active: true });
+  ) =>
+    items.push({
+      id: `${group}.${index}.${side.toLowerCase()}`,
+      group,
+      index,
+      side,
+      code,
+      // В каталоге код несёт суффикс половины (1Б/1Д), на кнопке он лишний —
+      // здесь коды без суффикса, поэтому shortCode совпадает с code.
+      shortCode: code,
+      depth,
+      label: code,
+      active: true,
+    });
 
   const grid = [
     [1, ['1', '2', '3', '4', '5']],

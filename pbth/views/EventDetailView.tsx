@@ -14,8 +14,8 @@ import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
-import { ReflectionModal } from '../components/ReflectionModal';
-import { CaptainReportModal } from '../components/CaptainReportModal';
+import { GamePointsModal } from '../components/GamePointsModal';
+import { EventTableModal } from '../components/EventTableModal';
 
 interface EventDetailAttendee {
   userId: string;
@@ -111,8 +111,8 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [newGamePitZone, setNewGamePitZone] = useState<'NEAR' | 'FAR'>('NEAR');
   const [newGamePair, setNewGamePair] = useState<'FIRST' | 'SECOND'>('FIRST');
 
-  const [reflectionGame, setReflectionGame] = useState<Game | null>(null);
-  const [captainReportGame, setCaptainReportGame] = useState<Game | null>(null);
+  const [pointsGame, setPointsGame] = useState<Game | null>(null);
+  const [isTableOpen, setIsTableOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editGameTime, setEditGameTime] = useState('');
   const [editGameOpponent, setEditGameOpponent] = useState('');
@@ -176,14 +176,20 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     (isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType));
   // #62: явку отмечает капитан/штаб; тренер — только тренировки/собрания (как на бэкенде).
   const canManageAttendance = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
-  // #89: капитанский разбор — отдельная кнопка. Здесь она только скрывается от
-  // игроков, чтобы не мозолить глаз; право на запись решает бэкенд (canEdit).
-  const canSeeCaptainReport = isAdminOrCaptain || currentUserRole === Role.TRAINER;
+  // #89: таблица разбора — рабочая поверхность тренера и штаба. Игроку она не
+  // нужна: он видит свои пойнты. Право на чтение всё равно проверяет бэкенд.
+  const canSeeEventTable = isAdminOrCaptain || currentUserRole === Role.TRAINER;
   // Явка имеет смысл только когда событие уже началось/прошло.
   const hasEventStarted = event.startDate.getTime() <= Date.now();
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
   const canReadEventFinance = currentUserRole !== Role.PLAYER;
-  const isTournament = event.type === EventType.TOURNAMENT || event.type === EventType.CHAMPIONSHIP;
+  // Расписание игр и рефлексия нужны везде, где команда выходит на поле и может
+  // посмотреть на себя со стороны, — не только на турнире (Василий, 2026-07-31).
+  const hasGameSchedule =
+    event.type === EventType.TOURNAMENT ||
+    event.type === EventType.CHAMPIONSHIP ||
+    event.type === EventType.FRIENDLY_MATCH ||
+    event.type === EventType.TRAINING;
   const isGameReminderTemplate = reminderTemplate === 'GAME_GATHERING' || reminderTemplate === 'GAME_WARMUP';
 
   // Карта явки (#48): держим ВСЕХ участников со статусами, а не только
@@ -962,20 +968,30 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             </div>
           )}
 
-          {isTournament && (
+          {hasGameSchedule && (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center text-white font-bold uppercase text-sm tracking-wider">
                   <Swords size={16} className="mr-2 text-pb-primary" /> Расписание игр
                 </div>
-                {isAdminOrCaptain && (
-                  <button
-                    onClick={() => setIsAddingGame(true)}
-                    className="text-xs bg-white/10 hover:bg-white/20 text-pb-primary px-3 py-1.5 rounded-lg transition-colors flex items-center"
-                  >
-                    <Plus size={12} className="mr-1" /> Добавить
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {canSeeEventTable && (
+                    <button
+                      onClick={() => setIsTableOpen(true)}
+                      className="text-xs bg-white/10 hover:bg-white/20 text-pb-primary px-3 py-1.5 rounded-lg transition-colors flex items-center"
+                    >
+                      <ClipboardList size={12} className="mr-1" /> Разбор
+                    </button>
+                  )}
+                  {isAdminOrCaptain && (
+                    <button
+                      onClick={() => setIsAddingGame(true)}
+                      className="text-xs bg-white/10 hover:bg-white/20 text-pb-primary px-3 py-1.5 rounded-lg transition-colors flex items-center"
+                    >
+                      <Plus size={12} className="mr-1" /> Добавить
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 relative overflow-hidden">
@@ -1015,29 +1031,17 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                         </div>
                       </button>
 
-                      {/* Рефлексия заполняется сразу после пойнта — вход должен быть в один тап
-                          из расписания, а не через карточку редактирования гейма. */}
+                      {/* Один вход на гейм — список его пойнтов. Рефлексия и разбор
+                          капитана живут внутри, за конкретным пойнтом. */}
                       <button
                         type="button"
-                        onClick={() => setReflectionGame(game)}
-                        title="Рефлексия по гейму"
-                        aria-label="Рефлексия по гейму"
+                        onClick={() => setPointsGame(game)}
+                        title="Пойнты и рефлексия"
+                        aria-label="Пойнты и рефлексия"
                         className="shrink-0 ml-2 p-3 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
                       >
                         <Swords size={16} />
                       </button>
-
-                      {canSeeCaptainReport && (
-                        <button
-                          type="button"
-                          onClick={() => setCaptainReportGame(game)}
-                          title="Разбор капитана"
-                          aria-label="Разбор капитана"
-                          className="shrink-0 ml-2 p-3 rounded-xl bg-white/5 border border-white/5 text-pb-subtext hover:text-pb-primary hover:border-pb-primary/40 transition-colors"
-                        >
-                          <ClipboardList size={16} />
-                        </button>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1631,13 +1635,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         </div>
       )}
 
-      {reflectionGame && (
-        <ReflectionModal isOpen game={reflectionGame} onClose={() => setReflectionGame(null)} />
-      )}
+      {pointsGame && <GamePointsModal isOpen game={pointsGame} onClose={() => setPointsGame(null)} />}
 
-      {captainReportGame && (
-        <CaptainReportModal isOpen game={captainReportGame} onClose={() => setCaptainReportGame(null)} />
-      )}
+      {isTableOpen && <EventTableModal isOpen eventId={event.id} onClose={() => setIsTableOpen(false)} />}
 
       {isAddingGame && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

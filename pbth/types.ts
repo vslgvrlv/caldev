@@ -75,9 +75,34 @@ export interface FieldPosition {
   index: string;
   side: 'NEAR' | 'FAR' | 'CENTER';
   code: string;
+  // Подпись на кнопке схемы, без суффикса половины: половины подписаны
+  // заголовками, дублировать Б/Д на каждой кнопке — шум.
+  shortCode: string;
   depth: number;
   label: string;
   active: boolean;
+}
+
+export type PointResult = 'WIN' | 'LOSS';
+
+// Пойнт — единица рефлексии. Гейм со счётом 4:3 состоит из семи пойнтов.
+export interface GamePoint {
+  id: string;
+  ordinal: number;
+  // null = пойнт ещё не размечен капитаном (из счёта известно только количество побед).
+  result: PointResult | null;
+  filledCount: number;
+  mineFilled: boolean;
+  captainFilled: boolean;
+}
+
+export interface GamePointsResponse {
+  gameId: string;
+  score: string | null;
+  canMarkResults: boolean;
+  expected: { wins: number; losses: number; total: number } | null;
+  resultsMatchScore: boolean | null;
+  points: GamePoint[];
 }
 
 // Фаза — когда это произошло. Одна шкала для поражения и для килла.
@@ -103,7 +128,8 @@ export type GameCombination = 'ENVELOPE_ATTACK' | 'SNAKE_ATTACK' | 'ACTIVE_SNAKE
 export type BreakWidth = 'NARROW' | 'WIDE';
 
 // Капитанский отчёт: верхнеуровневый взгляд на тот же пойнт. Существует ровно
-// один на гейм, редактируют капитан и тренер.
+// один на пойнт, редактируют капитан и тренер. Результата пойнта здесь нет —
+// он объективен и живёт в самом пойнте.
 export interface CaptainReport {
   combination: GameCombination | null;
   breakWidth: BreakWidth | null;
@@ -111,8 +137,36 @@ export interface CaptainReport {
   // Инициатива по трём линиям: -1 у них, 0 поровну, +1 у нас (§2.2).
   initiative: { snake: number | null; center: number | null; envelope: number | null };
   deltaOtb: number | null;
-  result: 'WIN' | 'LOSS' | null;
   note: string | null;
+}
+
+// Таблица разбора по событию — рабочая поверхность тренера и источник выгрузки.
+export interface EventTablePoint {
+  pointId: string;
+  ordinal: number;
+  result: PointResult | null;
+  submitted: number;
+  ourOtbLosses: number;
+  opponentOtbLosses: number;
+  deltaOtb: number;
+  captainReport: CaptainReport | null;
+  // null = капитан дельту не проставил. Отсутствие ответа это не согласие.
+  deltaOtbMismatch: boolean | null;
+  reflections: Array<GameReflection & { userId: string; name: string; nickname: string }>;
+}
+
+export interface EventTable {
+  eventId: string;
+  eventTitle: string;
+  // id укрытия -> код для чтения человеком («grid.300.far» -> «300Д»).
+  positions: Record<string, string>;
+  games: Array<{
+    gameId: string;
+    time: string;
+    opponent: string;
+    score: string | null;
+    points: EventTablePoint[];
+  }>;
 }
 
 export interface AttendeePreview {

@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport } from './types';
+import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport, GamePoint, GamePointsResponse, PointResult, EventTable } from './types';
 import {
   createLocalDevEvent,
   getLocalDevAuthMe,
@@ -674,7 +674,7 @@ export const api = {
     });
   },
 
-  // --- Рефлексия по гейму (#89) ---
+  // --- Рефлексия по пойнту (#89) ---
 
   // Каталог укрытий отдаётся целиком (51 позиция) и не меняется в течение
   // турнира — тянем один раз на открытие формы, фильтруем на клиенте.
@@ -683,24 +683,35 @@ export const api = {
     return data.items;
   },
 
-  async getMyReflection(gameId: string): Promise<GameReflection | null> {
-    const data = await request<{ reflection: GameReflection | null }>(`/reflections/games/${gameId}/mine`);
+  // Пойнты материализуются на сервере из счёта гейма — отдельного «создать» нет.
+  async getGamePoints(gameId: string): Promise<GamePointsResponse> {
+    return request<GamePointsResponse>(`/reflections/games/${gameId}/points`);
+  },
+
+  // Разметка «какие пойнты выиграли»: из счёта известно количество побед, но не
+  // их порядок, поэтому его проставляет капитан.
+  async saveGamePointResults(gameId: string, points: Array<{ ordinal: number; result: PointResult | null }>) {
+    return request(`/reflections/games/${gameId}/points`, { method: 'PUT', body: { points } });
+  },
+
+  async getMyReflection(pointId: string): Promise<GameReflection | null> {
+    const data = await request<{ reflection: GameReflection | null }>(`/reflections/points/${pointId}/mine`);
     return data.reflection;
   },
 
-  async saveMyReflection(gameId: string, reflection: GameReflection) {
-    return request(`/reflections/games/${gameId}/mine`, { method: 'PUT', body: reflection });
+  async saveMyReflection(pointId: string, reflection: GameReflection) {
+    return request(`/reflections/points/${pointId}/mine`, { method: 'PUT', body: reflection });
   },
 
   // canEdit считает сервер по роли в команде — на клиенте роль не выводим,
   // от неё зависит доступ к записи.
-  async getCaptainReport(gameId: string): Promise<{ report: CaptainReport | null; canEdit: boolean }> {
-    return request<{ report: CaptainReport | null; canEdit: boolean }>(`/reflections/games/${gameId}/captain`);
+  async getCaptainReport(pointId: string): Promise<{ report: CaptainReport | null; canEdit: boolean }> {
+    return request<{ report: CaptainReport | null; canEdit: boolean }>(`/reflections/points/${pointId}/captain`);
   },
 
-  async saveCaptainReport(gameId: string, report: CaptainReport) {
+  async saveCaptainReport(pointId: string, report: CaptainReport) {
     const { initiative, ...rest } = report;
-    return request(`/reflections/games/${gameId}/captain`, {
+    return request(`/reflections/points/${pointId}/captain`, {
       method: 'PUT',
       body: {
         ...rest,
@@ -709,6 +720,16 @@ export const api = {
         initiativeEnvelope: initiative.envelope,
       },
     });
+  },
+
+  // Таблица разбора по всему событию: тренер смотрит турнир целиком.
+  async getEventTable(eventId: string): Promise<EventTable> {
+    return request<EventTable>(`/reflections/events/${eventId}/table`);
+  },
+
+  // CSV отдаётся как файл, поэтому идёт мимо request(): его открывает браузер.
+  eventTableCsvUrl(eventId: string): string {
+    return `${API_URL}/reflections/events/${eventId}/table.csv`;
   },
 
   // Изменить дату/время события (scope single). Бэкенд PATCH /events/:id умеет
