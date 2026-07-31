@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CSV_HEADER, renderTableCsv, type ReflectionCsvTable } from "../../lib/reflection-csv.js";
+import { CSV_HEADER, renderSummaryCsv, renderTableCsv, type ReflectionCsvTable } from "../../lib/reflection-csv.js";
+import { buildEventSummary } from "../../lib/reflection-summary.js";
 
 // CSV — то, ради чего таблица и существует: дальше разбор идёт в Excel.
 // Сдвиг на одну колонку тихо переносит самооценку в чужую графу, поэтому
@@ -102,5 +103,75 @@ describe("renderTableCsv", () => {
   it("расхождение с капитаном выводится словом, отсутствие ответа — пусто", () => {
     expect(rows()[1]).toContain(";да;");
     expect(rows()[2].split(";").slice(-8)[0]).toBe("");
+  });
+});
+
+// Сводка уезжает отдельным файлом, а не блоком поверх детальной таблицы:
+// заголовок таблицы обязан остаться первой строкой, иначе в Excel ломаются
+// фильтр и сводная (Василий просил «дублировать разбор в выгрузке», 2026-07-31).
+describe("renderSummaryCsv", () => {
+  const summaryRows = () =>
+    renderSummaryCsv(
+      buildEventSummary({
+        games: [
+          {
+            points: [
+              {
+                result: "WIN",
+                deltaOtb: 0,
+                deltaOtbMismatch: true,
+                captainReport: {
+                  combination: "SNAKE_ATTACK",
+                  breakWidth: "NARROW",
+                  opponentBreakWidth: "WIDE",
+                  initiative: { snake: 1, center: 0, envelope: -1 },
+                },
+                reflections: [
+                  {
+                    userId: "u1",
+                    name: "Василий Гаврилов",
+                    nickname: "vasily",
+                    eliminated: true,
+                    deathPhase: "BREAK",
+                    kills: [{ phase: "COVER" }],
+                    selfRating: 4,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+      "Турнир D3"
+    ).split("\r\n");
+
+  it("название события в шапке, покрытие — первым блоком", () => {
+    const lines = summaryRows();
+    expect(lines[0]).toBe("Сводка разбора: Турнир D3");
+    expect(lines).toContain("Пойнтов всего;1");
+    expect(lines).toContain("С разбором капитана;1");
+  });
+
+  // Процент без размера выборки врёт, поэтому «Пойнтов» и winrate ходят парой
+  // и лежат в отдельных колонках — чтобы по ним можно было сортировать.
+  it("winrate идёт рядом с размером выборки", () => {
+    const lines = summaryRows();
+    expect(lines).toContain("Дельта;Пойнтов;Выиграли;Проиграли;Winrate");
+    expect(lines).toContain("0;1;1;0;100%");
+  });
+
+  it("коды справочников переведены и здесь", () => {
+    const text = summaryRows().join("\n");
+    expect(text).toContain("атака по змеям");
+    expect(text).toContain("узкая;широкая");
+    expect(text).toContain("змея;забрали мы");
+    for (const code of ["SNAKE_ATTACK", "NARROW", "WIDE", "snake", "envelope"]) {
+      expect(text).not.toContain(code);
+    }
+  });
+
+  it("пустые разделы помечаются словами, а не пустотой", () => {
+    const text = renderSummaryCsv(buildEventSummary({ games: [] }), "Пустое");
+    expect(text).toContain("нет данных");
   });
 });
