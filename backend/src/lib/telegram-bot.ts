@@ -44,6 +44,40 @@ export function buildTelegramWebhookSendMessagePayload(
   };
 }
 
+// Отправка файла в личку боту. Нужна выгрузкам: приложение живёт внутри
+// Telegram WebView, где скачивание файла открывает его отдельным окном без
+// кнопки «назад» (Василий, 2026-07-31). Файл, пришедший в чат, открывается
+// системным просмотрщиком и никуда не уводит из приложения.
+export async function sendTelegramBotDocument(
+  chatId: string,
+  fileName: string,
+  content: string,
+  options?: { caption?: string; mimeType?: string }
+): Promise<void> {
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  if (options?.caption) form.append("caption", options.caption);
+  form.append(
+    "document",
+    new Blob([content], { type: options?.mimeType ?? "application/octet-stream" }),
+    fileName
+  );
+
+  const url = `${env.telegram.botApiBaseUrl}/bot${env.telegram.botToken}/sendDocument`;
+  const response = await fetch(url, { method: "POST", body: form });
+
+  let payload: TelegramSendMessageResponse | null = null;
+  try {
+    payload = (await response.json()) as TelegramSendMessageResponse;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.description || `Telegram sendDocument failed (${response.status})`);
+  }
+}
+
 export async function sendTelegramBotMessage(
   chatId: string,
   text: string,

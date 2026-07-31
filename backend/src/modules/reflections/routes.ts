@@ -8,6 +8,7 @@ import { sendError } from "../../lib/http-error.js";
 import { compareDeltaOtb, computeDeltaOtb, type ReflectionPhase } from "../../lib/reflection-analytics.js";
 import { checkPointResults, parseScore } from "../../lib/game-points.js";
 import { renderTableCsv } from "../../lib/reflection-csv.js";
+import { sendTelegramBotDocument } from "../../lib/telegram-bot.js";
 
 // Рефлексия (#89). Единица — ПОЙНТ, а не гейм: гейм со счётом 4:3 состоит из
 // семи пойнтов, и форма заполняется за каждый (исправление модели 2026-07-31,
@@ -659,6 +660,30 @@ async function buildEventTable(eventId: string, eventTitle: string) {
   };
 }
 
+// Имя файла для человека: он ищет выгрузку среди других файлов в телефоне,
+// и «reflections-8f3a-...csv» там не находится.
+function csvFileName(eventTitle: string): string {
+  const safe = eventTitle.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  return `Разбор — ${safe || "событие"}.csv`;
+}
+
+async function loadTableForUser(eventId: string, userId: string) {
+  const membership = await query<{ title: string; telegram_id: string | null }>(
+    `SELECT e.title, u.telegram_id
+     FROM events e
+     JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
+     JOIN users u ON u.id = $2
+     WHERE e.id = $1`,
+    [eventId, userId]
+  );
+  if (!membership.rows.length) return null;
+
+  const title = membership.rows[0].title;
+  const table = await buildEventTable(eventId, title);
+  // BOM: без него Excel открывает кириллицу в CP1251 и получается каша.
+  return { title, telegramId: membership.rows[0].telegram_id, csv: `\uFEFF${renderTableCsv(table)}` };
+}
+
 // Выгрузка той же таблицы в CSV: разбор продолжается в таблице, а не в
 // приложении — «дальше с этим как-то работать» (Василий, 2026-07-31).
 reflectionsRouter.get(
@@ -666,25 +691,50 @@ reflectionsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
-    const userId = req.authUser!.id;
-
-    const membership = await query<{ role: Role; title: string }>(
-      `SELECT tm.role, e.title
-       FROM events e
-       JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
-       WHERE e.id = $1`,
-      [eventId, userId]
-    );
-    if (!membership.rows.length) {
+    const loaded = await loadTableForUser(eventId, req.authUser!.id);
+    if (!loaded) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
     }
 
-    const table = await buildEventTable(eventId, membership.rows[0].title);
-    const csv = renderTableCsv(table);
-
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="reflections-${eventId}.csv"`);
-    // BOM: без него Excel открывает кириллицу в CP1251 и получается каша.
-    return res.send(`\uFEFF${csv}`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="reflections-${eventId}.csv"; filename*=UTF-8''${encodeURIComponent(csvFileName(loaded.title))}`
+    );
+    return res.send(loaded.csv);
+  })
+);
+
+// Тот же CSV, но файлом в чат. Внутри Telegram WebView скачивание открывает
+// файл отдельным окном без кнопки «назад», из которого некуда вернуться
+// (Василий, 2026-07-31); файл в чате такой проблемы не создаёт и остаётся
+// под рукой — его можно переслать тренеру.
+reflectionsRouter.post(
+  "/events/:eventId/table.csv/send",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const eventId = z.string().uuid().parse(req.params.eventId);
+    const userId = req.authUser!.id;
+
+    const loaded = await loadTableForUser(eventId, userId);
+    if (!loaded) {
+      return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
+    }
+    if (!loaded.telegramId) {
+      return sendError(req, res, 409, "TELEGRAM_NOT_LINKED", "Telegram account is not linked");
+    }
+
+    try {
+      await sendTelegramBotDocument(loaded.telegramId, csvFileName(loaded.title), loaded.csv, {
+        caption: `Разбор: ${loaded.title}`,
+        mimeType: "text/csv; charset=utf-8",
+      });
+    } catch (error) {
+      return sendError(req, res, 502, "TELEGRAM_SEND_FAILED", (error as Error).message);
+    }
+
+    await writeAudit(userId, "reflection.table.sent", { eventId });
+
+    return res.json({ sent: true });
   })
 );

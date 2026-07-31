@@ -135,6 +135,30 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
   const [table, setTable] = useState<EventTable | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+
+  // Внутри Telegram файл уходит в чат: скачивание там открывает файл окном
+  // поверх приложения, из которого нет пути назад (Василий, 2026-07-31).
+  const inTelegram = Boolean((window as any).Telegram?.WebApp?.initData);
+
+  const exportCsv = async () => {
+    setIsExporting(true);
+    setError(null);
+    setExportNote(null);
+    try {
+      if (inTelegram) {
+        await api.sendEventTableCsv(eventId);
+        setExportNote('Файл отправлен в чат с ботом.');
+      } else {
+        await api.downloadEventTableCsv(eventId, `Разбор — ${table?.eventTitle ?? 'событие'}.csv`);
+      }
+    } catch {
+      setError('Не удалось выгрузить CSV');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -211,13 +235,16 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
           {error && <p className="text-xs text-pb-danger text-center">{error}</p>}
 
           {/* Выгрузка — то, ради чего таблица и нужна: дальше с ней работают вне приложения. */}
-          <a
-            href={api.eventTableCsvUrl(eventId)}
-            className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background flex items-center justify-center gap-2"
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            disabled={isExporting}
+            className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            <Download size={18} />
-            Скачать CSV
-          </a>
+            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            {inTelegram ? 'Прислать CSV в чат' : 'Скачать CSV'}
+          </button>
+          {exportNote && <p className="text-xs text-pb-primary text-center">{exportNote}</p>}
         </div>
       </div>
     </div>

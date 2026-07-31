@@ -20,7 +20,9 @@ export type ApiErrorCode =
   | "OAUTH_LINK_TAKEN"
   | "OAUTH_LAST_IDENTITY"
   | "OAUTH_PROVIDER_DISABLED"
-  | "OAUTH_PENDING_LINK_EXPIRED";
+  | "OAUTH_PENDING_LINK_EXPIRED"
+  | "TELEGRAM_NOT_LINKED"
+  | "TELEGRAM_SEND_FAILED";
 
 export function httpStatusToCode(status: number): ApiErrorCode {
   if (status === 400) return "BAD_REQUEST";

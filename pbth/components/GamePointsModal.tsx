@@ -63,6 +63,24 @@ export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
     }
   };
 
+  // Сходимость считаем ЛОКАЛЬНО, а не берём resultsMatchScore из ответа: тапы
+  // применяются оптимистично, и серверный флаг остаётся тем, каким был на
+  // загрузке. Из-за этого предупреждение висело даже после полной разметки.
+  const marked =
+    data?.expected != null
+      ? (() => {
+          const wins = data.points.filter((p) => p.result === 'WIN').length;
+          const losses = data.points.filter((p) => p.result === 'LOSS').length;
+          const unmarked = data.points.filter((p) => p.result === null).length;
+          return {
+            wins,
+            losses,
+            unmarked,
+            matchesScore: unmarked === 0 && wins === data.expected.wins && losses === data.expected.losses,
+          };
+        })()
+      : null;
+
   if (!isOpen) return null;
 
   // Форма закрылась — счётчики заполнения изменились, перечитываем.
@@ -110,16 +128,22 @@ export const GamePointsModal: React.FC<Props> = ({ game, isOpen, onClose }) => {
             </p>
           )}
 
-          {!isLoading && data?.expected && (
+          {!isLoading && data?.expected && marked && (
             <>
               <p className="text-xs text-pb-subtext">
                 {data.expected.total} пойнтов: {data.expected.wins} выиграли, {data.expected.losses} проиграли.
-                {data.canMarkResults && ' Отметь тапом, какие именно.'}
+                {data.canMarkResults && !marked.matchesScore && ' Отметь тапом, какие именно.'}
               </p>
 
-              {data.resultsMatchScore === false && data.canMarkResults && (
-                <p className="text-xs text-pb-warning">Разметка пока не сходится со счётом.</p>
-              )}
+              {data.canMarkResults &&
+                (marked.matchesScore ? (
+                  <p className="text-xs text-pb-primary">Разметка сходится со счётом.</p>
+                ) : (
+                  <p className="text-xs text-pb-warning">
+                    Отмечено {marked.wins} выигранных и {marked.losses} проигранных
+                    {marked.unmarked > 0 ? `, не отмечено ${marked.unmarked}` : ''} — со счётом пока не сходится.
+                  </p>
+                ))}
 
               {data.points.map((point) => (
                 <div key={point.id} className="flex items-center gap-2">

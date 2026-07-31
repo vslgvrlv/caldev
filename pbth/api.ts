@@ -727,9 +727,28 @@ export const api = {
     return request<EventTable>(`/reflections/events/${eventId}/table`);
   },
 
-  // CSV отдаётся как файл, поэтому идёт мимо request(): его открывает браузер.
-  eventTableCsvUrl(eventId: string): string {
-    return `${API_URL}/reflections/events/${eventId}/table.csv`;
+  // Внутри Telegram переход по ссылке на файл открывает его отдельным окном
+  // без кнопки «назад» — поэтому там CSV уходит файлом в чат, а не скачивается.
+  async sendEventTableCsv(eventId: string): Promise<{ sent: boolean }> {
+    return request<{ sent: boolean }>(`/reflections/events/${eventId}/table.csv/send`, { method: 'POST' });
+  },
+
+  // Вне Telegram — обычное скачивание. Качаем блобом и кликаем по нему сами:
+  // прямая ссылка увела бы из приложения на страницу файла.
+  async downloadEventTableCsv(eventId: string, fileName: string): Promise<void> {
+    const response = await fetch(`${API_URL}/reflections/events/${eventId}/table.csv`, {
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error(`CSV download failed (${response.status})`);
+
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   },
 
   // Изменить дату/время события (scope single). Бэкенд PATCH /events/:id умеет
