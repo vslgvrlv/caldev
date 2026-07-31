@@ -99,4 +99,23 @@ describe("field_positions catalog", () => {
     );
     expect(Number(dup.rows[0].count)).toBe(0);
   });
+
+  // На кнопке схемы половина уже подписана заголовком, поэтому Б/Д там шум.
+  // Но в базе суффикс остаётся: без него не понять, на чьей половине был аут.
+  it("короткий код без буквы половины, полный — с буквой", async () => {
+    const r = await pool.query<{ id: string; code: string; short_code: string }>(
+      `SELECT id, code, short_code FROM field_positions
+       WHERE id IN ('snake.2.far', 'envelope.4.near', 'grid.3000.center') ORDER BY id`
+    );
+    expect(r.rows.map((x) => [x.code, x.short_code])).toEqual([
+      ["K4Б", "K4"],
+      ["3000", "3000"],
+      ["Z2Д", "Z2"],
+    ]);
+
+    const withLetter = await pool.query<{ count: string }>(
+      `SELECT count(*) AS count FROM field_positions WHERE short_code ~ '[БД]'`
+    );
+    expect(Number(withLetter.rows[0].count)).toBe(0);
+  });
 });
