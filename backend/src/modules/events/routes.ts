@@ -69,7 +69,7 @@ const updateEventSchema = z.object({
   schedule: z
     .array(
       z.object({
-        // id присылается для уже существующего гейма. На гейме висят рефлексии (#89),
+        // id присылается для уже существующего игры. На игре висят рефлексии (#89),
         // поэтому правка расписания не должна пересоздавать его заново.
         id: z.string().uuid().optional(),
         time: z.string(),
@@ -751,8 +751,8 @@ eventsRouter.patch(
       );
 
       if (payload.schedule !== undefined) {
-        // Не DELETE+INSERT: id гейма — якорь рефлексий (#89), пересоздание расписания
-        // унесло бы их каскадом. Присланные геймы обновляем по id, отсутствующие удаляем.
+        // Не DELETE+INSERT: id игры — якорь рефлексий (#89), пересоздание расписания
+        // унесло бы их каскадом. Присланные игры обновляем по id, отсутствующие удаляем.
         const keptGameIds: string[] = [];
         for (const game of payload.schedule) {
           const saved = await client.query<{ id: string }>(
@@ -777,7 +777,7 @@ eventsRouter.patch(
               game.gamePair ?? null,
             ]
           );
-          // Пусто = прислали id гейма из другого события. Молча создавать дубль нельзя.
+          // Пусто = прислали id игры из другого события. Молча создавать дубль нельзя.
           if (!saved.rowCount) {
             await client.query("ROLLBACK");
             return res.status(400).json({ detail: "Game does not belong to this event" });

@@ -50,10 +50,10 @@ afterAll(async () => {
   await pool.query(`DELETE FROM users WHERE id = $1`, [fixture.userId]);
 });
 
-// Пойнт — единица рефлексии, а не гейм: в гейме 4:3 семь разных эпизодов,
+// Пойнт — единица рефлексии, а не игра: в игре 4:3 семь разных эпизодов,
 // и схема обязана удерживать это различие, иначе формы схлопнутся в одну.
 describe("game_points schema", () => {
-  it("порядковый номер в гейме уникален", async () => {
+  it("порядковый номер в игре уникален", async () => {
     await expect(
       pool.query(`INSERT INTO game_points (game_id, ordinal) VALUES ($1, 1)`, [fixture.gameId])
     ).rejects.toThrow(/game_points_game_ordinal_uniq/);
@@ -75,7 +75,7 @@ describe("game_points schema", () => {
     await pool.query(`DELETE FROM game_points WHERE id = $1`, [empty.rows[0].id]);
   });
 
-  it("гейм удалён — пойнты уходят вместе с ним", async () => {
+  it("игра удалена — пойнты уходят вместе с ней", async () => {
     const game = await pool.query<{ id: string }>(
       `INSERT INTO event_games (event_id, time_label, opponent) VALUES ($1, '11:00', 'Temp') RETURNING id`,
       [fixture.eventId]
@@ -198,9 +198,9 @@ describe("game_reflections schema", () => {
     await pool.query(`DELETE FROM game_reflections WHERE point_id = $1`, [fixture.pointId]);
   });
 
-  // Тот же игрок в том же гейме заполняет форму за каждый пойнт отдельно —
+  // Тот же игрок в той же игре заполняет форму за каждый пойнт отдельно —
   // ограничение уникальности не должно этому мешать.
-  it("в одном гейме игрок заполняет форму за каждый пойнт", async () => {
+  it("в одной игре игрок заполняет форму за каждый пойнт", async () => {
     const second = await pool.query<{ id: string }>(
       `INSERT INTO game_points (game_id, ordinal, result) VALUES ($1, 2, 'LOSS') RETURNING id`,
       [fixture.gameId]

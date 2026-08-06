@@ -11,7 +11,7 @@ import { renderSummaryCsv, renderTableCsv } from "../../lib/reflection-csv.js";
 import { buildEventSummary } from "../../lib/reflection-summary.js";
 import { sendTelegramBotDocument } from "../../lib/telegram-bot.js";
 
-// Рефлексия (#89). Единица — ПОЙНТ, а не гейм: гейм со счётом 4:3 состоит из
+// Рефлексия (#89). Единица — ПОЙНТ, а не игра: игра со счётом 4:3 состоит из
 // семи пойнтов, и форма заполняется за каждый (исправление модели 2026-07-31,
 // см. миграцию 031).
 // Спека: vault 02_PROJECTS/Paintball TeamHub/06_specs/
@@ -162,7 +162,7 @@ async function loadRosters(pointIds: string[]): Promise<Map<string, string[]>> {
 }
 
 // Пойнты — производная от счёта, поэтому материализуются лениво: как только у
-// гейма появился разборчивый счёт, строки создаются под него. Отдельной кнопки
+// игры появился разборчивый счёт, строки создаются под него. Отдельной кнопки
 // «создать пойнты» нет — она была бы ручной синхронизацией того, что и так
 // однозначно следует из счёта.
 async function ensurePoints(gameId: string, score: string | null): Promise<PointRow[]> {
@@ -194,7 +194,7 @@ async function ensurePoints(gameId: string, score: string | null): Promise<Point
   return refreshed.rows;
 }
 
-// Список пойнтов гейма с прогрессом заполнения — экран выбора «за какой пойнт
+// Список пойнтов игры с прогрессом заполнения — экран выбора «за какой пойнт
 // заполняю». Без него игрок отвечал бы за весь матч сразу.
 reflectionsRouter.get(
   "/games/:gameId/points",

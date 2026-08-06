@@ -57,7 +57,7 @@ describe("buildEventSummary", () => {
 
   it("неразмеченный пойнт не идёт в winrate", () => {
     // Неизвестный результат — это не поражение. Иначе команда, которая просто
-    // не доразметила гейм, увидит проваленный winrate.
+    // не доразметила игры, увидит проваленный winrate.
     const summary = summaryOf([point({ deltaOtb: 1, result: "WIN" }), point({ deltaOtb: 1, result: null })]);
 
     expect(summary.deltaOtb).toEqual([{ delta: 1, wins: 1, losses: 0, total: 1, winRate: 100 }]);

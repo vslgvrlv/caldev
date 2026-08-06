@@ -245,7 +245,7 @@ export const Waffle: React.FC<{ label: string; rate: Rate }> = ({ label, rate })
 );
 
 /**
- * Лента пойнтов по геймам. Ни один агрегат не показывает серий: winrate 51%
+ * Лента пойнтов по игрым. Ни один агрегат не показывает серий: winrate 51%
  * одинаков и для «ровно чередовались», и для «три подряд слили и вернулись».
  */
 export const PointRibbon: React.FC<{
