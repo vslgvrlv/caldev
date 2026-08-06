@@ -85,7 +85,7 @@ export interface FieldPosition {
 
 export type PointResult = 'WIN' | 'LOSS';
 
-// Пойнт — единица рефлексии. Гейм со счётом 4:3 состоит из семи пойнтов.
+// Пойнт — единица рефлексии. Игра со счётом 4:3 состоит из семи пойнтов.
 export interface GamePoint {
   id: string;
   ordinal: number;

@@ -230,7 +230,7 @@ export const EventTableModal: React.FC<Props> = ({ eventId, isOpen, onClose }) =
 
           {!isLoading && table && !hasPoints && (
             <p className="text-sm text-pb-subtext">
-              Пойнтов пока нет. Они появятся, когда у геймов будет проставлен счёт.
+              Пойнтов пока нет. Они появятся, когда у игр будет проставлен счёт.
             </p>
           )}
 

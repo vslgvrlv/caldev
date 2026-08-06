@@ -34,9 +34,9 @@ type ScheduleItemPayload = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// PATCH расписания обновляет геймы по id, а не пересоздаёт их: на гейме висят
+// PATCH расписания обновляет игры по id, а не пересоздаёт их: на игре висят
 // рефлексии (#89). Локальные id старого формата (`g-<timestamp>`) сервер не
-// примет — для них id не отправляем, гейм заведётся заново.
+// примет — для них id не отправляем, игра заведётся заново.
 const toScheduleItemPayload = (game: Game): ScheduleItemPayload => ({
   id: UUID_RE.test(game.id) ? game.id : undefined,
   time: game.time,
@@ -802,7 +802,7 @@ const App: React.FC = () => {
   const handleAddGame = async (eventId: string, game: Omit<Game, 'id'>) => {
     const createdGame: Game = {
       // Настоящий UUID, а не `g-<timestamp>`: id уезжает на сервер и становится
-      // постоянным id гейма. На гейме висят рефлексии (#89) — он не должен меняться.
+      // постоянным id игры. На игре висят рефлексии (#89) — он не должен меняться.
       id: crypto.randomUUID(),
       time: game.time,
       opponent: game.opponent,

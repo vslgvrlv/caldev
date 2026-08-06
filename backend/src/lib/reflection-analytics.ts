@@ -11,9 +11,9 @@ export type ReflectionPhase = "BREAK" | "COVER" | "ROTATION";
 export type ReflectionExitReason = "SURVIVED" | "HIT" | "PENALTY";
 
 export type OtbInput = {
-  // По одной записи на игрока, заполнившего форму гейма.
+  // По одной записи на игрока, заполнившего форму игры.
   reflections: Array<{ exitReason: ReflectionExitReason; exitPhase: ReflectionPhase | null }>;
-  // Все киллы всех наших игроков за этот гейм, вперемешку — важна только фаза.
+  // Все киллы всех наших игроков за эту игру, вперемешку — важна только фаза.
   kills: Array<{ phase: ReflectionPhase }>;
 };
 

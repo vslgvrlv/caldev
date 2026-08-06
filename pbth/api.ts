@@ -683,7 +683,7 @@ export const api = {
     return data.items;
   },
 
-  // Пойнты материализуются на сервере из счёта гейма — отдельного «создать» нет.
+  // Пойнты материализуются на сервере из счёта игры — отдельного «создать» нет.
   async getGamePoints(gameId: string): Promise<GamePointsResponse> {
     return request<GamePointsResponse>(`/reflections/games/${gameId}/points`);
   },

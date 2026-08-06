@@ -104,7 +104,7 @@ const adminEventPatchSchema = z.object({
   schedule: z
     .array(
       z.object({
-        // id существующего гейма — см. комментарий в events/routes.ts: на гейме
+        // id существующего игры — см. комментарий в events/routes.ts: на игре
         // висят рефлексии (#89), пересоздавать его при правке расписания нельзя.
         id: z.string().uuid().optional(),
         time: z.string().min(1).max(40),
@@ -1214,7 +1214,7 @@ adminRouter.patch(
       );
 
       if (payload.schedule !== undefined) {
-        // Upsert по id, а не DELETE+INSERT: гейм — якорь рефлексий (#89).
+        // Upsert по id, а не DELETE+INSERT: игра — якорь рефлексий (#89).
         const keptGameIds: string[] = [];
         for (const game of payload.schedule) {
           const saved = await client.query<{ id: string }>(
