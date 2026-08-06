@@ -94,24 +94,55 @@ describe("game_points schema", () => {
 // Схема — единственное место, где домен защищён от мусора: форму можно переписать,
 // а «выбили, но фазы нет» ломает delta_otb молча и навсегда.
 describe("game_reflections schema", () => {
-  it("дожил до конца — фазы и позиции поражения быть не должно", async () => {
+  it("дожил до конца — фазы и позиции ухода быть не должно", async () => {
     await expect(
       pool.query(
-        `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase)
-         VALUES ($1, $2, FALSE, 'BREAK')`,
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase)
+         VALUES ($1, $2, 'SURVIVED', 'BREAK')`,
         [fixture.pointId, fixture.userId]
       )
-    ).rejects.toThrow(/game_reflections_death_consistency_check/);
+    ).rejects.toThrow(/game_reflections_exit_consistency_check/);
   });
 
   it("выбили — фаза обязательна, без неё дельта не считается", async () => {
     await expect(
       pool.query(
-        `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase)
-         VALUES ($1, $2, TRUE, NULL)`,
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase)
+         VALUES ($1, $2, 'HIT', NULL)`,
         [fixture.pointId, fixture.userId]
       )
-    ).rejects.toThrow(/game_reflections_death_consistency_check/);
+    ).rejects.toThrow(/game_reflections_exit_consistency_check/);
+  });
+
+  // Штрафной вывод — третий исход, а не флаг поверх смерти (#104). Схема
+  // обязана его различать: иначе тепловая карта показывает укрытие, на котором
+  // игрока никто не выбивал.
+  it("штрафной вывод — валидный исход, но чей штраф знать обязательно", async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase)
+         VALUES ($1, $2, 'PENALTY', 'COVER')`,
+        [fixture.pointId, fixture.userId]
+      )
+    ).rejects.toThrow(/game_reflections_penalty_required_check/);
+
+    const ok = await pool.query<{ id: string }>(
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason, penalty_kind, exit_phase)
+       VALUES ($1, $2, 'PENALTY', 'TEAMMATE', 'COVER') RETURNING id`,
+      [fixture.pointId, fixture.userId]
+    );
+    expect(ok.rows[0].id).toBeTruthy();
+    await pool.query(`DELETE FROM game_reflections WHERE id = $1`, [ok.rows[0].id]);
+  });
+
+  it("четвёртого исхода не бывает", async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase)
+         VALUES ($1, $2, 'LEFT', 'COVER')`,
+        [fixture.pointId, fixture.userId]
+      )
+    ).rejects.toThrow(/game_reflections_exit_reason_check/);
   });
 
   // Ноль как «не оценил» сломал бы средние: 0 — не оценка, а отсутствие ответа,
@@ -120,8 +151,8 @@ describe("game_reflections schema", () => {
     for (const rating of [0, 6]) {
       await expect(
         pool.query(
-          `INSERT INTO game_reflections (point_id, user_id, eliminated, self_rating)
-           VALUES ($1, $2, FALSE, $3)`,
+          `INSERT INTO game_reflections (point_id, user_id, exit_reason, self_rating)
+           VALUES ($1, $2, 'SURVIVED', $3)`,
           [fixture.pointId, fixture.userId, rating]
         )
       ).rejects.toThrow(/game_reflections_self_rating_check/);
@@ -130,7 +161,7 @@ describe("game_reflections schema", () => {
 
   it("самооценку можно не ставить — экран пропускаемый", async () => {
     const saved = await pool.query<{ id: string; self_rating: number | null }>(
-      `INSERT INTO game_reflections (point_id, user_id, eliminated) VALUES ($1, $2, FALSE)
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason) VALUES ($1, $2, 'SURVIVED')
        RETURNING id, self_rating`,
       [fixture.pointId, fixture.userId]
     );
@@ -141,8 +172,8 @@ describe("game_reflections schema", () => {
   // Укрытие может быть неизвестно: на разбежке игрок не всегда видит, откуда прилетело.
   it("выбили без укрытия — валидный ответ", async () => {
     const r = await pool.query<{ id: string }>(
-      `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase)
-       VALUES ($1, $2, TRUE, 'BREAK') RETURNING id`,
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase)
+       VALUES ($1, $2, 'HIT', 'BREAK') RETURNING id`,
       [fixture.pointId, fixture.userId]
     );
     expect(r.rows[0].id).toBeTruthy();
@@ -150,12 +181,12 @@ describe("game_reflections schema", () => {
   });
 
   it("одна форма на пару (пойнт, игрок) — повторная запись конфликтует", async () => {
-    await pool.query(`INSERT INTO game_reflections (point_id, user_id, eliminated) VALUES ($1, $2, FALSE)`, [
+    await pool.query(`INSERT INTO game_reflections (point_id, user_id, exit_reason) VALUES ($1, $2, 'SURVIVED')`, [
       fixture.pointId,
       fixture.userId,
     ]);
     await expect(
-      pool.query(`INSERT INTO game_reflections (point_id, user_id, eliminated) VALUES ($1, $2, FALSE)`, [
+      pool.query(`INSERT INTO game_reflections (point_id, user_id, exit_reason) VALUES ($1, $2, 'SURVIVED')`, [
         fixture.pointId,
         fixture.userId,
       ])
@@ -170,12 +201,12 @@ describe("game_reflections schema", () => {
       `INSERT INTO game_points (game_id, ordinal, result) VALUES ($1, 2, 'LOSS') RETURNING id`,
       [fixture.gameId]
     );
-    await pool.query(`INSERT INTO game_reflections (point_id, user_id, eliminated) VALUES ($1, $2, FALSE)`, [
+    await pool.query(`INSERT INTO game_reflections (point_id, user_id, exit_reason) VALUES ($1, $2, 'SURVIVED')`, [
       fixture.pointId,
       fixture.userId,
     ]);
     await pool.query(
-      `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase) VALUES ($1, $2, TRUE, 'COVER')`,
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase) VALUES ($1, $2, 'HIT', 'COVER')`,
       [second.rows[0].id, fixture.userId]
     );
 
@@ -194,15 +225,15 @@ describe("game_reflections schema", () => {
   it("позиция ссылается на каталог фигур, произвольный id не проходит", async () => {
     await expect(
       pool.query(
-        `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase, death_position_id)
-         VALUES ($1, $2, TRUE, 'COVER', 'grid.9999.near')`,
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase, exit_position_id)
+         VALUES ($1, $2, 'HIT', 'COVER', 'grid.9999.near')`,
         [fixture.pointId, fixture.userId]
       )
-    ).rejects.toThrow(/death_position_id_fkey/);
+    ).rejects.toThrow(/exit_position_id_fkey/);
 
     const ok = await pool.query<{ id: string }>(
-      `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase, death_position_id)
-       VALUES ($1, $2, TRUE, 'COVER', 'grid.3000.center') RETURNING id`,
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason, exit_phase, exit_position_id)
+       VALUES ($1, $2, 'HIT', 'COVER', 'grid.3000.center') RETURNING id`,
       [fixture.pointId, fixture.userId]
     );
     expect(ok.rows[0].id).toBeTruthy();
@@ -211,7 +242,7 @@ describe("game_reflections schema", () => {
 
   it("фаза килла обязательна на уровне схемы", async () => {
     const reflection = await pool.query<{ id: string }>(
-      `INSERT INTO game_reflections (point_id, user_id, eliminated) VALUES ($1, $2, FALSE) RETURNING id`,
+      `INSERT INTO game_reflections (point_id, user_id, exit_reason) VALUES ($1, $2, 'SURVIVED') RETURNING id`,
       [fixture.pointId, fixture.userId]
     );
     const reflectionId = reflection.rows[0].id;
@@ -235,6 +266,42 @@ describe("game_reflections schema", () => {
       [reflectionId]
     );
     expect(Number(orphans.rows[0].count)).toBe(0);
+  });
+});
+
+// Состав пойнта (#102): без него форма открыта всем на каждый пойнт, а
+// знаменатель «сколько рефлексий ждём» считается по составу события.
+describe("game_point_roster schema", () => {
+  it("игрок попадает в состав пойнта ровно один раз", async () => {
+    await pool.query(`INSERT INTO game_point_roster (point_id, user_id) VALUES ($1, $2)`, [
+      fixture.pointId,
+      fixture.userId,
+    ]);
+    await expect(
+      pool.query(`INSERT INTO game_point_roster (point_id, user_id) VALUES ($1, $2)`, [
+        fixture.pointId,
+        fixture.userId,
+      ])
+    ).rejects.toThrow(/game_point_roster_pkey/);
+    await pool.query(`DELETE FROM game_point_roster WHERE point_id = $1`, [fixture.pointId]);
+  });
+
+  it("пойнт удалён — состав уходит вместе с ним", async () => {
+    const point = await pool.query<{ id: string }>(
+      `INSERT INTO game_points (game_id, ordinal) VALUES ($1, 7) RETURNING id`,
+      [fixture.gameId]
+    );
+    await pool.query(`INSERT INTO game_point_roster (point_id, user_id) VALUES ($1, $2)`, [
+      point.rows[0].id,
+      fixture.userId,
+    ]);
+    await pool.query(`DELETE FROM game_points WHERE id = $1`, [point.rows[0].id]);
+
+    const left = await pool.query<{ count: string }>(
+      `SELECT count(*) AS count FROM game_point_roster WHERE point_id = $1`,
+      [point.rows[0].id]
+    );
+    expect(Number(left.rows[0].count)).toBe(0);
   });
 });
 

@@ -254,6 +254,7 @@ export const EventSummarySection: React.FC<{ summary: EventSummary; games?: Even
                   </div>
                   <div className="text-[11px] text-pb-subtext">
                     Выбит {player.eliminated} · киллов {player.kills}
+                    {player.penalties > 0 && ` · штрафных выводов ${player.penalties}`}
                   </div>
                   <div className="text-[11px] text-pb-subtext">
                     {PHASE_ORDER.filter((phase) => (player.deathPhases[phase] ?? 0) > 0)

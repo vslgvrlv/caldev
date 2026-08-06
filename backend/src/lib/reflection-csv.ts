@@ -5,6 +5,8 @@
 import {
   BREAK_WIDTH_LABEL,
   COMBINATION_LABEL,
+  EXIT_REASON_LABEL,
+  PENALTY_KIND_LABEL,
   PHASE_LABEL,
   POINT_RESULT_LABEL,
   initiativeLabel,
@@ -35,9 +37,10 @@ export type ReflectionCsvTable = {
       reflections: Array<{
         name: string;
         nickname: string;
-        eliminated: boolean;
-        deathPhase: string | null;
-        deathPositionId: string | null;
+        exitReason: string;
+        penaltyKind: string | null;
+        exitPhase: string | null;
+        exitPositionId: string | null;
         kills: Array<{ phase: string; positionId: string | null }>;
         selfRating: number | null;
         note: string | null;
@@ -54,9 +57,10 @@ export const CSV_HEADER = [
   "Результат",
   "Игрок",
   "Ник",
-  "Выбит",
-  "Фаза поражения",
-  "Укрытие поражения",
+  "Как ушёл",
+  "Штраф",
+  "Фаза ухода",
+  "Укрытие ухода",
   "Киллов",
   "Киллы (фаза · укрытие)",
   "Самооценка",
@@ -108,7 +112,7 @@ export function renderTableCsv(table: ReflectionCsvTable): string {
       // Пойнт без единой формы всё равно строка: пустота в таблице — это
       // тоже факт, по ней видно, где команда рефлексию не заполняет.
       if (!point.reflections.length) {
-        lines.push([...shared, "", "", "", "", "", "", "", "", "", ...captain].map(csvCell).join(";"));
+        lines.push([...shared, "", "", "", "", "", "", "", "", "", "", ...captain].map(csvCell).join(";"));
         continue;
       }
 
@@ -118,10 +122,11 @@ export function renderTableCsv(table: ReflectionCsvTable): string {
             ...shared,
             reflection.name,
             reflection.nickname,
-            reflection.eliminated ? "да" : "нет",
-            labelOf(PHASE_LABEL, reflection.deathPhase),
-            reflection.deathPositionId
-              ? table.positions[reflection.deathPositionId] ?? reflection.deathPositionId
+            labelOf(EXIT_REASON_LABEL, reflection.exitReason),
+            labelOf(PENALTY_KIND_LABEL, reflection.penaltyKind),
+            labelOf(PHASE_LABEL, reflection.exitPhase),
+            reflection.exitPositionId
+              ? table.positions[reflection.exitPositionId] ?? reflection.exitPositionId
               : "",
             reflection.kills.length,
             reflection.kills
@@ -249,6 +254,8 @@ export function renderSummaryCsv(summary: EventSummary, eventTitle: string): str
     "На разбежке",
     "За укрытием",
     "На перемещении",
+    "Штрафных выводов",
+    "из них свой штраф",
     "Киллов",
     "Самооценка средняя",
     "Самооценка в проигранных",
@@ -263,6 +270,8 @@ export function renderSummaryCsv(summary: EventSummary, eventTitle: string): str
       player.deathPhases.BREAK ?? 0,
       player.deathPhases.COVER ?? 0,
       player.deathPhases.ROTATION ?? 0,
+      player.penalties,
+      player.ownPenalties,
       player.kills,
       player.avgSelfRating ?? "",
       player.avgSelfRatingInLosses ?? "",

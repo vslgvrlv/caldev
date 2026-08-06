@@ -8,10 +8,11 @@
 // разные задачи, «в большинстве выигрываем 60%» как метрика бессмысленна.
 
 export type ReflectionPhase = "BREAK" | "COVER" | "ROTATION";
+export type ReflectionExitReason = "SURVIVED" | "HIT" | "PENALTY";
 
 export type OtbInput = {
   // По одной записи на игрока, заполнившего форму гейма.
-  reflections: Array<{ eliminated: boolean; deathPhase: ReflectionPhase | null }>;
+  reflections: Array<{ exitReason: ReflectionExitReason; exitPhase: ReflectionPhase | null }>;
   // Все киллы всех наших игроков за этот гейм, вперемешку — важна только фаза.
   kills: Array<{ phase: ReflectionPhase }>;
 };
@@ -22,8 +23,11 @@ export type OtbResult = {
   deltaOtb: number;
 };
 
+// PENALTY здесь не потеря на разбежке: соперник нас не отстрелил, и записывать
+// это в его актив — врать в обе стороны (#104). Штрафной вывод считается
+// отдельно и в дельту не входит.
 export function computeDeltaOtb(input: OtbInput): OtbResult {
-  const ourOtbLosses = input.reflections.filter((r) => r.eliminated && r.deathPhase === "BREAK").length;
+  const ourOtbLosses = input.reflections.filter((r) => r.exitReason === "HIT" && r.exitPhase === "BREAK").length;
   const opponentOtbLosses = input.kills.filter((k) => k.phase === "BREAK").length;
   return { ourOtbLosses, opponentOtbLosses, deltaOtb: opponentOtbLosses - ourOtbLosses };
 }

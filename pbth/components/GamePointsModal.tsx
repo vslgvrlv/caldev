@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, Check, ClipboardList, ChevronRight } from 'lucide-react';
+import { Loader2, Check, ClipboardList, ChevronRight, Users } from 'lucide-react';
 import { api } from '../api';
 import { ReflectionModal } from './ReflectionModal';
 import { CaptainReportModal } from './CaptainReportModal';
 import { GameScoreLine } from './GameScoreLine';
+import { PointRosterModal } from './PointRosterModal';
 import type { Game, GamePoint, GamePointsResponse, PointResult } from '../types';
 
 // Выбор пойнта — вход в рефлексию (#89). Гейм со счётом 4:3 это семь пойнтов,
@@ -33,6 +34,7 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
   const [error, setError] = useState<string | null>(null);
   const [reflectionPoint, setReflectionPoint] = useState<GamePoint | null>(null);
   const [captainPoint, setCaptainPoint] = useState<GamePoint | null>(null);
+  const [rosterPoint, setRosterPoint] = useState<GamePoint | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -90,6 +92,7 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
   const closeChild = () => {
     setReflectionPoint(null);
     setCaptainPoint(null);
+    setRosterPoint(null);
     void load();
   };
 
@@ -98,6 +101,21 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
   }
   if (captainPoint) {
     return <CaptainReportModal isOpen game={game} point={captainPoint} onClose={closeChild} />;
+  }
+  if (rosterPoint && data) {
+    // Предзаполнение берём с предыдущего пойнта: между пойнтами меняется
+    // один-два человека, и заново набирать пятёрку капитан не станет.
+    const previous = data.points.find((p) => p.ordinal === rosterPoint.ordinal - 1);
+    return (
+      <PointRosterModal
+        isOpen
+        point={rosterPoint}
+        previousRoster={previous?.roster ?? []}
+        candidates={data.candidates}
+        onClose={() => setRosterPoint(null)}
+        onSaved={closeChild}
+      />
+    );
   }
 
   return (
@@ -171,10 +189,16 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
                     </span>
                   </button>
 
+                  {/* Не выходил на пойнт — форма не открывается (#102). Пока
+                      состава нет, mineInRoster = true, и старые события ведут
+                      себя как раньше. */}
                   <button
                     type="button"
                     onClick={() => setReflectionPoint(point)}
-                    className="flex-1 min-w-0 flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-left hover:border-pb-primary/40 transition-colors"
+                    disabled={!point.mineInRoster}
+                    className={`flex-1 min-w-0 flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 text-left transition-colors ${
+                      point.mineInRoster ? 'hover:border-pb-primary/40' : 'opacity-40 cursor-default'
+                    }`}
                   >
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-bold text-white">
@@ -182,8 +206,13 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
                         {point.result ? ` · ${RESULT_LABEL[point.result]}` : ''}
                       </span>
                       <span className="block text-[11px] text-pb-subtext mt-0.5">
-                        {point.mineFilled ? 'Твоя рефлексия заполнена' : 'Твоя рефлексия не заполнена'}
+                        {!point.mineInRoster
+                          ? 'Ты не выходил на этот пойнт'
+                          : point.mineFilled
+                            ? 'Твоя рефлексия заполнена'
+                            : 'Твоя рефлексия не заполнена'}
                         {point.filledCount > 0 ? ` · всего ${point.filledCount}` : ''}
+                        {point.roster.length > 0 ? ` из ${point.roster.length}` : ''}
                         {point.captainFilled ? ' · есть разбор' : ''}
                       </span>
                     </span>
@@ -193,6 +222,22 @@ export const GamePointsModal: React.FC<Props> = ({ game, teamName, isOpen, onClo
                       <ChevronRight size={16} className="text-pb-subtext shrink-0" />
                     )}
                   </button>
+
+                  {data.canEditRoster && (
+                    <button
+                      type="button"
+                      onClick={() => setRosterPoint(point)}
+                      title="Состав пойнта"
+                      aria-label="Состав пойнта"
+                      className={`shrink-0 w-11 rounded-xl border flex items-center justify-center transition-colors ${
+                        point.roster.length > 0
+                          ? 'bg-white/10 text-pb-primary border-pb-primary/40'
+                          : 'bg-white/5 text-pb-subtext border-white/10'
+                      }`}
+                    >
+                      <Users size={16} />
+                    </button>
+                  )}
 
                   {data.canMarkResults && (
                     <button

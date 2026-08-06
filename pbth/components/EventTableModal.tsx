@@ -111,9 +111,13 @@ const PointRow: React.FC<{ point: EventTablePoint; positions: Record<string, str
                   )}
                 </div>
                 <div className="text-pb-subtext">
-                  {reflection.eliminated
-                    ? `Выбит ${reflection.deathPhase ? PHASE_LABEL[reflection.deathPhase] : ''} · ${position(reflection.deathPositionId)}`
-                    : 'Дожил до конца'}
+                  {reflection.exitReason === 'SURVIVED'
+                    ? 'Дожил до конца'
+                    : `${
+                        reflection.exitReason === 'PENALTY'
+                          ? `Вывели за штраф (${reflection.penaltyKind === 'OWN' ? 'свой' : 'партнёра'})`
+                          : 'Выбит'
+                      } ${reflection.exitPhase ? PHASE_LABEL[reflection.exitPhase] : ''} · ${position(reflection.exitPositionId)}`}
                 </div>
                 <div className="text-pb-subtext">
                   {reflection.kills.length === 0

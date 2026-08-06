@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { api } from '../api';
 import { FieldSchema } from './FieldSchema';
-import type { FieldPosition, Game, GamePoint, GameReflection, ReflectionKill, ReflectionPhase } from '../types';
+import type { FieldPosition, Game, GamePoint, GameReflection, PenaltyKind, ReflectionKill, ReflectionPhase } from '../types';
 
 // Форма рефлексии игрока по пойнту (#89, спека §7.5). Бюджет — 60–90 сек,
 // 4–8 тапов. Клавиатура открывается ровно один раз и только по желанию —
@@ -42,10 +42,25 @@ const SELF_RATINGS: Array<{ value: number; label: string }> = [
   { value: 5, label: 'отлично' },
 ];
 
+// Три исхода вместо двух (#104). Штрафной вывод раньше приходилось отмечать
+// как «меня выбили» — и это враньё уезжало в тепловую карту, в позиционный
+// обмен и в счёт киллов соперника.
+const OUTCOMES: Array<{ value: 'HIT' | 'SURVIVED' | 'PENALTY'; label: string }> = [
+  { value: 'HIT', label: 'Меня выбили' },
+  { value: 'SURVIVED', label: 'Дожил до конца' },
+  { value: 'PENALTY', label: 'Вывели за штраф' },
+];
+
+const PENALTY_KINDS: Array<{ value: PenaltyKind; label: string; hint: string }> = [
+  { value: 'OWN', label: 'Мой штраф', hint: 'сняли меня как нарушителя' },
+  { value: 'TEAMMATE', label: 'Штраф партнёра', hint: 'сняли в довесок — 2-за-1' },
+];
+
 const emptyReflection: GameReflection = {
-  eliminated: false,
-  deathPhase: null,
-  deathPositionId: null,
+  exitReason: 'SURVIVED',
+  penaltyKind: null,
+  exitPhase: null,
+  exitPositionId: null,
   kills: [],
   selfRating: null,
   note: null,
@@ -111,7 +126,7 @@ export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose 
   // к первому вопросу, а не на пустой экран поражения.
   const goBack = () => {
     if (step === 1) return onClose();
-    if (step === 3 && !draft.eliminated) return setStep(1);
+    if (step === 3 && draft.exitReason === 'SURVIVED') return setStep(1);
     setStep((step - 1) as Step);
   };
 
@@ -176,44 +191,82 @@ export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose 
           {!isLoading && step === 1 && (
             <div className="space-y-3">
               <p className="text-sm text-pb-subtext">Чем закончился пойнт для тебя?</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft((prev) => ({ ...prev, eliminated: true }));
-                  setStep(2);
-                }}
-                className="w-full p-4 rounded-xl font-bold bg-white/5 text-white border border-white/10 hover:bg-white/10"
-              >
-                Меня выбили
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // Дожил — фазы и укрытия поражения не существует, экран 2 пропускаем.
-                  setDraft((prev) => ({ ...prev, eliminated: false, deathPhase: null, deathPositionId: null }));
-                  setStep(3);
-                }}
-                className="w-full p-4 rounded-xl font-bold bg-white/5 text-white border border-white/10 hover:bg-white/10"
-              >
-                Дожил до конца
-              </button>
+              {OUTCOMES.map((outcome) => (
+                <button
+                  key={outcome.value}
+                  type="button"
+                  onClick={() => {
+                    if (outcome.value === 'SURVIVED') {
+                      // Дожил — фазы и укрытия ухода не существует, экран 2 пропускаем.
+                      setDraft((prev) => ({
+                        ...prev,
+                        exitReason: 'SURVIVED',
+                        penaltyKind: null,
+                        exitPhase: null,
+                        exitPositionId: null,
+                      }));
+                      return setStep(3);
+                    }
+                    if (outcome.value === 'HIT') {
+                      setDraft((prev) => ({ ...prev, exitReason: 'HIT', penaltyKind: null }));
+                      return setStep(2);
+                    }
+                    // Штраф: чей именно — спрашиваем тут же, без этого нельзя
+                    // отличить нарушителя от снятого в довесок.
+                    setDraft((prev) => ({ ...prev, exitReason: 'PENALTY' }));
+                  }}
+                  className={`w-full p-4 rounded-xl font-bold border transition-colors ${
+                    draft.exitReason === outcome.value && outcome.value === 'PENALTY'
+                      ? 'bg-pb-primary text-pb-background border-pb-primary'
+                      : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  {outcome.label}
+                </button>
+              ))}
+
+              {draft.exitReason === 'PENALTY' && (
+                <div className="space-y-2 border-t border-white/5 pt-4">
+                  <p className="text-sm text-pb-subtext">Чей штраф?</p>
+                  {PENALTY_KINDS.map((kind) => (
+                    <button
+                      key={kind.value}
+                      type="button"
+                      onClick={() => {
+                        setDraft((prev) => ({ ...prev, penaltyKind: kind.value }));
+                        setStep(2);
+                      }}
+                      className={`w-full p-3 rounded-xl border text-left transition-colors ${
+                        draft.penaltyKind === kind.value
+                          ? 'bg-pb-primary text-pb-background border-pb-primary'
+                          : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="font-bold text-sm">{kind.label}</span>
+                      <span className="block text-[11px] opacity-70">{kind.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {!isLoading && step === 2 && (
             <div className="space-y-4">
-              <p className="text-sm text-pb-subtext">Где и когда тебя выбили?</p>
-              {phaseButtons(draft.deathPhase, (phase) => setDraft((prev) => ({ ...prev, deathPhase: phase })))}
+              <p className="text-sm text-pb-subtext">
+                {draft.exitReason === 'PENALTY' ? 'Где ты стоял, когда тебя сняли?' : 'Где и когда тебя выбили?'}
+              </p>
+              {phaseButtons(draft.exitPhase, (phase) => setDraft((prev) => ({ ...prev, exitPhase: phase })))}
               <FieldSchema
                 positions={positions}
-                value={draft.deathPositionId}
-                onChange={(positionId) => setDraft((prev) => ({ ...prev, deathPositionId: positionId }))}
+                value={draft.exitPositionId}
+                onChange={(positionId) => setDraft((prev) => ({ ...prev, exitPositionId: positionId }))}
                 swapped={swapped}
                 onSwap={toggleSwap}
               />
               <button
                 type="button"
-                disabled={!draft.deathPhase}
+                disabled={!draft.exitPhase}
                 onClick={() => setStep(3)}
                 className="w-full p-4 rounded-xl font-bold bg-pb-primary text-pb-background disabled:opacity-40"
               >

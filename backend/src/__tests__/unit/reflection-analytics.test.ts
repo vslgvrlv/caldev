@@ -8,8 +8,8 @@ describe("computeDeltaOtb", () => {
     expect(
       computeDeltaOtb({
         reflections: [
-          { eliminated: false, deathPhase: null },
-          { eliminated: true, deathPhase: "COVER" },
+          { exitReason: "SURVIVED", exitPhase: null },
+          { exitReason: "HIT", exitPhase: "COVER" },
         ],
         kills: [{ phase: "COVER" }, { phase: "ROTATION" }],
       })
@@ -19,7 +19,7 @@ describe("computeDeltaOtb", () => {
   it("отстреляли двоих, своих не потеряли — большинство +2", () => {
     expect(
       computeDeltaOtb({
-        reflections: [{ eliminated: false, deathPhase: null }],
+        reflections: [{ exitReason: "SURVIVED", exitPhase: null }],
         kills: [{ phase: "BREAK" }, { phase: "BREAK" }, { phase: "COVER" }],
       }).deltaOtb
     ).toBe(2);
@@ -29,8 +29,8 @@ describe("computeDeltaOtb", () => {
     expect(
       computeDeltaOtb({
         reflections: [
-          { eliminated: true, deathPhase: "BREAK" },
-          { eliminated: true, deathPhase: "ROTATION" },
+          { exitReason: "HIT", exitPhase: "BREAK" },
+          { exitReason: "HIT", exitPhase: "ROTATION" },
         ],
         kills: [{ phase: "ROTATION" }],
       }).deltaOtb
@@ -43,9 +43,9 @@ describe("computeDeltaOtb", () => {
     expect(
       computeDeltaOtb({
         reflections: [
-          { eliminated: true, deathPhase: "BREAK" },
-          { eliminated: true, deathPhase: "BREAK" },
-          { eliminated: false, deathPhase: null },
+          { exitReason: "HIT", exitPhase: "BREAK" },
+          { exitReason: "HIT", exitPhase: "BREAK" },
+          { exitReason: "SURVIVED", exitPhase: null },
         ],
         kills: [{ phase: "BREAK" }],
       })
@@ -57,10 +57,24 @@ describe("computeDeltaOtb", () => {
   it("фазы COVER и ROTATION в дельту не входят ни с одной стороны", () => {
     expect(
       computeDeltaOtb({
-        reflections: [{ eliminated: true, deathPhase: "COVER" }],
+        reflections: [{ exitReason: "HIT", exitPhase: "COVER" }],
         kills: [{ phase: "COVER" }, { phase: "ROTATION" }],
       })
     ).toEqual({ ourOtbLosses: 0, opponentOtbLosses: 0, deltaOtb: 0 });
+  });
+
+  // Штрафной вывод — не потеря на разбежке: соперник нас не отстрелил, и
+  // записывать это ему в актив нельзя (#104).
+  it("штрафной вывод на разбежке в дельту не входит", () => {
+    expect(
+      computeDeltaOtb({
+        reflections: [
+          { exitReason: "PENALTY", exitPhase: "BREAK" },
+          { exitReason: "HIT", exitPhase: "BREAK" },
+        ],
+        kills: [{ phase: "BREAK" }],
+      })
+    ).toEqual({ ourOtbLosses: 1, opponentOtbLosses: 1, deltaOtb: 0 });
   });
 });
 
