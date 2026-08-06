@@ -12,6 +12,17 @@ export const PHASE_LABEL: Record<string, string> = {
   ROTATION: "на перемещении",
 };
 
+export const EXIT_REASON_LABEL: Record<string, string> = {
+  SURVIVED: "дожил",
+  HIT: "выбили",
+  PENALTY: "вывели за штраф",
+};
+
+export const PENALTY_KIND_LABEL: Record<string, string> = {
+  OWN: "свой штраф",
+  TEAMMATE: "штраф партнёра",
+};
+
 export const COMBINATION_LABEL: Record<string, string> = {
   ENVELOPE_ATTACK: "атака по конвертам",
   SNAKE_ATTACK: "атака по змеям",

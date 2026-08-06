@@ -694,6 +694,16 @@ export const api = {
     return request(`/reflections/games/${gameId}/points`, { method: 'PUT', body: { points } });
   },
 
+  // Состав пойнта пишется целиком: капитан видит на экране пятёрку и сохраняет
+  // то, что видит. opponentRosterSize — сколько было у соперника (5-на-4 после
+  // штрафа это другой пойнт, и складывать его с равным составом нельзя).
+  async saveGamePointRoster(pointId: string, userIds: string[], opponentRosterSize: number | null) {
+    return request(`/reflections/points/${pointId}/roster`, {
+      method: 'PUT',
+      body: { userIds, opponentRosterSize },
+    });
+  },
+
   async getMyReflection(pointId: string): Promise<GameReflection | null> {
     const data = await request<{ reflection: GameReflection | null }>(`/reflections/points/${pointId}/mine`);
     return data.reflection;

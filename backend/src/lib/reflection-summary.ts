@@ -35,9 +35,10 @@ export type SummaryInput = {
         userId: string;
         name: string;
         nickname: string;
-        eliminated: boolean;
-        deathPhase: string | null;
-        deathPositionId?: string | null;
+        exitReason: string;
+        penaltyKind?: string | null;
+        exitPhase: string | null;
+        exitPositionId?: string | null;
         kills: Array<{ phase: string }>;
         selfRating: number | null;
       }>;
@@ -59,7 +60,11 @@ export type PlayerSummary = {
   name: string;
   nickname: string;
   points: number;
+  // Только реальные выбивания. Штрафные выводы считаются отдельно — иначе
+  // дисциплинированный игрок и штрафник в таблице неотличимы (#104).
   eliminated: number;
+  penalties: number;
+  ownPenalties: number;
   deathPhases: Record<string, number>;
   kills: number;
   killPhases: Record<string, number>;
@@ -231,6 +236,8 @@ export function buildEventSummary(table: SummaryInput): EventSummary {
           nickname: reflection.nickname,
           points: 0,
           eliminated: 0,
+          penalties: 0,
+          ownPenalties: 0,
           deathPhases: Object.fromEntries(PHASES.map((phase) => [phase, 0])),
           kills: 0,
           killPhases: Object.fromEntries(PHASES.map((phase) => [phase, 0])),
@@ -243,17 +250,23 @@ export function buildEventSummary(table: SummaryInput): EventSummary {
       }
 
       player.points += 1;
-      if (reflection.eliminated) {
+      // Штрафной вывод — не смерть: в тепловую карту и в фазы его пускать
+      // нельзя, там появилось бы укрытие, на котором игрока никто не выбивал.
+      if (reflection.exitReason === "PENALTY") {
+        player.penalties += 1;
+        if (reflection.penaltyKind === "OWN") player.ownPenalties += 1;
+      }
+      if (reflection.exitReason === "HIT") {
         player.eliminated += 1;
         deathsTotal += 1;
-        if (reflection.deathPhase) {
-          player.deathPhases[reflection.deathPhase] = (player.deathPhases[reflection.deathPhase] ?? 0) + 1;
-          deathsByPhase[reflection.deathPhase] = (deathsByPhase[reflection.deathPhase] ?? 0) + 1;
+        if (reflection.exitPhase) {
+          player.deathPhases[reflection.exitPhase] = (player.deathPhases[reflection.exitPhase] ?? 0) + 1;
+          deathsByPhase[reflection.exitPhase] = (deathsByPhase[reflection.exitPhase] ?? 0) + 1;
           // Зона нужна вместе с фазой: «выбили на разбежке» не даёт задания на
           // тренировку, «выбили на разбежке в змее» — даёт.
-          const zone = reflection.deathPositionId ? positionZones[reflection.deathPositionId] : undefined;
+          const zone = reflection.exitPositionId ? positionZones[reflection.exitPositionId] : undefined;
           const cell = zone ? deathsByZone.get(zone) : undefined;
-          if (cell) cell[reflection.deathPhase] = (cell[reflection.deathPhase] ?? 0) + 1;
+          if (cell) cell[reflection.exitPhase] = (cell[reflection.exitPhase] ?? 0) + 1;
         }
       }
       player.kills += reflection.kills.length;

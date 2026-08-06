@@ -12,8 +12,9 @@ const reflection = (over: Partial<Reflection> = {}): Reflection => ({
   userId: "u1",
   name: "Василий Гаврилов",
   nickname: "vasily",
-  eliminated: false,
-  deathPhase: null,
+  exitReason: "SURVIVED",
+  penaltyKind: null,
+  exitPhase: null,
   kills: [],
   selfRating: null,
   ...over,
@@ -153,8 +154,8 @@ describe("buildEventSummary", () => {
     const summary = summaryOf([
       point({
         reflections: [
-          reflection({ eliminated: true, deathPhase: "BREAK", kills: [{ phase: "COVER" }, { phase: "COVER" }] }),
-          reflection({ userId: "u2", name: "Денис Голев", nickname: "golev", eliminated: true, deathPhase: "ROTATION" }),
+          reflection({ exitReason: "HIT", penaltyKind: null, exitPhase: "BREAK", kills: [{ phase: "COVER" }, { phase: "COVER" }] }),
+          reflection({ userId: "u2", name: "Денис Голев", nickname: "golev", exitReason: "HIT", exitPhase: "ROTATION" }),
         ],
       }),
     ]);
@@ -167,6 +168,39 @@ describe("buildEventSummary", () => {
       killPhases: { BREAK: 0, COVER: 2, ROTATION: 0 },
     });
     expect(summary.players.find((player) => player.userId === "u2")?.deathPhases.ROTATION).toBe(1);
+  });
+
+  // Штрафной вывод не выбивание: если считать его смертью, дисциплинированный
+  // игрок и штрафник в таблице неотличимы, а тепловая карта покажет укрытие,
+  // на котором игрока никто не выбивал (#104).
+  it("штрафной вывод не попадает ни в выбивания, ни в фазы, ни в зоны", () => {
+    const summary = buildEventSummary({
+      positionZones: { "snake.1.near": "snake" },
+      games: [
+        {
+          points: [
+            point({
+              reflections: [
+                reflection({
+                  exitReason: "PENALTY",
+                  penaltyKind: "OWN",
+                  exitPhase: "BREAK",
+                  exitPositionId: "snake.1.near",
+                }),
+              ],
+            }),
+          ],
+        },
+      ],
+    } as unknown as SummaryInput);
+
+    const player = summary.players.find((p) => p.userId === "u1")!;
+    expect(player.eliminated).toBe(0);
+    expect(player.penalties).toBe(1);
+    expect(player.ownPenalties).toBe(1);
+    expect(player.deathPhases.BREAK).toBe(0);
+    expect(summary.deaths.total).toBe(0);
+    expect(summary.deaths.zones.find((z) => z.zone === "snake")?.total).toBe(0);
   });
 
   it("расхождение с капитаном считается только там, где капитан дельту поставил", () => {
@@ -260,9 +294,9 @@ describe("buildEventSummary", () => {
           points: [
             point({
               reflections: [
-                reflection({ eliminated: true, deathPhase: "BREAK", deathPositionId: "snake.1.near" }),
-                reflection({ userId: "u2", eliminated: true, deathPhase: "COVER", deathPositionId: "grid.300.far" }),
-                reflection({ userId: "u3", eliminated: true, deathPhase: "COVER", deathPositionId: null }),
+                reflection({ exitReason: "HIT", penaltyKind: null, exitPhase: "BREAK", exitPositionId: "snake.1.near" }),
+                reflection({ userId: "u2", exitReason: "HIT", penaltyKind: null, exitPhase: "COVER", exitPositionId: "grid.300.far" }),
+                reflection({ userId: "u3", exitReason: "HIT", penaltyKind: null, exitPhase: "COVER", exitPositionId: null }),
               ],
             }),
           ],

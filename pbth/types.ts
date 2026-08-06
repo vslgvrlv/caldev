@@ -94,12 +94,28 @@ export interface GamePoint {
   filledCount: number;
   mineFilled: boolean;
   captainFilled: boolean;
+  // Кто из наших выходил на этот пойнт. Пустой массив = состав не записан
+  // (старые события), и тогда пойнт открыт всем — см. mineInRoster.
+  roster: string[];
+  opponentRosterSize: number | null;
+  mineInRoster: boolean;
+}
+
+// Кандидат в состав пойнта: член команды с отметкой явки на событие.
+// present = null — явку на событии не отмечали.
+export interface RosterCandidate {
+  userId: string;
+  name: string;
+  nickname: string;
+  present: boolean | null;
 }
 
 export interface GamePointsResponse {
   gameId: string;
   score: string | null;
   canMarkResults: boolean;
+  canEditRoster: boolean;
+  candidates: RosterCandidate[];
   expected: { wins: number; losses: number; total: number } | null;
   resultsMatchScore: boolean | null;
   points: GamePoint[];
@@ -113,10 +129,19 @@ export interface ReflectionKill {
   positionId: string | null;
 }
 
+// Как игрок покинул поле. Штрафной вывод — отдельный исход, а не разновидность
+// смерти: иначе тепловая карта показывает укрытие, на котором игрока никто не
+// выбивал, а соперник получает фраг, которого не было (#104).
+export type ExitReason = 'SURVIVED' | 'HIT' | 'PENALTY';
+// Чей штраф на игроке. Ось независима от exitReason: «сняли за мой штраф» =
+// (PENALTY, OWN), «сняли в довесок по 2-за-1» = (PENALTY, TEAMMATE).
+export type PenaltyKind = 'OWN' | 'TEAMMATE';
+
 export interface GameReflection {
-  eliminated: boolean;
-  deathPhase: ReflectionPhase | null;
-  deathPositionId: string | null;
+  exitReason: ExitReason;
+  penaltyKind: PenaltyKind | null;
+  exitPhase: ReflectionPhase | null;
+  exitPositionId: string | null;
   kills: ReflectionKill[];
   // Самооценка 1–5. null = экран пропущен, это не ноль.
   selfRating: number | null;
@@ -176,7 +201,10 @@ export interface PlayerSummary {
   name: string;
   nickname: string;
   points: number;
+  // Только выбивания. Штрафные выводы считаются отдельно.
   eliminated: number;
+  penalties: number;
+  ownPenalties: number;
   deathPhases: Record<string, number>;
   kills: number;
   killPhases: Record<string, number>;

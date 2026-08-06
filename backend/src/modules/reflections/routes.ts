@@ -27,22 +27,34 @@ const killSchema = z.object({
   positionId: z.string().max(64).nullable().optional(),
 });
 
+// Три исхода пойнта вместо булева «выбили/дожил» (#104): штрафной вывод — не
+// смерть, и подмешивать его в статистику отстрела нельзя. penalty_kind —
+// независимая ось: чей штраф на игроке.
+const exitReasonSchema = z.enum(["SURVIVED", "HIT", "PENALTY"]);
+const penaltyKindSchema = z.enum(["OWN", "TEAMMATE"]);
+
 const reflectionSchema = z
   .object({
-    eliminated: z.boolean(),
-    deathPhase: phaseSchema.nullable().optional(),
-    deathPositionId: z.string().max(64).nullable().optional(),
+    exitReason: exitReasonSchema,
+    penaltyKind: penaltyKindSchema.nullable().optional(),
+    exitPhase: phaseSchema.nullable().optional(),
+    exitPositionId: z.string().max(64).nullable().optional(),
     kills: z.array(killSchema).max(20).default([]),
     // Самооценка 1–5 (§8.3). Необязательна: экран пропускаемый, NULL = «не оценил».
     selfRating: z.number().int().min(1).max(5).nullable().optional(),
     note: z.string().trim().max(2000).nullable().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.eliminated && !value.deathPhase) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deathPhase"], message: "deathPhase is required when eliminated" });
+    if (value.exitReason !== "SURVIVED" && !value.exitPhase) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["exitPhase"], message: "exitPhase is required when player left the field" });
     }
-    if (!value.eliminated && (value.deathPhase || value.deathPositionId)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deathPhase"], message: "deathPhase must be empty when survived" });
+    if (value.exitReason === "SURVIVED" && (value.exitPhase || value.exitPositionId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["exitPhase"], message: "exitPhase must be empty when survived" });
+    }
+    // «Сняли по штрафу, а чей штраф — не знаю» не принимаем: без этого нельзя
+    // отличить нарушителя от снятого в довесок по 2-за-1.
+    if (value.exitReason === "PENALTY" && !value.penaltyKind) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["penaltyKind"], message: "penaltyKind is required for penalty exit" });
     }
   });
 
@@ -122,7 +134,32 @@ async function loadPointAccess(pointId: string, userId: string): Promise<PointAc
   };
 }
 
-type PointRow = { id: string; ordinal: number; result: "WIN" | "LOSS" | null };
+type PointRow = {
+  id: string;
+  ordinal: number;
+  result: "WIN" | "LOSS" | null;
+  opponent_roster_size: number | null;
+};
+
+const POINT_COLUMNS = `id, ordinal, result, opponent_roster_size`;
+
+// Кто выходил на пойнт (#102). Пустой массив = состав не записан; это не
+// «никто не выходил», а «не знаем», и вся логика выше обязана деградировать
+// в старое поведение «пойнт доступен всем».
+async function loadRosters(pointIds: string[]): Promise<Map<string, string[]>> {
+  const byPoint = new Map<string, string[]>();
+  if (!pointIds.length) return byPoint;
+  const rows = await query<{ point_id: string; user_id: string }>(
+    `SELECT point_id, user_id FROM game_point_roster WHERE point_id = ANY($1::uuid[])`,
+    [pointIds]
+  );
+  for (const row of rows.rows) {
+    const list = byPoint.get(row.point_id);
+    if (list) list.push(row.user_id);
+    else byPoint.set(row.point_id, [row.user_id]);
+  }
+  return byPoint;
+}
 
 // Пойнты — производная от счёта, поэтому материализуются лениво: как только у
 // гейма появился разборчивый счёт, строки создаются под него. Отдельной кнопки
@@ -131,7 +168,7 @@ type PointRow = { id: string; ordinal: number; result: "WIN" | "LOSS" | null };
 async function ensurePoints(gameId: string, score: string | null): Promise<PointRow[]> {
   const parsed = parseScore(score);
   const existing = await query<PointRow>(
-    `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+    `SELECT ${POINT_COLUMNS} FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
     [gameId]
   );
   if (!parsed) return existing.rows;
@@ -151,7 +188,7 @@ async function ensurePoints(gameId: string, score: string | null): Promise<Point
   );
 
   const refreshed = await query<PointRow>(
-    `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+    `SELECT ${POINT_COLUMNS} FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
     [gameId]
   );
   return refreshed.rows;
@@ -187,22 +224,121 @@ reflectionsRouter.get(
     );
     const statsByPoint = new Map(stats.rows.map((r) => [r.point_id, r]));
     const captainByPoint = new Set(captains.rows.map((r) => r.point_id));
+    const rosterByPoint = await loadRosters(points.map((p) => p.id));
 
     return res.json({
       gameId,
       score: access.score,
       canMarkResults: canEditTeamData(access.role),
+      canEditRoster: canEditTeamData(access.role),
+      candidates: await loadRosterCandidates(access.eventId, access.teamId),
       expected: parsed ? { wins: parsed.our, losses: parsed.opponent, total: parsed.total } : null,
       resultsMatchScore: parsed ? checkPointResults(parsed, points.map((p) => p.result)).matchesScore : null,
-      points: points.map((point) => ({
-        id: point.id,
-        ordinal: point.ordinal,
-        result: point.result,
-        filledCount: Number(statsByPoint.get(point.id)?.filled ?? 0),
-        mineFilled: Number(statsByPoint.get(point.id)?.mine ?? 0) > 0,
-        captainFilled: captainByPoint.has(point.id),
-      })),
+      points: points.map((point) => {
+        const roster = rosterByPoint.get(point.id) ?? [];
+        return {
+          id: point.id,
+          ordinal: point.ordinal,
+          result: point.result,
+          filledCount: Number(statsByPoint.get(point.id)?.filled ?? 0),
+          mineFilled: Number(statsByPoint.get(point.id)?.mine ?? 0) > 0,
+          captainFilled: captainByPoint.has(point.id),
+          roster,
+          opponentRosterSize: point.opponent_roster_size,
+          // Состав не записан → игрок считается вышедшим. Иначе старые события,
+          // где ростера нет и не будет, схлопнулись бы в «никто не играл».
+          mineInRoster: roster.length === 0 || roster.includes(userId),
+        };
+      }),
     });
+  })
+);
+
+// Кандидаты в состав пойнта — состав команды с отметкой явки на событие.
+// Явка нужна, чтобы предзаполнить первый пойнт: те, кто не приехал, в него
+// попасть не могут.
+async function loadRosterCandidates(eventId: string, teamId: string) {
+  const rows = await query<{ user_id: string; name: string; nickname: string; present: boolean | null }>(
+    `SELECT u.id AS user_id, u.name, u.nickname, a.present
+     FROM team_memberships tm
+     JOIN users u ON u.id = tm.user_id
+     LEFT JOIN event_attendance a ON a.event_id = $1 AND a.user_id = u.id
+     WHERE tm.team_id = $2
+     ORDER BY u.nickname`,
+    [eventId, teamId]
+  );
+  return rows.rows.map((r) => ({
+    userId: r.user_id,
+    name: r.name,
+    nickname: r.nickname,
+    present: r.present ?? null,
+  }));
+}
+
+const rosterSchema = z.object({
+  userIds: z.array(z.string().uuid()).max(20),
+  opponentRosterSize: z.number().int().min(0).max(10).nullable().optional(),
+});
+
+// Состав пойнта пишется целиком: капитан видит пятерых на экране и сохраняет
+// то, что видит. Дифф «добавили/убрали» с этим жестом не совпал бы.
+reflectionsRouter.put(
+  "/points/:pointId/roster",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const pointId = z.string().uuid().parse(req.params.pointId);
+    const payload = rosterSchema.parse(req.body);
+    const userId = req.authUser!.id;
+
+    const access = await loadPointAccess(pointId, userId);
+    if (!access) {
+      return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
+    }
+    if (!canEditTeamData(access.role)) {
+      return sendError(req, res, 403, "ROLE_REQUIRED", "Point roster is editable by captain or trainer only");
+    }
+
+    // Чужие в состав не попадают: ростер — это наши пятеро, а не произвольные
+    // user_id из тела запроса.
+    const unique = [...new Set(payload.userIds)];
+    if (unique.length) {
+      const members = await query<{ user_id: string }>(
+        `SELECT user_id FROM team_memberships WHERE team_id = $1 AND user_id = ANY($2::uuid[])`,
+        [access.teamId, unique]
+      );
+      if (members.rows.length !== unique.length) {
+        return sendError(req, res, 400, "NOT_TEAM_MEMBER", "Roster contains users outside the team");
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM game_point_roster WHERE point_id = $1`, [pointId]);
+      if (unique.length) {
+        await client.query(
+          `INSERT INTO game_point_roster (point_id, user_id)
+           SELECT $1, user_id FROM unnest($2::uuid[]) AS user_id`,
+          [pointId, unique]
+        );
+      }
+      if (payload.opponentRosterSize !== undefined) {
+        await client.query(
+          `UPDATE game_points SET opponent_roster_size = $2, updated_at = NOW() WHERE id = $1`,
+          [pointId, payload.opponentRosterSize]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await writeAudit(userId, "reflection.point_roster", { pointId, gameId: access.gameId, size: unique.length });
+
+    return res.json({ success: true, pointId, roster: unique, opponentRosterSize: payload.opponentRosterSize ?? null });
   })
 );
 
@@ -246,7 +382,7 @@ reflectionsRouter.put(
     await writeAudit(userId, "reflection.point_results", { gameId, points: payload.points.length });
 
     const points = await query<PointRow>(
-      `SELECT id, ordinal, result FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
+      `SELECT ${POINT_COLUMNS} FROM game_points WHERE game_id = $1 ORDER BY ordinal`,
       [gameId]
     );
     return res.json({ success: true, points: points.rows });
@@ -256,9 +392,10 @@ reflectionsRouter.put(
 type ReflectionRow = {
   id: string;
   user_id: string;
-  eliminated: boolean;
-  death_phase: string | null;
-  death_position_id: string | null;
+  exit_reason: "SURVIVED" | "HIT" | "PENALTY";
+  penalty_kind: "OWN" | "TEAMMATE" | null;
+  exit_phase: string | null;
+  exit_position_id: string | null;
   self_rating: number | null;
   note: string | null;
   updated_at: string;
@@ -270,9 +407,10 @@ function serializeReflection(row: ReflectionRow, kills: KillRow[]) {
   return {
     id: row.id,
     userId: row.user_id,
-    eliminated: row.eliminated,
-    deathPhase: row.death_phase,
-    deathPositionId: row.death_position_id,
+    exitReason: row.exit_reason,
+    penaltyKind: row.penalty_kind,
+    exitPhase: row.exit_phase,
+    exitPositionId: row.exit_position_id,
     selfRating: row.self_rating,
     note: row.note,
     updatedAt: row.updated_at,
@@ -294,7 +432,7 @@ async function loadKills(reflectionIds: string[]): Promise<KillRow[]> {
   return result.rows;
 }
 
-const REFLECTION_COLUMNS = `id, user_id, eliminated, death_phase, death_position_id, self_rating, note, updated_at`;
+const REFLECTION_COLUMNS = `id, user_id, exit_reason, penalty_kind, exit_phase, exit_position_id, self_rating, note, updated_at`;
 
 // Своя форма за пойнт. Пусто — игрок ещё не заполнял.
 reflectionsRouter.get(
@@ -340,27 +478,45 @@ reflectionsRouter.put(
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
 
+    // Записанный состав закрывает форму тем, кто на пойнт не выходил (#102).
+    // Пустой состав ничего не запрещает — старые события им не сломать.
+    // Уже заполненную форму не блокируем: она могла появиться до ростера, и
+    // отобрать право её исправить — потерять данные из-за опечатки капитана.
+    const roster = (await loadRosters([pointId])).get(pointId) ?? [];
+    if (roster.length && !roster.includes(userId)) {
+      const existing = await query<{ id: string }>(
+        `SELECT id FROM game_reflections WHERE point_id = $1 AND user_id = $2`,
+        [pointId, userId]
+      );
+      if (!existing.rows.length) {
+        return sendError(req, res, 409, "NOT_IN_POINT_ROSTER", "You are not in the roster of this point");
+      }
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
+      const leftField = payload.exitReason !== "SURVIVED";
       const saved = await client.query<{ id: string }>(
-        `INSERT INTO game_reflections (point_id, user_id, eliminated, death_phase, death_position_id, self_rating, note)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO game_reflections (point_id, user_id, exit_reason, penalty_kind, exit_phase, exit_position_id, self_rating, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (point_id, user_id) DO UPDATE
-           SET eliminated        = EXCLUDED.eliminated,
-               death_phase       = EXCLUDED.death_phase,
-               death_position_id = EXCLUDED.death_position_id,
-               self_rating       = EXCLUDED.self_rating,
-               note              = EXCLUDED.note,
-               updated_at        = NOW()
+           SET exit_reason      = EXCLUDED.exit_reason,
+               penalty_kind     = EXCLUDED.penalty_kind,
+               exit_phase       = EXCLUDED.exit_phase,
+               exit_position_id = EXCLUDED.exit_position_id,
+               self_rating      = EXCLUDED.self_rating,
+               note             = EXCLUDED.note,
+               updated_at       = NOW()
          RETURNING id`,
         [
           pointId,
           userId,
-          payload.eliminated,
-          payload.eliminated ? payload.deathPhase! : null,
-          payload.eliminated ? payload.deathPositionId ?? null : null,
+          payload.exitReason,
+          payload.penaltyKind ?? null,
+          leftField ? payload.exitPhase! : null,
+          leftField ? payload.exitPositionId ?? null : null,
           payload.selfRating ?? null,
           payload.note?.length ? payload.note : null,
         ]
@@ -387,7 +543,7 @@ reflectionsRouter.put(
     await writeAudit(userId, "reflection.submit", {
       pointId,
       gameId: access.gameId,
-      eliminated: payload.eliminated,
+      exitReason: payload.exitReason,
       kills: payload.kills.length,
     });
 
@@ -531,8 +687,8 @@ reflectionsRouter.get(
 
     const { ourOtbLosses, opponentOtbLosses, deltaOtb } = computeDeltaOtb({
       reflections: reflections.rows.map((r) => ({
-        eliminated: r.eliminated,
-        deathPhase: r.death_phase as ReflectionPhase | null,
+        exitReason: r.exit_reason,
+        exitPhase: r.exit_phase as ReflectionPhase | null,
       })),
       kills: kills.map((k) => ({ phase: k.phase as ReflectionPhase })),
     });
@@ -642,8 +798,8 @@ async function buildEventTable(eventId: string, eventTitle: string) {
           const pointReflections = reflections.rows.filter((r) => r.point_id === point.id);
           const { ourOtbLosses, opponentOtbLosses, deltaOtb } = computeDeltaOtb({
             reflections: pointReflections.map((r) => ({
-              eliminated: r.eliminated,
-              deathPhase: r.death_phase as ReflectionPhase | null,
+              exitReason: r.exit_reason,
+              exitPhase: r.exit_phase as ReflectionPhase | null,
             })),
             kills: kills
               .filter((k) => pointReflections.some((r) => r.id === k.reflection_id))
