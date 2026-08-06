@@ -9,6 +9,7 @@ import {
   resolveTelegramLoginTransport,
   sendAuthTelemetry,
 } from '../../lib/auth-ux';
+import { PairingPanel } from '../../components/PairingPanel';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -21,6 +22,7 @@ export const AdminLoginView: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [switchingRole, setSwitchingRole] = useState(false);
   const [startingLogin, setStartingLogin] = useState(false);
+  const [pairing, setPairing] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(authQuery);
@@ -170,15 +172,16 @@ export const AdminLoginView: React.FC = () => {
         if (hasTelegramWebApp && !String(initData || '').trim()) {
           sendAuthTelemetry({
             scope: 'ADMIN',
-            flow: 'BOT_HANDOFF',
-            event: 'webapp_initdata_missing_fallback_handoff',
+            flow: 'PAIRING',
+            event: 'webapp_initdata_missing_fallback_pairing',
             code: 'INITDATA_MISSING',
             path: '/admin/login',
           });
         }
 
-        const handoff = await api.startTelegramHandoff('ADMIN', '/admin');
-        window.location.assign(handoff.botUrl);
+        // Админка входит тем же кодом сопряжения (#109): один флоу закрывает
+        // и десктоп, и телефон, и PWA — без единого редиректа.
+        setPairing(true);
       } catch (err) {
         const authErr = extractAuthError(err);
         setError(resolveAuthErrorMessage({ code: authErr.code, detail: authErr.detail, scope: 'ADMIN' }));
@@ -247,7 +250,15 @@ export const AdminLoginView: React.FC = () => {
           </button>
         )}
 
-        {(import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
+        {pairing && (
+          <PairingPanel
+            scope="ADMIN"
+            redirectTo="/admin"
+            onAuthenticated={() => navigate('/admin', { replace: true })}
+          />
+        )}
+
+        {!pairing && (import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
           <button
             onClick={() => {
               window.location.assign('/api/v1/auth/yandex/start?redirectTo=/admin');
@@ -259,14 +270,16 @@ export const AdminLoginView: React.FC = () => {
           </button>
         )}
 
-        <button
-          onClick={handleTelegramLogin}
-          disabled={startingLogin}
-          className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
-        >
-          <Send size={18} />
-          {startingLogin ? 'Переходим в Telegram...' : 'Войти в Admin через Telegram-бот'}
-        </button>
+        {!pairing && (
+          <button
+            onClick={handleTelegramLogin}
+            disabled={startingLogin}
+            className="w-full bg-[#24A1DE] hover:bg-[#208bbf] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+          >
+            <Send size={18} />
+            {startingLogin ? 'Готовим код...' : 'Войти в Admin через Telegram'}
+          </button>
+        )}
         <button
           onClick={() => navigate('/login', { replace: true })}
           className="w-full mt-3 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl"

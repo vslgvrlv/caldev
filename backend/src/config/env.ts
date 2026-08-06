@@ -81,6 +81,26 @@ export const env = {
     ),
   },
 
+  // Вход по коду сопряжения (#109). TTL короткий сознательно: код виден на
+  // экране и его переписывают руками за десятки секунд, а не за полчаса.
+  authPairing: {
+    enabled: asBoolean(process.env.AUTH_PAIRING_ENABLED, true),
+    attemptTtlSeconds: asNumber(
+      process.env.AUTH_PAIRING_ATTEMPT_TTL_SEC || "300",
+      "AUTH_PAIRING_ATTEMPT_TTL_SEC"
+    ),
+    // Сколько кодов один браузер может попросить за окно. Защита от того,
+    // чтобы одна вкладка не набивала базу попытками в цикле опроса.
+    maxAttemptsPerWindow: asNumber(
+      process.env.AUTH_PAIRING_MAX_ATTEMPTS || "10",
+      "AUTH_PAIRING_MAX_ATTEMPTS"
+    ),
+    attemptWindowSeconds: asNumber(
+      process.env.AUTH_PAIRING_ATTEMPT_WINDOW_SEC || "600",
+      "AUTH_PAIRING_ATTEMPT_WINDOW_SEC"
+    ),
+  },
+
   yandexOAuth: {
     enabled: asBoolean(process.env.AUTH_YANDEX_ENABLED, false),
     clientId: process.env.YANDEX_OAUTH_CLIENT_ID || "",
@@ -198,6 +218,12 @@ if (env.telegramHandoff.attemptTtlSeconds < 60) {
 
 if (env.telegramHandoff.tokenTtlSeconds < 60) {
   throw new Error("AUTH_TELEGRAM_HANDOFF_TOKEN_TTL_SEC must be >= 60");
+}
+
+// Ниже минуты код не успеть переписать в другое приложение; выше десяти минут
+// он живёт дольше, чем внимание человека, и превращается в лишнюю мишень.
+if (env.authPairing.attemptTtlSeconds < 60 || env.authPairing.attemptTtlSeconds > 900) {
+  throw new Error("AUTH_PAIRING_ATTEMPT_TTL_SEC must be between 60 and 900");
 }
 
 if (env.authSlo.windowMinutes < 1) {

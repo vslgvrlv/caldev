@@ -21,6 +21,19 @@ import {
   resolveTelegramHandoffRedirect,
   type TelegramHandoffScope,
 } from "../../lib/auth-telegram-handoff.js";
+import {
+  buildPairingBrowserSecret,
+  buildPairingDeepLink,
+  classifyPairingStatus,
+  describePairingDevice,
+  formatPairingCode,
+  generatePairingCode,
+  hashPairingBrowserSecret,
+  hashPairingCode,
+  normalizePairingCode,
+  resolvePairingRedirect,
+  type PairingAttemptStatus,
+} from "../../lib/auth-pairing.js";
 import { completeOAuthLogin } from "../../lib/oauth-login.js";
 
 const contextSchema = z.object({
@@ -53,13 +66,24 @@ const handoffCompleteSchema = z.object({
   token: z.string().min(1),
 });
 
+const pairStartSchema = z.object({
+  scope: z.enum(["USER", "ADMIN"]),
+  redirectTo: z.string().optional(),
+});
+
+const pairStatusSchema = z.object({
+  // Длина с запасом: код доезжает с дефисом и в любом регистре,
+  // нормализация разбирается дальше.
+  code: z.string().min(1).max(32),
+});
+
 const authSloQuerySchema = z.object({
   windowMinutes: z.coerce.number().int().min(1).max(24 * 60).optional(),
 });
 
 const clientAuthTelemetrySchema = z.object({
   scope: z.enum(["USER", "ADMIN", "INVITE"]),
-  flow: z.enum(["MINIAPP", "OIDC", "BOT_HANDOFF", "UNKNOWN"]).optional(),
+  flow: z.enum(["MINIAPP", "OIDC", "BOT_HANDOFF", "PAIRING", "UNKNOWN"]).optional(),
   event: z.string().min(1).max(64),
   platform: z.enum(["android", "ios", "desktop", "unknown"]),
   code: z.string().min(1).max(80).optional(),
@@ -87,6 +111,24 @@ function logoutGuardCookieOptions() {
     sameSite: env.session.cookieSameSite,
     secure: env.isProd,
     httpOnly: true,
+  } as const;
+}
+
+// Секрет привязки попытки к браузеру (#109). httpOnly — значит недоступен
+// скриптам страницы; path сужен до auth-ручек, потому что больше его никто
+// не читает. Живёт чуть дольше самой попытки: между «показали код» и
+// «подтвердили в Telegram» человек уходит в другое приложение и возвращается.
+const PAIRING_COOKIE_NAME = "pbth.pair";
+const PAIRING_COOKIE_TTL_MS = 1000 * 60 * 30;
+
+function pairingCookieOptions() {
+  return {
+    path: "/api/v1/auth",
+    domain: env.session.cookieDomain,
+    sameSite: env.session.cookieSameSite,
+    secure: env.isProd,
+    httpOnly: true,
+    maxAge: PAIRING_COOKIE_TTL_MS,
   } as const;
 }
 
@@ -336,6 +378,22 @@ type TelegramHandoffAttemptRow = {
   expires_at: string;
 };
 
+type PairingAttemptRow = {
+  id: string;
+  scope: "USER" | "ADMIN";
+  status: string;
+  redirect_to: string;
+  browser_secret_hash: string;
+  telegram_profile: {
+    id?: string;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    photo_url?: string;
+  } | null;
+  expires_at: string;
+};
+
 function buildCapabilities(params: {
   effectiveRole: "ADMIN" | "USER" | null;
   memberships: Array<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>;
@@ -402,6 +460,8 @@ authRouter.post(
         ? "OIDC"
         : flow === "BOT_HANDOFF"
           ? "BOT_HANDOFF"
+        : flow === "PAIRING"
+          ? "PAIRING"
         : flow === "MINIAPP"
           ? "WEBAPP"
           : "UNKNOWN";
@@ -655,6 +715,211 @@ authRouter.get(
 
     const { origin } = getAuthPublicUrls(req);
     return res.redirect(302, new URL(attempt.redirect_to, origin).toString());
+  })
+);
+
+// --- Вход по коду сопряжения (#109) ---------------------------------------
+//
+// Единственная схема, которая работает в PWA на домашнем экране iOS: там своя
+// банка кук, изолированная от Safari, и любой редирект «уйти и вернуться»
+// отдаёт Set-Cookie не тому браузеру. Здесь сессионная кука приходит на ответ
+// опроса, который PWA сделало само, — навигации нет вообще.
+
+authRouter.post(
+  "/pair/start",
+  asyncHandler(async (req, res) => {
+    if (!env.authPairing.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+
+    const parsed = pairStartSchema.parse(req.body ?? {});
+    const redirectTo = resolvePairingRedirect({ scope: parsed.scope, redirectTo: parsed.redirectTo });
+
+    // Секрет браузера переживает попытки: если человек перезапросил код, это
+    // тот же браузер, и лимит должен считаться по нему, а не обнуляться.
+    let browserSecret = readCookie(req, PAIRING_COOKIE_NAME);
+    if (!browserSecret) {
+      browserSecret = buildPairingBrowserSecret();
+    }
+    const browserSecretHash = hashPairingBrowserSecret(browserSecret);
+
+    const recent = await query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM auth_pairing_attempts
+        WHERE browser_secret_hash = $1
+          AND created_at > NOW() - make_interval(secs => $2)`,
+      [browserSecretHash, env.authPairing.attemptWindowSeconds]
+    );
+    if (Number(recent.rows[0]?.count ?? 0) >= env.authPairing.maxAttemptsPerWindow) {
+      recordAuthMetric({
+        method: "PAIRING",
+        platform: detectRequestPlatform(req),
+        outcome: "ERROR",
+        code: "PAIRING_RATE_LIMITED",
+      });
+      return res.status(429).json({ detail: "Too many pairing attempts", code: "PAIRING_RATE_LIMITED" });
+    }
+
+    // Коллизия кода за пять минут маловероятна, но UNIQUE на code_hash —
+    // жёсткий инвариант: два живых кода с одним значением означали бы, что
+    // подтверждение уходит не в ту попытку.
+    let code = "";
+    let inserted: { id: string; expires_at: string } | undefined;
+    for (let attempt = 0; attempt < 5 && !inserted; attempt += 1) {
+      code = generatePairingCode();
+      const result = await query<{ id: string; expires_at: string }>(
+        `INSERT INTO auth_pairing_attempts (
+           code_hash, browser_secret_hash, scope, status, redirect_to,
+           device_label, requested_ip, expires_at
+         )
+         VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, NOW() + make_interval(secs => $7))
+         ON CONFLICT (code_hash) DO NOTHING
+         RETURNING id, expires_at`,
+        [
+          hashPairingCode(code),
+          browserSecretHash,
+          parsed.scope,
+          redirectTo,
+          describePairingDevice(req.get("user-agent")),
+          req.ip ?? null,
+          env.authPairing.attemptTtlSeconds,
+        ]
+      );
+      inserted = result.rows[0];
+    }
+    if (!inserted) {
+      throw new Error("pair/start: could not allocate a free pairing code");
+    }
+
+    res.cookie(PAIRING_COOKIE_NAME, browserSecret, pairingCookieOptions());
+    recordAuthMetric({
+      method: "PAIRING",
+      platform: detectRequestPlatform(req),
+      outcome: "ATTEMPT",
+    });
+
+    return res.json({
+      code: formatPairingCode(code),
+      botUrl: buildPairingDeepLink(env.telegram.botUsername, code),
+      botUsername: env.telegram.botUsername,
+      expiresAt: inserted.expires_at,
+    });
+  })
+);
+
+authRouter.get(
+  "/pair/status",
+  asyncHandler(async (req, res) => {
+    if (!env.authPairing.enabled) {
+      return res.status(404).json({ detail: "Not found", code: "NOT_FOUND" });
+    }
+
+    const parsed = pairStatusSchema.parse(req.query ?? {});
+    const code = normalizePairingCode(parsed.code);
+    const browserSecret = readCookie(req, PAIRING_COOKIE_NAME);
+    if (!code || !browserSecret) {
+      return res.status(404).json({ detail: "Unknown pairing attempt", code: "PAIRING_NOT_FOUND" });
+    }
+
+    const attemptResult = await query<PairingAttemptRow>(
+      `SELECT id, scope::text, status::text, redirect_to, browser_secret_hash,
+              telegram_profile, expires_at
+         FROM auth_pairing_attempts
+        WHERE code_hash = $1
+        LIMIT 1`,
+      [hashPairingCode(code)]
+    );
+    const attempt = attemptResult.rows[0];
+
+    // Главная защита флоу: сессию забирает только тот браузер, который попытку
+    // начал. Подсмотренный или присланный злоумышленником код бесполезен —
+    // и ответ здесь такой же, как на несуществующий код, чтобы по разнице
+    // ответов нельзя было проверять чужие коды на существование.
+    if (!attempt || attempt.browser_secret_hash !== hashPairingBrowserSecret(browserSecret)) {
+      return res.status(404).json({ detail: "Unknown pairing attempt", code: "PAIRING_NOT_FOUND" });
+    }
+
+    const status = classifyPairingStatus({
+      status: attempt.status as PairingAttemptStatus,
+      expiresAt: attempt.expires_at,
+      now: Date.now(),
+    });
+
+    if (status === "expired" && (attempt.status === "PENDING" || attempt.status === "CLAIMED")) {
+      await query(`UPDATE auth_pairing_attempts SET status = 'EXPIRED' WHERE id = $1`, [attempt.id]);
+    }
+
+    if (status !== "approved") {
+      return res.json({ status });
+    }
+
+    const profile = attempt.telegram_profile;
+    if (!profile?.id) {
+      // APPROVED без профиля означал бы, что карточку подтвердили, а кто —
+      // неизвестно. Такой попытке нельзя давать сессию.
+      await query(`UPDATE auth_pairing_attempts SET status = 'EXPIRED' WHERE id = $1`, [attempt.id]);
+      return res.json({ status: "expired" });
+    }
+
+    if (attempt.scope === "ADMIN") {
+      let adminCandidateUsername = profile.username ?? null;
+      if (!adminCandidateUsername) {
+        const existingUser = await query<{ username: string | null }>(
+          `SELECT username FROM users WHERE telegram_id = $1::bigint LIMIT 1`,
+          [String(profile.id)]
+        );
+        adminCandidateUsername = existingUser.rows[0]?.username ?? null;
+      }
+      if (!canChooseAdminRole({ telegram_id: String(profile.id), username: adminCandidateUsername })) {
+        await query(`UPDATE auth_pairing_attempts SET status = 'DENIED' WHERE id = $1`, [attempt.id]);
+        recordAuthMetric({
+          method: "PAIRING",
+          platform: detectRequestPlatform(req),
+          outcome: "ERROR",
+          code: "ADMIN_SCOPE_NONE",
+        });
+        return res.status(403).json({ detail: "Admin scope unavailable", code: "ADMIN_SCOPE_NONE" });
+      }
+    }
+
+    // Одноразовость: гасим попытку до выдачи сессии и только если она всё ещё
+    // APPROVED. Два параллельных опроса (вкладка + фоновое обновление) не
+    // должны обменять один код на две сессии.
+    const consumed = await query<{ id: string }>(
+      `UPDATE auth_pairing_attempts
+          SET status = 'CONSUMED', consumed_at = NOW()
+        WHERE id = $1 AND status = 'APPROVED'
+        RETURNING id`,
+      [attempt.id]
+    );
+    if (!consumed.rows[0]) {
+      return res.json({ status: "expired" });
+    }
+
+    await completeOAuthLogin(req, res, {
+      provider: "telegram",
+      profile: {
+        id: String(profile.id),
+        firstName: profile.first_name,
+        lastName: profile.last_name,
+        username: profile.username,
+        avatarUrl: profile.photo_url,
+      },
+      authMethod: "PAIRING",
+      entryRoleOverride: attempt.scope === "ADMIN" ? "ADMIN" : "USER",
+    });
+    res.clearCookie(LOGOUT_GUARD_COOKIE_NAME, logoutGuardCookieOptions());
+    res.clearCookie(PAIRING_COOKIE_NAME, { ...pairingCookieOptions(), maxAge: undefined });
+
+    recordAuthMetric({
+      method: "PAIRING",
+      platform: detectRequestPlatform(req),
+      outcome: "SUCCESS",
+    });
+
+    // Кука сессии уходит именно с этим ответом — в банку того браузера,
+    // который опрос и сделал. Ради этой строки всё и затевалось.
+    return res.json({ status: "approved", redirectTo: attempt.redirect_to });
   })
 );
 

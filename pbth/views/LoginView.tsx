@@ -11,6 +11,7 @@ import {
   sendAuthTelemetry,
 } from '../lib/auth-ux';
 import { sanitizeNext } from '../lib/login-next-param';
+import { PairingPanel } from '../components/PairingPanel';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
@@ -34,6 +35,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   const [continuity, setContinuity] = useState<AuthenticatedMe | null>(null);
   const [continuityChecked, setContinuityChecked] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
+  const [pairing, setPairing] = useState(false);
   const isLocalDev =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
@@ -179,13 +181,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
         if (hasTelegramWebApp && !String(initData || '').trim()) {
           sendAuthTelemetry({
             scope: telemetryScope,
-            flow: 'BOT_HANDOFF',
-            event: 'webapp_initdata_missing_fallback_handoff',
+            flow: 'PAIRING',
+            event: 'webapp_initdata_missing_fallback_pairing',
             code: 'INITDATA_MISSING',
           });
         }
-        const handoff = await api.startTelegramHandoff(wantsAdmin ? 'ADMIN' : 'USER', targetRedirect);
-        window.location.assign(handoff.botUrl);
+        // Вне Mini App вход идёт кодом сопряжения (#109). Никакой навигации:
+        // редирект в PWA на домашнем экране iOS отдаёт куку чужому браузеру.
+        setPairing(true);
         return;
       }
       try {
@@ -223,6 +226,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Сюда приходим, когда опрос уже получил сессионную куку. Никаких переходов
+  // по внешним ссылкам не было — приложение просто перерисовывается.
+  const handlePaired = (target: string) => {
+    sendAuthTelemetry({
+      scope: wantsAdmin ? 'ADMIN' : 'USER',
+      flow: 'PAIRING',
+      event: 'login_success',
+    });
+    if (target.startsWith('/admin')) {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    onLogin();
+    navigate(target, { replace: true });
   };
 
   const handleLocalDevLogin = (telegramId: string) => {
@@ -345,10 +364,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
           </div>
         )}
 
+        {pairing && (
+          <PairingPanel
+            scope={wantsAdmin ? 'ADMIN' : 'USER'}
+            redirectTo={targetRedirect}
+            onAuthenticated={handlePaired}
+          />
+        )}
+
         {/* Provider buttons. Neutral surface, brand-coloured logo only.
             Hierarchy = size + order, not colour. Yandex primary (RU market),
             Telegram secondary. Hidden when there is a known session. */}
-        {continuityChecked && !continuity && (
+        {continuityChecked && !continuity && !pairing && (
           <div className="space-y-2">
             {(import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
               <button
@@ -383,7 +410,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
           </div>
         )}
 
-        {isLocalDev && continuityChecked && !continuity && (
+        {isLocalDev && continuityChecked && !continuity && !pairing && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               onClick={() => handleLocalDevLogin('9000000101')}

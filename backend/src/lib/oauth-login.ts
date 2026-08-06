@@ -5,7 +5,7 @@ import { canChooseAdminRole } from "./entry-role.js";
 import { getUserMemberships } from "./permissions.js";
 import { findIdentity, linkIdentity } from "./identity-repo.js";
 
-export type AuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "YANDEX_OAUTH";
+export type AuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "YANDEX_OAUTH" | "PAIRING";
 
 export type OAuthProvider = "telegram" | "yandex";
 
