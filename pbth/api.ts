@@ -7,6 +7,16 @@ import {
   getLocalDevInitData,
   updateLocalDevRsvp,
 } from './lib/local-dev-api';
+import {
+  SNAPSHOT_AUTH_ME,
+  SNAPSHOT_FIELD_POSITIONS,
+  SNAPSHOT_INIT,
+  isOfflineError,
+  loadSnapshot,
+  saveSnapshot,
+  toOfflineError,
+} from './lib/offline';
+import { enqueue, flushOutbox, type OutboxEntry } from './lib/outbox';
 
 const baseFromEnv = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 const API_URL = baseFromEnv ? `${baseFromEnv}/api/v1` : '/api/v1';
@@ -449,6 +459,12 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  // Явное согласие ручки на отложенную отправку. Пометка ставится вручную и
+  // только там, где повтор безопасен (перезапись по уникальному ключу).
+  // Необратимые действия — удаление события, выход из серии, снятие из состава
+  // — не очередятся никогда: «отложенное удаление», всплывшее через сутки,
+  // хуже честного отказа.
+  offlineQueue?: { dedupeKey: string; label: string };
 };
 
 type ApiError = Error & {
@@ -458,15 +474,36 @@ type ApiError = Error & {
 };
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options?.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
-    },
-    credentials: 'include',
-    body: options?.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: options?.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options?.headers || {}),
+      },
+      credentials: 'include',
+      body: options?.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch (networkError) {
+    // Сети нет — это не отказ сервера. Разница принципиальна: на 401 надо
+    // отправлять на логин, на отсутствие сети — поднимать приложение из
+    // снимка. Раньше оба случая приходили одним TypeError и лечились одинаково.
+    if (options?.offlineQueue) {
+      await enqueue({
+        method: options.method || 'GET',
+        path,
+        body: options.body,
+        dedupeKey: options.offlineQueue.dedupeKey,
+        label: options.offlineQueue.label,
+      });
+      // Для человека сохранение состоялось: он нажал кнопку, форма закрылась,
+      // доставка дальше — наша забота. Вернуть ошибку значило бы заставить его
+      // жать «Сохранить» в поле, где сети не будет ещё несколько часов.
+      return { queuedOffline: true } as T;
+    }
+    throw toOfflineError(networkError);
+  }
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     let code: string | undefined;
@@ -484,6 +521,36 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Нормализация ответа /init вынесена наружу, потому что путей теперь два —
+// свежий ответ и снимок из IndexedDB. Две копии этой раскладки разъехались бы,
+// и офлайн-режим тихо показывал бы события не так, как онлайн.
+export function normalizeInitPayload(data: Record<string, any>) {
+  const mergedEvents = [...(data.events || []), ...(data.actionRequiredEvents || [])];
+  const normalizedEvents = mergedEvents.map((e: any) => {
+    const rawStart = e.startAt || e.startDate;
+    const rawEnd = e.endAt || e.endDate;
+    return {
+      ...e,
+      startAt: rawStart,
+      endAt: rawEnd,
+      startDate: new Date(rawStart),
+      endDate: rawEnd ? new Date(rawEnd) : undefined,
+    };
+  });
+  const normalizedTransactions = (data.transactions || []).map((t: any) => ({
+    ...t,
+    date: new Date(t.date),
+  }));
+
+  return {
+    ...data,
+    events: normalizedEvents,
+    transactions: normalizedTransactions,
+    members: data.members || [],
+    teams: (data.teams || []) as TeamContext[],
+  };
+}
+
 function localDevStorage() {
   if (typeof window === 'undefined') return null;
   return window.localStorage;
@@ -495,13 +562,33 @@ function localDevHostname() {
 }
 
 export const api = {
+  // Отправка отложенного. Повтор безопасен: все очередящиеся ручки — перезапись
+  // по уникальному ключу, а не добавление, поэтому дубль в очереди не создаёт
+  // дубль в базе.
+  async flushOfflineQueue(): Promise<void> {
+    await flushOutbox(async (entry: OutboxEntry) => {
+      await request(entry.path, { method: entry.method, body: entry.body });
+    });
+  },
+
   async getAuthMe(): Promise<AuthMeResponse> {
     const storage = localDevStorage();
     const localPayload = storage ? getLocalDevAuthMe(storage, localDevHostname()) : null;
     if (localPayload) {
       return localPayload as AuthMeResponse;
     }
-    return request<AuthMeResponse>('/auth/me');
+    try {
+      const payload = await request<AuthMeResponse>('/auth/me');
+      // Личность кладём в снимок только когда сервер её подтвердил. Снимок
+      // неаутентифицированного ответа заморозил бы человека на экране логина.
+      if (payload?.authenticated) void saveSnapshot(SNAPSHOT_AUTH_ME, payload);
+      return payload;
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      const cached = await loadSnapshot<AuthMeResponse>(SNAPSHOT_AUTH_ME);
+      if (!cached) throw error;
+      return cached.value;
+    }
   },
 
   async selectAccountRole(accountRole: 'ADMIN' | 'USER'): Promise<{ ok: true; accountRole: 'ADMIN' | 'USER' }> {
@@ -551,9 +638,19 @@ export const api = {
       return localData;
     }
 
-    const res = await fetch(`${API_URL}/init`, {
-      credentials: 'include',
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/init`, {
+        credentials: 'include',
+      });
+    } catch (networkError) {
+      // Снимок хранится сырым, до нормализации: в нём нет объектов Date, он
+      // переживает structured clone и не зависит от того, как мы сегодня
+      // раскладываем события. Нормализация — одна на оба пути, ниже.
+      const cached = await loadSnapshot<Record<string, any>>(SNAPSHOT_INIT);
+      if (!cached) throw toOfflineError(networkError);
+      return { ...normalizeInitPayload(cached.value), offlineSnapshotAt: cached.savedAt };
+    }
     if (!res.ok) {
       let detail = 'Failed to fetch data';
       try {
@@ -575,30 +672,14 @@ export const api = {
       [k: string]: any;
     };
 
-    const mergedEvents = [...(data.events || []), ...(data.actionRequiredEvents || [])];
-    const normalizedEvents = mergedEvents.map((e: any) => {
-      const rawStart = e.startAt || e.startDate;
-      const rawEnd = e.endAt || e.endDate;
-      return {
-      ...e,
-      startAt: rawStart,
-      endAt: rawEnd,
-      startDate: new Date(rawStart),
-      endDate: rawEnd ? new Date(rawEnd) : undefined,
-      };
-    });
-    const normalizedTransactions = (data.transactions || []).map((t: any) => ({
-      ...t,
-      date: new Date(t.date),
-    }));
+    // Снимок обновляем только на полноценном ответе. Кешировать «команды пока
+    // нет» или админский ответ нельзя: человек уедет на турнир со снимком,
+    // который заведомо не пустит его в приложение.
+    if (data?.user && data?.team && !data?.noTeamYet && !data?.admin) {
+      void saveSnapshot(SNAPSHOT_INIT, data);
+    }
 
-    return {
-      ...data,
-      events: normalizedEvents,
-      transactions: normalizedTransactions,
-      members: data.members || [],
-      teams: (data.teams || []) as TeamContext[],
-    };
+    return normalizeInitPayload(data);
   },
 
   async listPlaces(): Promise<SavedPlace[]> {
@@ -678,9 +759,20 @@ export const api = {
 
   // Каталог укрытий отдаётся целиком (51 позиция) и не меняется в течение
   // турнира — тянем один раз на открытие формы, фильтруем на клиенте.
+  // Без каталога форма рефлексии не открывается вообще — а именно её и заполняют
+  // в поле, где сети нет. Поэтому каталог держим снимком: он статичный, устареть
+  // за турнир не может.
   async getFieldPositions(): Promise<FieldPosition[]> {
-    const data = await request<{ items: FieldPosition[] }>('/field-positions');
-    return data.items;
+    try {
+      const data = await request<{ items: FieldPosition[] }>('/field-positions');
+      void saveSnapshot(SNAPSHOT_FIELD_POSITIONS, data.items);
+      return data.items;
+    } catch (error) {
+      if (!isOfflineError(error)) throw error;
+      const cached = await loadSnapshot<FieldPosition[]>(SNAPSHOT_FIELD_POSITIONS);
+      if (!cached) throw error;
+      return cached.value;
+    }
   },
 
   // Пойнты материализуются на сервере из счёта игры — отдельного «создать» нет.
@@ -691,7 +783,11 @@ export const api = {
   // Разметка «какие пойнты выиграли»: из счёта известно количество побед, но не
   // их порядок, поэтому его проставляет капитан.
   async saveGamePointResults(gameId: string, points: Array<{ ordinal: number; result: PointResult | null }>) {
-    return request(`/reflections/games/${gameId}/points`, { method: 'PUT', body: { points } });
+    return request(`/reflections/games/${gameId}/points`, {
+      method: 'PUT',
+      body: { points },
+      offlineQueue: { dedupeKey: `points:${gameId}`, label: 'Разметка пойнтов' },
+    });
   },
 
   // Состав пойнта пишется целиком: капитан видит на экране пятёрку и сохраняет
@@ -701,16 +797,28 @@ export const api = {
     return request(`/reflections/points/${pointId}/roster`, {
       method: 'PUT',
       body: { userIds, opponentRosterSize },
+      offlineQueue: { dedupeKey: `roster:${pointId}`, label: 'Состав пойнта' },
     });
   },
 
+  // Отсутствие сети — не отсутствие формы. Офлайн отвечаем «сохранённой версии
+  // нет»: то, что человек заполнит, ляжет в черновик и уедет очередью.
   async getMyReflection(pointId: string): Promise<GameReflection | null> {
-    const data = await request<{ reflection: GameReflection | null }>(`/reflections/points/${pointId}/mine`);
-    return data.reflection;
+    try {
+      const data = await request<{ reflection: GameReflection | null }>(`/reflections/points/${pointId}/mine`);
+      return data.reflection;
+    } catch (error) {
+      if (isOfflineError(error)) return null;
+      throw error;
+    }
   },
 
   async saveMyReflection(pointId: string, reflection: GameReflection) {
-    return request(`/reflections/points/${pointId}/mine`, { method: 'PUT', body: reflection });
+    return request(`/reflections/points/${pointId}/mine`, {
+      method: 'PUT',
+      body: reflection,
+      offlineQueue: { dedupeKey: `reflection:${pointId}`, label: 'Рефлексия за пойнт' },
+    });
   },
 
   // canEdit считает сервер по роли в команде — на клиенте роль не выводим,
@@ -729,6 +837,7 @@ export const api = {
         initiativeCenter: initiative.center,
         initiativeEnvelope: initiative.envelope,
       },
+      offlineQueue: { dedupeKey: `captain:${pointId}`, label: 'Разбор капитана' },
     });
   },
 

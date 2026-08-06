@@ -20,6 +20,9 @@ import { AdminConsoleView } from './views/admin/AdminConsoleView';
 import { RSVPModal } from './components/RSVPModal';
 import { Plus, Loader2 } from 'lucide-react';
 import { api, type NotificationDeliveryResponse } from './api'; // Import API
+import { isOfflineError } from './lib/offline';
+import { subscribeOutbox } from './lib/outbox';
+import { OfflineBanner } from './components/OfflineBanner';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -56,6 +59,11 @@ const App: React.FC = () => {
   const [authBootstrapDone, setAuthBootstrapDone] = useState(false);
   const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM' | 'ADMIN_MODE'>('READY');
   const [onboardingRequired, setOnboardingRequired] = useState(false);
+  // Момент снятия снимка, из которого поднялось приложение. null — данные
+  // свежие. Показывается человеку: состав недельной давности легко принять за
+  // сегодняшний, и это хуже, чем отсутствие данных.
+  const [offlineSnapshotAt, setOfflineSnapshotAt] = useState<number | null>(null);
+  const [outboxState, setOutboxState] = useState<{ pending: number; blocked: number }>({ pending: 0, blocked: 0 });
   // Tracks whether the current session's user is allowlisted to enter the
   // Platform Admin Console. Drives the "Платформа админа" entry-point in
   // ProfileView so owners have a 1-tap path into /admin from /app.
@@ -152,6 +160,14 @@ const App: React.FC = () => {
         setEvents(data.events || []);
         setMembers(data.members || []);
         setTransactions(data.transactions || []);
+        setOfflineSnapshotAt(typeof data.offlineSnapshotAt === 'number' ? data.offlineSnapshotAt : null);
+
+        // Финансы и календарь без сети не поднять, и они не нужны для входа —
+        // приложение обязано открыться и на турнире, где есть только снимок.
+        if (typeof data.offlineSnapshotAt === 'number') {
+          setAppGate('READY');
+          return 'ok';
+        }
 
         try {
           const [financeOverview, financeMembers] = await Promise.all([
@@ -212,6 +228,15 @@ const App: React.FC = () => {
         return 'ok';
     } catch (e) {
         console.error("Error loading data", e);
+        // Сети нет и снимка тоже нет — показывать «проверьте авторизацию»
+        // вредно: человек пойдёт перелогиниваться, а логин без сети тем более
+        // не работает.
+        if (isOfflineError(e)) {
+          if (!options?.silent) {
+            alert('Нет сети, а сохранённых данных на этом устройстве ещё нет. Открой приложение один раз при интернете — дальше оно будет работать и без него.');
+          }
+          return 'error';
+        }
         if (!options?.silent) {
           const message = e instanceof Error ? e.message : '';
           if (message.includes('INIT_NO_TEAM')) {
@@ -403,6 +428,27 @@ const App: React.FC = () => {
       cancelled = true;
     };
   }, [navigate]);
+
+  // Отложенное уходит при возврате связи и на старте: телефон в поле чаще
+  // ловит сеть в кармане, чем в руках у владельца, поэтому ждать открытия
+  // нужного экрана нельзя. Следом, если приложение поднялось из снимка,
+  // перезагружаем данные — иначе плашка «офлайн» висела бы поверх уже живой
+  // сети до ручного обновления страницы.
+  useEffect(() => {
+    const unsubscribe = subscribeOutbox(setOutboxState);
+    const sync = async () => {
+      await api.flushOfflineQueue();
+      if (offlineSnapshotAt !== null) await loadData({ silent: true });
+    };
+    void sync();
+    const onOnline = () => { void sync(); };
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineSnapshotAt]);
 
   // --- AUTH HANDLERS ---
   const handleLogin = async () => {
@@ -1126,6 +1172,11 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>
 
         <main className="max-w-md mx-auto min-h-screen relative shadow-2xl shadow-black overflow-hidden flex flex-col">
+          <OfflineBanner
+            snapshotAt={offlineSnapshotAt}
+            pending={outboxState.pending}
+            blocked={outboxState.blocked}
+          />
           {onboardingRequired && (
             <div
               className="mx-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"

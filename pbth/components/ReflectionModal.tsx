@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { api } from '../api';
+import { dropSnapshot, loadSnapshot, saveSnapshot } from '../lib/offline';
+import { chooseReflectionDraft, reflectionDraftKey } from '../lib/reflection-draft';
 import { FieldSchema } from './FieldSchema';
 import type { FieldPosition, Game, GamePoint, GameReflection, PenaltyKind, ReflectionKill, ReflectionPhase } from '../types';
 
@@ -75,17 +77,24 @@ export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Пока форма не поднялась с диска, писать на диск нельзя: пустая начальная
+  // форма затёрла бы ровно тот черновик, который мы собираемся показать.
+  const [isHydrated, setIsHydrated] = useState(false);
+  const draftKey = reflectionDraftKey(point.id);
+
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
     setIsLoading(true);
+    setIsHydrated(false);
     setError(null);
     setStep(1);
-    Promise.all([api.getFieldPositions(), api.getMyReflection(point.id)])
-      .then(([catalog, saved]) => {
+    Promise.all([api.getFieldPositions(), api.getMyReflection(point.id), loadSnapshot<GameReflection>(draftKey)])
+      .then(([catalog, saved, local]) => {
         if (cancelled) return;
         setPositions(catalog);
-        setDraft(saved ?? emptyReflection);
+        setDraft(chooseReflectionDraft(local, saved, Date.now()) ?? emptyReflection);
+        setIsHydrated(true);
       })
       .catch(() => {
         if (!cancelled) setError('Не удалось загрузить форму');
@@ -96,7 +105,14 @@ export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, point.id]);
+  }, [isOpen, point.id, draftKey]);
+
+  // Пишем по каждому изменению, а не по закрытию: телефон убирают в карман
+  // прямо посреди формы, и «сохранить на выходе» до выхода не доживает.
+  useEffect(() => {
+    if (!isOpen || !isHydrated) return;
+    void saveSnapshot(draftKey, draft);
+  }, [isOpen, isHydrated, draftKey, draft]);
 
   const toggleSwap = () => {
     setSwapped((prev) => {
@@ -135,6 +151,10 @@ export const ReflectionModal: React.FC<Props> = ({ game, point, isOpen, onClose 
     setError(null);
     try {
       await api.saveMyReflection(point.id, draft);
+      // Ушло на сервер или встало в очередь — в обоих случаях форма больше не
+      // «незаконченная», и черновик её только переживёт лишним.
+      await dropSnapshot(draftKey);
+      setIsHydrated(false);
       setStep(6);
     } catch {
       setError('Не удалось сохранить рефлексию');

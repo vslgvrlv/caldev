@@ -1,11 +1,33 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
 const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
 const apiTarget = runtimeProcess?.env?.VITE_BACKEND_TARGET || 'http://127.0.0.1:8000';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Без сервис-воркера приложение на турнире не открывается вообще: манифест
+    // даёт иконку на домашнем экране, но за ней всё равно уходит запрос в сеть.
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Манифест уже лежит в public/ и ведётся руками — плагин его не трогает.
+      manifest: false,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // Любой навигационный запрос отдаём из оболочки: без сети маршрут
+        // /app/... иначе упирается в 404 сервера, которого нет.
+        navigateFallback: '/index.html',
+        // Запросы к API кешировать нельзя — данные приложение держит само, в
+        // снимках IndexedDB, где видно их возраст. Кеш ответов дал бы вторую,
+        // невидимую копию правды.
+        navigateFallbackDenylist: [/^\/api\//, /^\/calendar\//],
+        cleanupOutdatedCaches: true,
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   build: {
     rollupOptions: {
       onwarn(warning, warn) {
