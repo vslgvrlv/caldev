@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
+import { registerServiceWorker } from './lib/register-sw';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -17,3 +18,5 @@ root.render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+registerServiceWorker();
