@@ -135,6 +135,10 @@ describe("game_reflections schema", () => {
     await pool.query(`DELETE FROM game_reflections WHERE id = $1`, [ok.rows[0].id]);
   });
 
+  // Незнакомый исход отсекают сразу два ограничения: enum-проверка и проверка
+  // согласованности (значение вне списка не попадает ни в одну её ветку).
+  // Какое из них Postgres назовёт первым — деталь реализации, поэтому тест
+  // сторожит сам факт отказа, а не текст сообщения.
   it("четвёртого исхода не бывает", async () => {
     await expect(
       pool.query(
@@ -142,7 +146,7 @@ describe("game_reflections schema", () => {
          VALUES ($1, $2, 'LEFT', 'COVER')`,
         [fixture.pointId, fixture.userId]
       )
-    ).rejects.toThrow(/game_reflections_exit_reason_check/);
+    ).rejects.toThrow(/game_reflections_exit_(reason|consistency)_check/);
   });
 
   // Ноль как «не оценил» сломал бы средние: 0 — не оценка, а отсутствие ответа,

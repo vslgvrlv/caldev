@@ -45,6 +45,20 @@ BEGIN
   ) THEN
     ALTER TABLE game_reflections RENAME COLUMN death_position_id TO exit_position_id;
   END IF;
+
+  -- RENAME COLUMN не трогает зависимые ограничения: внешний ключ так и остаётся
+  -- game_reflections_death_position_id_fkey на колонке exit_position_id. Это тот
+  -- же обман имени, ради устранения которого колонку и переименовали, — только
+  -- теперь он всплывает в тексте ошибки, которую читает разработчик.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'game_reflections_death_position_id_fkey'
+      AND conrelid = 'game_reflections'::regclass
+  ) THEN
+    ALTER TABLE game_reflections
+      RENAME CONSTRAINT game_reflections_death_position_id_fkey
+                     TO game_reflections_exit_position_id_fkey;
+  END IF;
 END $$;
 
 -- 3. Бэкфилл. Ничего не выдумываем: старые записи знают только «выбили/дожил»,
