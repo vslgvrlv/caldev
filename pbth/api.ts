@@ -605,6 +605,25 @@ export const api = {
     });
   },
 
+  async startPairing(
+    scope: 'USER' | 'ADMIN',
+    redirectTo = '/app',
+  ): Promise<{ code: string; botUrl: string; botUsername: string; expiresAt: string }> {
+    return request('/auth/pair/start', {
+      method: 'POST',
+      body: { scope, redirectTo },
+    });
+  },
+
+  // Ответ на этот запрос несёт Set-Cookie с сессией — именно поэтому вход
+  // работает в PWA на домашнем экране: кука ложится в банку того браузера,
+  // который запрос и сделал (#109).
+  async getPairingStatus(
+    code: string,
+  ): Promise<{ status: 'pending' | 'claimed' | 'approved' | 'denied' | 'expired'; redirectTo?: string }> {
+    return request(`/auth/pair/status?code=${encodeURIComponent(code)}`);
+  },
+
   async switchTeamContext(membershipId: string): Promise<{ ok: true }> {
     return request<{ ok: true }>('/auth/context', {
       method: 'POST',

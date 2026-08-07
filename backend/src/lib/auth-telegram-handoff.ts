@@ -7,6 +7,7 @@ type TrustedAuthMethod =
   | "DEV"
   | "BOT_HANDOFF"
   | "YANDEX_OAUTH"
+  | "PAIRING"
   | null
   | undefined;
 
@@ -104,13 +105,18 @@ export function isTrustedAdminAuthMethod(authMethod: TrustedAuthMethod): boolean
   //  - OIDC          — Telegram OIDC (signed JWT, replay-guarded).
   //  - BOT_HANDOFF   — one-shot server-issued token presented via the bot DM.
   //  - YANDEX_OAUTH  — OAuth2 + PKCE + replay-guard (migrations 023/024).
+  //  - PAIRING       — device flow (#109): identity is proven by an explicit
+  //    tap inside the user's own Telegram chat, and the session is bound to the
+  //    httpOnly browser secret issued at /auth/pair/start, so a code seen or
+  //    forwarded by anyone else cannot redeem it.
   // WEBAPP (Telegram Mini App initData) is intentionally NOT trusted:
   // initData is client-presented and trust-rooted in the host TG client,
   // which is acceptable for player surfaces but not for the admin gate.
   return (
     authMethod === "OIDC" ||
     authMethod === "BOT_HANDOFF" ||
-    authMethod === "YANDEX_OAUTH"
+    authMethod === "YANDEX_OAUTH" ||
+    authMethod === "PAIRING"
   );
 }
 

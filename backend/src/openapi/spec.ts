@@ -22,7 +22,7 @@ export function buildOpenApiSpec() {
           type: "object",
           properties: {
             authenticated: { type: "boolean" },
-            authMethod: { type: "string", enum: ["WEBAPP", "OIDC", "LEGACY_WIDGET", "DEV", "BOT_HANDOFF", null] },
+            authMethod: { type: "string", enum: ["WEBAPP", "OIDC", "LEGACY_WIDGET", "DEV", "BOT_HANDOFF", "YANDEX_OAUTH", "PAIRING", null] },
             adminScope: { type: "string", enum: ["NONE", "TEAM", "PLATFORM"] },
             capabilities: { type: "array", items: { type: "string" } },
             onboardingRequired: { type: "boolean" },

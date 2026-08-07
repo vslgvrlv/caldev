@@ -10,6 +10,7 @@ import {
   parseTelegramHandoffWebhookStart,
 } from "../../lib/auth-telegram-handoff.js";
 import { buildTelegramWebhookSendMessagePayload } from "../../lib/telegram-bot.js";
+import { handlePairingUpdate } from "../auth/pairing-webhook.js";
 import { logger } from "../../lib/logger.js";
 
 const vendorRouter = Router();
@@ -174,6 +175,12 @@ vendorRouter.post(
     const providedSecret = String(req.get("x-telegram-bot-api-secret-token") || "");
     if (providedSecret !== env.telegram.webhookSecret) {
       return res.status(401).json({ detail: "Invalid Telegram webhook secret", code: "AUTH_REQUIRED" });
+    }
+
+    // Сопряжение разбирается первым: это основной вход (#109), и оно
+    // единственное умеет отвечать на callback_query.
+    if (await handlePairingUpdate(req.body ?? {})) {
+      return res.status(200).json({ ok: true });
     }
 
     const rawMessageText = String(req.body?.message?.text || "").trim();

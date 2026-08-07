@@ -1,6 +1,6 @@
 export type AuthScope = "USER" | "ADMIN" | "INVITE";
 export type AuthPlatform = "android" | "ios" | "desktop" | "unknown";
-export type AuthFlow = "MINIAPP" | "OIDC" | "BOT_HANDOFF" | "UNKNOWN";
+export type AuthFlow = "MINIAPP" | "OIDC" | "BOT_HANDOFF" | "PAIRING" | "UNKNOWN";
 export type AuthLoginTransport = "WEBAPP" | "OIDC";
 
 type AuthErrorMessageMap = {
