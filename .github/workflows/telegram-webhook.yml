@@ -1,0 +1,93 @@
+name: Telegram Webhook
+
+# Настройка вебхука бота была ручным одноразовым действием, и из-за этого
+# webhook staging остался подписан только на "message": карточка входа
+# приходила, а нажатие кнопки Telegram не доставлял вовсе (#109).
+# Теперь это воспроизводимая операция.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Окружение бота"
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      action:
+        description: "set — переустановить вебхук, info — только показать текущий"
+        required: true
+        default: info
+        type: choice
+        options:
+          - info
+          - set
+
+permissions:
+  contents: read
+
+jobs:
+  webhook:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target == 'prod' && 'production' || 'staging' }}
+    steps:
+      - name: Validate deploy secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          [[ -n "${DEPLOY_HOST}" ]] || { echo "Missing secret: DEPLOY_HOST" >&2; exit 1; }
+          [[ -n "${DEPLOY_SSH_KEY}" ]] || { echo "Missing secret: DEPLOY_SSH_KEY" >&2; exit 1; }
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${DEPLOY_PORT:-22}"
+          ssh-keyscan -p "${PORT}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      # Скрипт берём из этой ветки, а не из задеплоенного релиза: настройку
+      # вебхука нужно уметь чинить, не выкатывая релиз.
+      - name: Upload script to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          scp -P "${DEPLOY_PORT:-22}" -i ~/.ssh/id_ed25519 \
+            scripts/release/telegram-webhook.sh \
+            "${DEPLOY_USER:-root}@${DEPLOY_HOST}:/tmp/telegram-webhook.sh"
+
+      # Токен и адрес вебхука лежат в env-файле окружения на сервере — он и есть
+      # источник правды, дублировать их в секретах Actions незачем.
+      - name: Apply webhook action on server
+        env:
+          TARGET: ${{ inputs.target }}
+          ACTION: ${{ inputs.action }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/id_ed25519 "${DEPLOY_USER:-root}@${DEPLOY_HOST}" \
+            "TARGET='${TARGET}' ACTION='${ACTION}' bash -s" <<'SSH'
+          set -euo pipefail
+          ENV_FILE="/opt/pbth/shared/env/${TARGET}.env"
+          [[ -f "${ENV_FILE}" ]] || { echo "No env file: ${ENV_FILE}" >&2; exit 1; }
+          set -a; . "${ENV_FILE}"; set +a
+          export TELEGRAM_BOT_TOKEN TELEGRAM_BOT_API_BASE_URL TELEGRAM_WEBHOOK_URL TELEGRAM_WEBHOOK_SECRET
+          bash /tmp/telegram-webhook.sh "${ACTION}"
+          # Итог печатаем всегда — видно, какие allowed_updates реально стоят.
+          bash /tmp/telegram-webhook.sh info
+          rm -f /tmp/telegram-webhook.sh
+          SSH
