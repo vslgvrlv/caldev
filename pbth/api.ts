@@ -473,10 +473,37 @@ type ApiError = Error & {
   status?: number;
 };
 
+// Восемь секунд — предел, после которого ждать бессмысленно: снимок в
+// IndexedDB уже лежит, и показать его лучше, чем крутить спиннер.
+const REQUEST_DEADLINE_MS = 8000;
+
+// iOS в самолётном режиме и в поле с одной палкой часто НЕ отбивает запрос
+// ошибкой, а держит его открытым: промис fetch не выполняется вообще. Весь
+// офлайн-слой (#105) построен на том, что fetch отвергается — поэтому
+// приложение зависало на загрузочном спиннере, хотя данные для показа были.
+// Отсюда два ограничителя: явный сигнал «сети нет» и жёсткий срок ответа.
+async function fetchWithDeadline(input: string, init: RequestInit): Promise<Response> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw toOfflineError(new Error('navigator.onLine = false'));
+  }
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), REQUEST_DEADLINE_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    // Отмена по сроку приходит AbortError'ом, а не TypeError'ом, и без нашей
+    // пометки не была бы распознана как отсутствие сети.
+    if (controller.signal.aborted) throw toOfflineError(new Error('request deadline exceeded'));
+    throw error;
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetchWithDeadline(`${API_URL}${path}`, {
       method: options?.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -659,7 +686,7 @@ export const api = {
 
     let res: Response;
     try {
-      res = await fetch(`${API_URL}/init`, {
+      res = await fetchWithDeadline(`${API_URL}/init`, {
         credentials: 'include',
       });
     } catch (networkError) {
