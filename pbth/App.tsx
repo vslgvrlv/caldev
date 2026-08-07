@@ -139,8 +139,11 @@ const App: React.FC = () => {
   };
 
   // Initial Fetch
-  const loadData = async (options?: { silent?: boolean }): Promise<InitLoadResult> => {
-    setIsLoading(true);
+  // background — обновление поверх уже показанного экрана. Такое обновление не
+  // имеет права поднимать загрузочный спиннер: на турнире связь то есть, то
+  // нет, и приложение мигало бы пустым экраном поверх живых данных.
+  const loadData = async (options?: { silent?: boolean; background?: boolean }): Promise<InitLoadResult> => {
+    if (!options?.background) setIsLoading(true);
     try {
         const data = await api.getInitData();
 
@@ -270,7 +273,7 @@ const App: React.FC = () => {
           ? 'invalid_shape'
           : 'error';
     } finally {
-        setIsLoading(false);
+        if (!options?.background) setIsLoading(false);
     }
   };
 
@@ -438,7 +441,7 @@ const App: React.FC = () => {
     const unsubscribe = subscribeOutbox(setOutboxState);
     const sync = async () => {
       await api.flushOfflineQueue();
-      if (offlineSnapshotAt !== null) await loadData({ silent: true });
+      if (offlineSnapshotAt !== null) await loadData({ silent: true, background: true });
     };
     void sync();
     const onOnline = () => { void sync(); };

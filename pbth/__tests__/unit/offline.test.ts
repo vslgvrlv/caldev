@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OFFLINE_ERROR_CODE, formatSnapshotAge, isOfflineError, toOfflineError } from '../../lib/offline';
+import { api } from '../../api';
 
 // Корень бага «на турнире приложение не открывается» — неразличимость двух
 // совершенно разных событий. 401 требует логина, отсутствие сети требует
@@ -55,5 +56,57 @@ describe('возраст снимка', () => {
   it('на границе суток не появляется нулевых значений', () => {
     expect(formatSnapshotAge(base, base + 23 * 3600_000)).toBe('23 ч назад');
     expect(formatSnapshotAge(base, base + 24 * 3600_000)).toBe('вчера');
+  });
+});
+
+// Ровно этот случай оставлял приложение на вечном загрузочном спиннере: iPhone
+// в самолётном режиме не отбивает запрос ошибкой, а держит его открытым. Весь
+// офлайн-слой ждал отказа fetch, отказ не приходил никогда, и до чтения снимка
+// дело не доходило. Поэтому «сети нет» теперь наступает по сроку, а не только
+// по отвергнутому промису.
+describe('зависшая сеть считается офлайном', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const hangingFetch = () =>
+    vi.fn((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }));
+        });
+      }),
+    );
+
+  it('запрос, который никогда не отвечает, обрывается по сроку', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', hangingFetch());
+
+    const pending = api.getInitData();
+    const assertion = expect(pending).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await assertion;
+  });
+
+  it('то же и для проверки сессии — иначе вход зависает до перезапуска', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', hangingFetch());
+
+    const pending = api.getAuthMe();
+    const assertion = expect(pending).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await assertion;
+  });
+
+  // Браузер уже знает, что сети нет. Ждать восьми секунд, чтобы узнать то же
+  // самое, — значит держать человека перед спиннером на ровном месте.
+  it('при выключенной сети запрос не уходит вовсе', async () => {
+    const fetchMock = hangingFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('navigator', { onLine: false });
+
+    await expect(api.getInitData()).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
