@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OFFLINE_ERROR_CODE, formatSnapshotAge, isOfflineError, toOfflineError } from '../../lib/offline';
-import { api } from '../../api';
+import { api, markNetworkAlive } from '../../api';
 
 // Корень бага «на турнире приложение не открывается» — неразличимость двух
 // совершенно разных событий. 401 требует логина, отсутствие сети требует
@@ -65,6 +65,10 @@ describe('возраст снимка', () => {
 // дело не доходило. Поэтому «сети нет» теперь наступает по сроку, а не только
 // по отвергнутому промису.
 describe('зависшая сеть считается офлайном', () => {
+  beforeEach(() => {
+    markNetworkAlive();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -97,6 +101,23 @@ describe('зависшая сеть считается офлайном', () => 
     const assertion = expect(pending).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
     await vi.advanceTimersByTimeAsync(10_000);
     await assertion;
+  });
+
+  // Старт делает несколько запросов подряд. Если каждый заново выжидает свой
+  // срок, открытие приложения без сети стоит не шесть секунд, а все двадцать —
+  // человек столько перед спиннером не сидит.
+  it('после первого просроченного запроса следующие чтения не ждут заново', async () => {
+    vi.useFakeTimers();
+    const fetchMock = hangingFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = api.getAuthMe();
+    const firstAssertion = expect(first).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await firstAssertion;
+
+    await expect(api.getInitData()).rejects.toMatchObject({ code: OFFLINE_ERROR_CODE });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   // Браузер уже знает, что сети нет. Ждать восьми секунд, чтобы узнать то же

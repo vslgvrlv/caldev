@@ -473,24 +473,56 @@ type ApiError = Error & {
   status?: number;
 };
 
-// Восемь секунд — предел, после которого ждать бессмысленно: снимок в
+// Шесть секунд — предел, после которого ждать бессмысленно: снимок в
 // IndexedDB уже лежит, и показать его лучше, чем крутить спиннер.
-const REQUEST_DEADLINE_MS = 8000;
+const REQUEST_DEADLINE_MS = 6000;
+
+// Убедившись, что сеть мертва, не проверяем это заново каждым запросом. Иначе
+// открытие приложения стоило бы столько сроков, сколько запросов идёт при
+// старте, — по шесть секунд каждый, друг за другом.
+const NETWORK_DEAD_MS = 15000;
+let networkDeadUntil = 0;
+
+function markNetworkDead() {
+  networkDeadUntil = Date.now() + NETWORK_DEAD_MS;
+}
+
+// Экспортируется ради тестов: отсрочка живёт в модуле, и без сброса соседний
+// тест проверял бы не срок ответа, а память о прошлой неудаче.
+export function markNetworkAlive() {
+  networkDeadUntil = 0;
+}
+
+// Связь вернулась — пробовать снова нужно сразу, а не досиживать отсрочку.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', markNetworkAlive);
+}
 
 // iOS в самолётном режиме и в поле с одной палкой часто НЕ отбивает запрос
 // ошибкой, а держит его открытым: промис fetch не выполняется вообще. Весь
 // офлайн-слой (#105) построен на том, что fetch отвергается — поэтому
 // приложение зависало на загрузочном спиннере, хотя данные для показа были.
-// Отсюда два ограничителя: явный сигнал «сети нет» и жёсткий срок ответа.
+// Отсюда три ограничителя: явный сигнал «сети нет», жёсткий срок ответа и
+// память о том, что срок уже вышел.
 async function fetchWithDeadline(input: string, init: RequestInit): Promise<Response> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw toOfflineError(new Error('navigator.onLine = false'));
   }
+  // Отсрочка распространяется только на чтение. Отправку пробуем всегда: у
+  // чтения есть снимок, а нажатие «Иду» либо уходит, либо честно ложится в
+  // очередь — угадывать за него по прошлой неудаче нельзя.
+  const isRead = (init.method ?? 'GET').toUpperCase() === 'GET';
+  if (isRead && Date.now() < networkDeadUntil) {
+    throw toOfflineError(new Error('network known dead'));
+  }
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), REQUEST_DEADLINE_MS);
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    markNetworkAlive();
+    return response;
   } catch (error) {
+    markNetworkDead();
     // Отмена по сроку приходит AbortError'ом, а не TypeError'ом, и без нашей
     // пометки не была бы распознана как отсутствие сети.
     if (controller.signal.aborted) throw toOfflineError(new Error('request deadline exceeded'));
