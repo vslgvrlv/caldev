@@ -33,6 +33,7 @@ type ScheduleItemPayload = {
   score?: string;
   pitZone?: 'NEAR' | 'FAR';
   gamePair?: 'FIRST' | 'SECOND';
+  stage?: 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL';
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,6 +48,7 @@ const toScheduleItemPayload = (game: Game): ScheduleItemPayload => ({
   score: game.score,
   pitZone: game.pitZone,
   gamePair: game.gamePair,
+  stage: game.stage,
 });
 
 const App: React.FC = () => {
@@ -858,6 +860,7 @@ const App: React.FC = () => {
       score: game.score,
       pitZone: game.pitZone,
       gamePair: game.gamePair,
+      stage: game.stage,
     };
 
     let nextScheduleForApi: ScheduleItemPayload[] = [];
@@ -885,14 +888,14 @@ const App: React.FC = () => {
   const handleUpdateGame = async (
     eventId: string,
     gameId: string,
-    patch: { time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }
+    patch: { time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND'; stage?: 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' }
   ) => {
     let nextScheduleForApi: ScheduleItemPayload[] = [];
 
     const applyGamePatch = (sourceEvent: Event): Event => {
       const nextSchedule = (sourceEvent.schedule || []).map((game) =>
         game.id === gameId
-          ? { ...game, time: patch.time, opponent: patch.opponent, score: patch.score, pitZone: patch.pitZone, gamePair: patch.gamePair }
+          ? { ...game, time: patch.time, opponent: patch.opponent, score: patch.score, pitZone: patch.pitZone, gamePair: patch.gamePair, stage: patch.stage }
           : game
       );
       nextScheduleForApi = nextSchedule.map(toScheduleItemPayload);

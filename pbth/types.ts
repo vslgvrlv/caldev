@@ -65,6 +65,7 @@ export interface Game {
   score?: string;
   pitZone?: "NEAR" | "FAR";
   gamePair?: "FIRST" | "SECOND";
+  stage?: "GROUP" | "R16" | "QF" | "SF" | "FINAL";
 }
 
 // Каталог укрытий на поле (#89). Максимальная конфигурация, 51 позиция;

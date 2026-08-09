@@ -249,8 +249,9 @@ initRouter.get(
         score: string | null;
         pit_zone: "NEAR" | "FAR" | null;
         game_pair: "FIRST" | "SECOND" | null;
+        stage: "GROUP" | "R16" | "QF" | "SF" | "FINAL" | null;
       }>(
-        `SELECT id, event_id, time_label, opponent, score, pit_zone::text, game_pair::text
+        `SELECT id, event_id, time_label, opponent, score, pit_zone::text, game_pair::text, stage::text
          FROM event_games
          WHERE event_id = ANY($1::uuid[])
          ORDER BY lpad(time_label, 5, '0') ASC`,
@@ -265,6 +266,7 @@ initRouter.get(
           score: g.score ?? undefined,
           pitZone: g.pit_zone ?? undefined,
           gamePair: g.game_pair ?? undefined,
+          stage: g.stage ?? undefined,
         });
         gamesMap.set(g.event_id, list);
       }

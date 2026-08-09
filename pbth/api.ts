@@ -154,6 +154,7 @@ export type AdminEventScheduleItem = {
   score?: string;
   pitZone?: 'NEAR' | 'FAR';
   gamePair?: 'FIRST' | 'SECOND';
+  stage?: 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL';
 };
 
 export type AdminImportedScheduleItem = AdminEventScheduleItem & {
@@ -825,7 +826,7 @@ export const api = {
 
   async updateEventSchedule(
     eventId: string,
-    schedule: Array<{ id?: string; time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }>
+    schedule: Array<{ id?: string; time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND'; stage?: 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' }>
   ) {
     return request(`/events/${eventId}`, {
       method: 'PATCH',
