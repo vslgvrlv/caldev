@@ -1,9 +1,11 @@
+// @ts-ignore local test runtime provides Node built-ins, but the project does not ship @types/node
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+// @ts-ignore local test runtime provides Node built-ins, but the project does not ship @types/node
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const guide = (name: "captain" | "trainer") =>
-  readFileSync(resolve(process.cwd(), "public", "guide", `${name}.html`), "utf8");
+  readFileSync(fileURLToPath(new URL(`../../public/guide/${name}.html`, import.meta.url)), "utf8");
 
 describe("role guide pages", () => {
   it("ships an accessible captain guide with the required operational sections", () => {
