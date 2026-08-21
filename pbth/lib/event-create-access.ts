@@ -6,6 +6,10 @@ export type EventCreateAccess = {
   defaultType: EventType | null;
 };
 
+export type EventCreateViewProps = Pick<EventCreateAccess, "allowedTypes"> & {
+  defaultType: EventType;
+};
+
 const ALL_EVENT_TYPES = Object.values(EventType);
 
 export function eventCreateAccess(role: Role): EventCreateAccess {
@@ -21,4 +25,9 @@ export function eventCreateAccess(role: Role): EventCreateAccess {
     allowedTypes,
     defaultType: allowedTypes[0] ?? null,
   };
+}
+
+export function eventCreateViewProps(access: EventCreateAccess): EventCreateViewProps | null {
+  if (!access.canCreate || access.defaultType === null) return null;
+  return { allowedTypes: access.allowedTypes, defaultType: access.defaultType };
 }

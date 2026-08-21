@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EVENT_LABELS } from "../../constants";
-import { eventCreateAccess } from "../../lib/event-create-access";
+import { eventCreateAccess, eventCreateViewProps } from "../../lib/event-create-access";
 import { EventType, Role } from "../../types";
 import { CreateEventView } from "../../views/CreateEventView";
 
@@ -30,6 +30,14 @@ describe("eventCreateAccess", () => {
       canCreate: false,
       allowedTypes: [],
       defaultType: null,
+    });
+  });
+
+  it("does not produce form props when creation is unavailable", () => {
+    expect(eventCreateViewProps(eventCreateAccess(Role.PLAYER))).toBeNull();
+    expect(eventCreateViewProps(eventCreateAccess(Role.TRAINER))).toEqual({
+      allowedTypes: [EventType.TRAINING, EventType.MEETING],
+      defaultType: EventType.TRAINING,
     });
   });
 

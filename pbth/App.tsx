@@ -23,7 +23,7 @@ import { api, type NotificationDeliveryResponse } from './api'; // Import API
 import { isOfflineError } from './lib/offline';
 import { subscribeOutbox } from './lib/outbox';
 import { OfflineBanner } from './components/OfflineBanner';
-import { eventCreateAccess } from './lib/event-create-access';
+import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -1073,12 +1073,13 @@ const App: React.FC = () => {
         );
       case 'CREATE':
         const creationAccess = eventCreateAccess(activeTeam!.role);
+        const createProps = eventCreateViewProps(creationAccess);
+        if (createProps === null) return null;
         return (
             <CreateEventView 
               onBack={() => setCurrentView('DASHBOARD')}
               onCreate={handleCreateEvent}
-              allowedTypes={creationAccess.allowedTypes}
-              defaultType={creationAccess.defaultType!}
+              {...createProps}
             />
         );
       default:
