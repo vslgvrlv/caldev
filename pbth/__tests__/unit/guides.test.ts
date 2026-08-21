@@ -22,6 +22,31 @@ describe("role guide pages", () => {
     for (const id of ["s2", "s3", "s4", "s5"]) { expect(section(trainer, id)).toContain("Что сделать"); expect(section(trainer, id)).toContain("Что получится"); }
   });
 
+  it("keeps every designer-required canonical copy detail", () => {
+    const captain = visibleText(guide("captain"));
+    const trainer = visibleText(guide("trainer"));
+    for (const fragment of [
+      "Отметьте, как начинали игру мы и соперник.",
+      "Добавьте короткую заметку: что получилось и что нужно изменить.",
+      "как менялся результат по ходу игр",
+      "где и на каком этапе чаще выбывали игроки",
+      "какие варианты начала игры приносили лучший результат",
+      "какие тактические решения работали лучше",
+      "достаточно ли данных для надёжных выводов",
+      "При необходимости измените его статус.",
+    ]) expect(captain).toContain(fragment);
+    for (const fragment of [
+      "Откройте нужную игру.",
+      "Проверьте, что количество побед и поражений совпадает со счётом.",
+      "Добавьте короткие наблюдения по игре.",
+      "последовательность побед и поражений",
+      "где и когда команда чаще теряла игроков",
+      "действия с лучшим результатом",
+      "повторяющиеся проблемы",
+      "Проверьте полноту данных.",
+    ]) expect(trainer).toContain(fragment);
+  });
+
   it("keeps access, image matrix and raw assets explicit", () => {
     const captain = guide("captain"); const trainer = guide("trainer");
     expect(captain).toContain('<html lang="ru">'); expect(trainer).toContain('<html lang="ru">'); expect(captain).toContain('aria-labelledby="toc-title"'); expect(trainer).toContain('aria-labelledby="toc-title"'); expect(captain).toContain(":focus-visible"); expect(trainer).toContain(":focus-visible");
