@@ -23,6 +23,7 @@ import { api, type NotificationDeliveryResponse } from './api'; // Import API
 import { isOfflineError } from './lib/offline';
 import { subscribeOutbox } from './lib/outbox';
 import { OfflineBanner } from './components/OfflineBanner';
+import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -1071,10 +1072,14 @@ const App: React.FC = () => {
           />
         );
       case 'CREATE':
+        const creationAccess = eventCreateAccess(activeTeam!.role);
+        const createProps = eventCreateViewProps(creationAccess);
+        if (createProps === null) return null;
         return (
             <CreateEventView 
               onBack={() => setCurrentView('DASHBOARD')}
               onCreate={handleCreateEvent}
+              {...createProps}
             />
         );
       default:
@@ -1168,7 +1173,7 @@ const App: React.FC = () => {
       );
     }
     
-    const isAdmin = activeTeam.role === Role.ADMIN || activeTeam.role === Role.CAPTAIN;
+    const creationAccess = eventCreateAccess(activeTeam.role);
 
     return (
       <div className="min-h-screen bg-pb-background bg-splatter bg-fixed bg-no-repeat bg-center bg-cover text-white font-sans selection:bg-pb-primary selection:text-pb-background">
@@ -1192,7 +1197,7 @@ const App: React.FC = () => {
                {renderContent()}
           </div>
           
-          {isAdmin && !selectedEvent && !selectedMember && currentView !== 'CREATE' && (
+          {creationAccess.canCreate && !selectedEvent && !selectedMember && currentView !== 'CREATE' && (
               <div className="absolute bottom-24 right-4 z-50">
                   <button 
                     onClick={() => setCurrentView('CREATE')}

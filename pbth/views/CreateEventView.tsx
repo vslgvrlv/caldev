@@ -18,12 +18,14 @@ const WEEKDAYS: { key: Weekday; label: string }[] = [
 interface CreateEventViewProps {
   onBack: () => void;
   onCreate: (eventData: any) => void;
+  allowedTypes: EventType[];
+  defaultType: EventType;
 }
 
-export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCreate }) => {
+export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCreate, allowedTypes, defaultType }) => {
   const [formData, setFormData] = useState({
     title: '',
-    type: EventType.TRAINING,
+    type: defaultType,
     date: '',
     time: '19:00',
     location: '',
@@ -111,7 +113,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
         <div className="space-y-2">
           <label className="text-pb-subtext text-xs uppercase font-bold tracking-wider">Тип события</label>
           <div className="grid grid-cols-2 gap-2">
-            {Object.entries(EVENT_LABELS).map(([key, label]) => {
+            {allowedTypes.map((key) => [key, EVENT_LABELS[key]] as const).map(([key, label]) => {
                 const isSelected = formData.type === key;
                 const typeColor = EVENT_COLORS[key as EventType];
                 return (
