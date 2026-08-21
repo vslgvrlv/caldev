@@ -50,6 +50,9 @@ export default defineConfig({
       '/api': {
         target: apiTarget,
         changeOrigin: true,
+        bypass(req) {
+          return req.url === '/api.ts' ? req.url : undefined;
+        },
       },
       '/calendar': {
         target: apiTarget,
