@@ -47,8 +47,12 @@ describe("role guide pages", () => {
       "какие проблемы повторялись;",
       "насколько полно участники заполнили данные.",
     ]) expect(trainer).toContain(fragment);
-    expect(section(guide("captain"), "s6")).toContain("<li>Посмотрите:<ul>");
-    expect(section(guide("trainer"), "s5")).toContain("<li>Посмотрите:<ul>");
+    const captainSummary = section(guide("captain"), "s6");
+    const trainerSummary = section(guide("trainer"), "s5");
+    expect(captainSummary).toContain("<li>Посмотрите:<ul>");
+    expect(trainerSummary).toContain("<li>Посмотрите:<ul>");
+    expect((captainSummary.match(/Посмотрите:/g) || []).length).toBe(1);
+    expect((trainerSummary.match(/Посмотрите:/g) || []).length).toBe(1);
   });
 
   it("keeps access, image matrix and raw assets explicit", () => {
