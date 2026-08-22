@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Role } from '../types';
 import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, X, Lock, Camera, MessageCircle, Shield, ArrowRight } from 'lucide-react';
 import { ProfileIdentities } from '../components/ProfileIdentities';
+import { GuideEntrypoint } from '../components/GuideEntrypoint';
 
 interface ProfileViewProps {
   user: User;
@@ -11,6 +12,7 @@ interface ProfileViewProps {
   onCopyLink: () => void;
   onShareLink: () => void;
   onDownloadICS: () => void;
+  role: Role | null | undefined;
   /**
    * True when the current user is allowlisted as a platform owner.
    * Renders the "Платформа админа" entry-point card.
@@ -28,6 +30,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onCopyLink,
   onShareLink,
   onDownloadICS,
+  role,
   canEnterAdmin = false,
   onEnterAdmin,
 }) => {
@@ -132,6 +135,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       <ProfileIdentities />
+
+      <GuideEntrypoint role={role} />
 
       {/* Entry point to the Platform Admin Console — visible only for
           allowlist-eligible users (owners). Hidden for regular players /

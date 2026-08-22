@@ -1067,6 +1067,7 @@ const App: React.FC = () => {
             onCopyLink={handleCopyIcsLink}
             onShareLink={handleShareIcsLink}
             onDownloadICS={handleDownloadIcs}
+            role={activeTeam!.role}
             canEnterAdmin={canEnterAdmin}
             onEnterAdmin={() => navigate('/admin')}
           />
