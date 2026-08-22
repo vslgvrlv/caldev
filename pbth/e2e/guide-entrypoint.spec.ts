@@ -4,10 +4,10 @@ const GUIDE_ARIA_LABEL = "Открыть инструкцию по работе 
 const BOTTOM_NAV_LABELS = ["Главная", "Календарь", "Казна", "Команда", "Профиль"];
 
 const roleCases = [
-  ["PLAYER", "/guide/player.html", "Инструкция · Игрок"],
-  ["TRAINER", "/guide/trainer.html", "Инструкция · Тренер"],
-  ["CAPTAIN", "/guide/captain.html", "Инструкция · Капитан"],
-  ["ADMIN", "/guide/captain.html", "Инструкция · Капитан"],
+  ["PLAYER", "TRAINER", "/guide/player.html", "Инструкция · Игрок"],
+  ["TRAINER", "PLAYER", "/guide/trainer.html", "Инструкция · Тренер"],
+  ["CAPTAIN", "PLAYER", "/guide/captain.html", "Инструкция · Капитан"],
+  ["ADMIN", "PLAYER", "/guide/captain.html", "Инструкция · Капитан"],
 ] as const;
 
 const viewports = [
@@ -17,7 +17,8 @@ const viewports = [
 
 test.use({ serviceWorkers: "block" });
 
-type RuntimeRole = string | null | undefined;
+type MembershipRole = "PLAYER" | "TRAINER" | "CAPTAIN" | "ADMIN";
+type RuntimeRole = MembershipRole | null | undefined;
 
 async function installApiMocks(page: Page, auth: "local" | "anonymous" = "local") {
   const unexpectedRequests: string[] = [];
@@ -67,9 +68,13 @@ async function installApiMocks(page: Page, auth: "local" | "anonymous" = "local"
   return unexpectedRequests;
 }
 
-async function openProfile(page: Page, role: RuntimeRole) {
+async function openProfile(page: Page, activeTeamRole: RuntimeRole, membershipRole: MembershipRole) {
   const unexpectedRequests = await installApiMocks(page);
-  await page.addInitScript((seed: { role?: RuntimeRole; omitRole: boolean }) => {
+  await page.addInitScript((seed: {
+    activeTeamRole?: RuntimeRole;
+    membershipRole: MembershipRole;
+    omitActiveTeamRole: boolean;
+  }) => {
     const user = {
       id: "guide-user",
       name: "Guide User",
@@ -88,13 +93,13 @@ async function openProfile(page: Page, role: RuntimeRole) {
       teamId: team.id,
       teamName: "Guide Team",
       shortCode: "GUIDE",
+      role: seed.membershipRole,
     };
-    if (!seed.omitRole) {
-      team.role = seed.role;
-      membership.role = seed.role;
+    if (!seed.omitActiveTeamRole) {
+      team.role = seed.activeTeamRole;
     }
-    // The session profile only enables local-dev auth; state.team.role remains
-    // authoritative so every runtime role exercises the real App wiring.
+    // Membership role deliberately differs from the active team role: the
+    // session profile only enables auth, while state.team.role must drive UI.
     localStorage.setItem("pbth:local-dev-session:v1", JSON.stringify({ profile: "captain" }));
     localStorage.setItem("pbth:local-dev-state:v1", JSON.stringify({
       profile: "captain",
@@ -105,7 +110,11 @@ async function openProfile(page: Page, role: RuntimeRole) {
       events: [],
       transactions: [],
     }));
-  }, { role, omitRole: role === undefined });
+  }, {
+    activeTeamRole,
+    membershipRole,
+    omitActiveTeamRole: activeTeamRole === undefined,
+  });
   await page.goto("/app");
   await page.getByRole("button", { name: "Профиль" }).click();
   await expect(page.getByText("Способы входа", { exact: true })).toBeVisible();
@@ -114,10 +123,10 @@ async function openProfile(page: Page, role: RuntimeRole) {
 }
 
 for (const [viewportName, viewport] of viewports) {
-  for (const [role, path, guideBadge] of roleCases) {
+  for (const [role, membershipRole, path, guideBadge] of roleCases) {
     test(`${role} opens its role guide at ${viewportName} without leaving the app`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      const unexpectedRequests = await openProfile(page, role);
+      const unexpectedRequests = await openProfile(page, role, membershipRole);
       const link = page.getByRole("link", { name: GUIDE_ARIA_LABEL, exact: true });
       await expect(link).toBeVisible();
       await expect(link).toHaveAttribute("href", path);
@@ -158,7 +167,7 @@ test("anonymous /app entry stays behind the authenticated gate", async ({ page }
 
 for (const missingRole of [null, undefined] as const) {
   test(`authenticated profile hides the guide when role is ${String(missingRole)}`, async ({ page }) => {
-    const unexpectedRequests = await openProfile(page, missingRole);
+    const unexpectedRequests = await openProfile(page, missingRole, "PLAYER");
 
     await expect(page.getByRole("link", { name: GUIDE_ARIA_LABEL, exact: true })).toHaveCount(0);
     await expect(page.getByText("Интеграция календаря", { exact: true })).toBeVisible();
@@ -169,7 +178,7 @@ for (const missingRole of [null, undefined] as const) {
 
 test("profile guide card fits 320 px and opens from a visible keyboard focus", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  const unexpectedRequests = await openProfile(page, "TRAINER");
+  const unexpectedRequests = await openProfile(page, "TRAINER", "PLAYER");
   const link = page.getByRole("link", { name: GUIDE_ARIA_LABEL, exact: true });
   await expect(link).toBeVisible();
   await expect(link.getByText("Как пользоваться", { exact: true })).toBeVisible();

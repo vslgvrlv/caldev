@@ -7,22 +7,23 @@ import { ProfileView } from "../../views/ProfileView";
 vi.mock("../../components/ProfileIdentities", () => ({ ProfileIdentities: () => null }));
 
 const GUIDE_ARIA_LABEL = "Открыть инструкцию по работе с PaintBall Team Hub";
-const ProfileViewWithRuntimeRole = ProfileView as unknown as React.ComponentType<Record<string, unknown>>;
 
-function renderProfile(role: Role | null | undefined) {
+function renderProfile(role: React.ComponentProps<typeof ProfileView>["role"]) {
+  const props: React.ComponentProps<typeof ProfileView> = {
+    user: { id: "guide-user", name: "Guide User", nickname: "guide_user" },
+    onUpdateUser: () => undefined,
+    onLogout: () => undefined,
+    calendarLink: "https://example.test/calendar.ics",
+    onCopyLink: () => undefined,
+    onShareLink: () => undefined,
+    onDownloadICS: () => undefined,
+    role,
+    canEnterAdmin: true,
+    onEnterAdmin: () => undefined,
+  };
+
   return renderToStaticMarkup(
-    React.createElement(ProfileViewWithRuntimeRole, {
-      user: { id: "guide-user", name: "Guide User", nickname: "guide_user" },
-      onUpdateUser: () => undefined,
-      onLogout: () => undefined,
-      calendarLink: "https://example.test/calendar.ics",
-      onCopyLink: () => undefined,
-      onShareLink: () => undefined,
-      onDownloadICS: () => undefined,
-      role,
-      canEnterAdmin: true,
-      onEnterAdmin: () => undefined,
-    }),
+    React.createElement(ProfileView, props),
   );
 }
 
