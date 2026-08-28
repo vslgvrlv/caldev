@@ -68,10 +68,13 @@ const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // `/auth/me` is called multiple times during bootstrap and Telegram Mini App startup.
-  // Telegram auth endpoints can retry on slow WebView/script initialization.
+  // Pairing status is deliberately polled for up to five minutes, while pairing
+  // starts already have a stricter per-browser limiter in the route itself.
   // Limiting these by IP causes false 429s for mobile users behind carrier NAT.
   skip: (req) =>
     req.path === "/me" ||
+    req.path === "/pair/start" ||
+    req.path === "/pair/status" ||
     req.path === "/telegram/webapp" ||
     req.path === "/telegram/oidc/start" ||
     req.path === "/telegram/oidc/callback",
