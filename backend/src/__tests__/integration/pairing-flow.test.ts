@@ -11,6 +11,9 @@ import { hashPairingCode as hashRaw, normalizePairingCode } from "../../lib/auth
 const hashPairingCode = (formatted: string) => hashRaw(normalizePairingCode(formatted));
 
 process.env.AUTH_PAIRING_ENABLED = "1";
+// Pairing endpoints must not consume the generic IP auth budget: status is
+// polled for five minutes, and start has its own per-browser abuse protection.
+process.env.RATE_AUTH_MAX = "2";
 process.env.TELEGRAM_BOT_TOKEN = "123:dummy";
 process.env.TELEGRAM_BOT_USERNAME = "dummy_bot";
 process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
@@ -67,6 +70,18 @@ afterAll(async () => {
 });
 
 describe("pairing login flow — end-to-end", () => {
+  it("длительный опрос не упирается в общий IP rate limit", async () => {
+    const agent = request.agent(app);
+    const started = await startPairing(agent);
+    const code = String(started.body.code);
+
+    for (let index = 0; index < 30; index += 1) {
+      const status = await agent.get(`/api/v1/auth/pair/status?code=${encodeURIComponent(code)}`);
+      expect(status.status).toBe(200);
+      expect(status.body).toEqual({ status: "pending" });
+    }
+  });
+
   it("код → карточка в чате → подтверждение → сессия на ответе опроса", async () => {
     const calls = stubTelegram();
     const agent = request.agent(app);
