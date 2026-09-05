@@ -4,6 +4,7 @@ import {
   nextPollDelayMs,
   pairingSecondsLeft,
   pairingStatusMessage,
+  restorePairingAttempt,
   shouldKeepPolling,
   type PairingScreenState,
 } from '../../lib/pairing';
@@ -58,6 +59,33 @@ describe('formatPairingCountdown', () => {
 
   it('не рисует отрицательное время', () => {
     expect(formatPairingCountdown(-10)).toBe('0:00');
+  });
+});
+
+describe('restorePairingAttempt', () => {
+  const now = Date.parse('2026-09-05T06:00:00Z');
+  const attempt = {
+    scope: 'USER' as const,
+    redirectTo: '/app',
+    code: 'WD3F-Q7PR',
+    botUrl: 'https://t.me/pbthub_bot?start=pair_WD3FQ7PR',
+    botUsername: 'pbthub_bot',
+    expiresAt: '2026-09-05T06:05:00Z',
+    startedAt: now,
+  };
+
+  it('восстанавливает живую попытку после remount страницы', () => {
+    expect(restorePairingAttempt(JSON.stringify(attempt), 'USER', '/app', now)).toEqual(attempt);
+  });
+
+  it('не восстанавливает истёкшую или чужую по scope/redirect попытку', () => {
+    expect(restorePairingAttempt(JSON.stringify(attempt), 'USER', '/app', now + 301_000)).toBeNull();
+    expect(restorePairingAttempt(JSON.stringify(attempt), 'ADMIN', '/app', now)).toBeNull();
+    expect(restorePairingAttempt(JSON.stringify(attempt), 'USER', '/admin', now)).toBeNull();
+  });
+
+  it('переживает повреждённое localStorage-значение', () => {
+    expect(restorePairingAttempt('{broken', 'USER', '/app', now)).toBeNull();
   });
 });
 

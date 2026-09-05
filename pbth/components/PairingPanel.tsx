@@ -12,7 +12,9 @@ import {
   nextPollDelayMs,
   pairingSecondsLeft,
   pairingStatusMessage,
+  restorePairingAttempt,
   shouldKeepPolling,
+  type StoredPairingAttempt,
   type PairingScreenState,
 } from '../lib/pairing';
 
@@ -21,6 +23,8 @@ interface PairingPanelProps {
   redirectTo: string;
   onAuthenticated: (redirectTo: string) => void;
 }
+
+const PAIRING_STORAGE_KEY = 'pbth:pairing-attempt:v1';
 
 export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, onAuthenticated }) => {
   const [state, setState] = useState<PairingScreenState>('idle');
@@ -34,8 +38,25 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
   // Опрос живёт в ref, а не в стейте: перерисовка не должна ни останавливать
   // его, ни заводить второй параллельный.
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollInFlight = useRef(false);
   const startedAt = useRef(0);
   const activeCode = useRef('');
+
+  const clearStoredAttempt = useCallback(() => {
+    try {
+      window.localStorage.removeItem(PAIRING_STORAGE_KEY);
+    } catch {
+      // Private mode/storage policy: lifecycle polling still completes login.
+    }
+  }, []);
+
+  const storeAttempt = useCallback((attempt: StoredPairingAttempt) => {
+    try {
+      window.localStorage.setItem(PAIRING_STORAGE_KEY, JSON.stringify(attempt));
+    } catch {
+      // Persistence is a recovery aid, not a requirement for pairing.
+    }
+  }, []);
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current) {
@@ -46,7 +67,12 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
 
   const poll = useCallback(async () => {
     const current = activeCode.current;
-    if (!current) return;
+    if (!current || pollInFlight.current) return;
+    pollInFlight.current = true;
+    // A fired timeout keeps its numeric handle. Clear it before lifecycle
+    // events decide whether another request is already scheduled.
+    stopPolling();
+    let terminal = false;
     try {
       const result = await api.getPairingStatus(current);
       if (activeCode.current !== current) return;
@@ -55,12 +81,18 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
         // Сессионная кука пришла на ЭТОТ ответ — в банку этого браузера.
         // Дальше приложение просто перерисовывается залогиненным.
         setState('approved');
+        terminal = true;
+        activeCode.current = '';
+        clearStoredAttempt();
         stopPolling();
         onAuthenticated(result.redirectTo || redirectTo);
         return;
       }
       if (result.status === 'denied' || result.status === 'expired') {
         setState(result.status);
+        terminal = true;
+        activeCode.current = '';
+        clearStoredAttempt();
         stopPolling();
         return;
       }
@@ -68,13 +100,18 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
     } catch {
       // Сеть моргнула или ушли в офлайн — это не повод хоронить попытку:
       // код на экране всё ещё жив, следующий тик попробует снова.
+    } finally {
+      pollInFlight.current = false;
+      if (!terminal && activeCode.current === current && !pollTimer.current) {
+        pollTimer.current = setTimeout(poll, nextPollDelayMs(Date.now() - startedAt.current));
+      }
     }
-    if (activeCode.current !== current) return;
-    pollTimer.current = setTimeout(poll, nextPollDelayMs(Date.now() - startedAt.current));
-  }, [onAuthenticated, redirectTo, stopPolling]);
+  }, [clearStoredAttempt, onAuthenticated, redirectTo, stopPolling]);
 
   const requestCode = useCallback(async () => {
     stopPolling();
+    activeCode.current = '';
+    clearStoredAttempt();
     setState('starting');
     setCopied(false);
     try {
@@ -85,15 +122,42 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
       setExpiresAt(started.expiresAt);
       activeCode.current = started.code;
       startedAt.current = Date.now();
+      storeAttempt({
+        scope,
+        redirectTo,
+        code: started.code,
+        botUrl: started.botUrl,
+        botUsername: started.botUsername,
+        expiresAt: started.expiresAt,
+        startedAt: startedAt.current,
+      });
       setState('waiting');
       pollTimer.current = setTimeout(poll, nextPollDelayMs(0));
     } catch {
       setState('error');
     }
-  }, [poll, redirectTo, scope, stopPolling]);
+  }, [clearStoredAttempt, poll, redirectTo, scope, stopPolling, storeAttempt]);
 
   useEffect(() => {
-    void requestCode();
+    let restored: StoredPairingAttempt | null = null;
+    try {
+      restored = restorePairingAttempt(window.localStorage.getItem(PAIRING_STORAGE_KEY), scope, redirectTo, Date.now());
+    } catch {
+      // Storage unavailable — start a fresh attempt below.
+    }
+    if (restored) {
+      setCode(restored.code);
+      setBotUrl(restored.botUrl);
+      setBotUsername(restored.botUsername);
+      setExpiresAt(restored.expiresAt);
+      activeCode.current = restored.code;
+      startedAt.current = restored.startedAt;
+      setState('waiting');
+      void poll();
+    } else {
+      clearStoredAttempt();
+      void requestCode();
+    }
     return stopPolling;
     // Код запрашивается один раз на монтирование: перезапрос — только по
     // явной кнопке, иначе перерисовка плодила бы попытки.
@@ -117,21 +181,28 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
     return () => clearInterval(timer);
   }, [expiresAt, state, stopPolling]);
 
-  // Вкладка в фоне — опрос не нужен: приложение всё равно не перерисуется на
-  // глазах. Возврат к экрану сразу дёргает статус, чтобы человек, вернувшийся
-  // из Telegram, увидел результат мгновенно, а не через такт опроса (#105).
+  // Мобильные webview расходятся в lifecycle-событиях: iOS чаще даёт
+  // visibilitychange/pageshow, Android Telegram — focus. Любой возврат должен
+  // немедленно забрать APPROVED вместе с сессионной cookie (#665).
   useEffect(() => {
+    const resumePolling = () => {
+      if (!activeCode.current) return;
+      stopPolling();
+      void poll();
+    };
     const onVisibility = () => {
-      if (!shouldKeepPolling(state)) return;
-      if (document.visibilityState === 'hidden') {
-        stopPolling();
-      } else if (!pollTimer.current) {
-        void poll();
-      }
+      if (document.visibilityState === 'hidden') stopPolling();
+      else resumePolling();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [poll, state, stopPolling]);
+    window.addEventListener('focus', resumePolling);
+    window.addEventListener('pageshow', resumePolling);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', resumePolling);
+      window.removeEventListener('pageshow', resumePolling);
+    };
+  }, [poll, stopPolling]);
 
   const handleCopy = async () => {
     try {
