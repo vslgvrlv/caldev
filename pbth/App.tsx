@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LandingView } from './views/LandingView';
 import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game, TeamContext } from './types';
@@ -24,6 +24,7 @@ import { isOfflineError } from './lib/offline';
 import { subscribeOutbox } from './lib/outbox';
 import { OfflineBanner } from './components/OfflineBanner';
 import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
+import { reconcileSelectedEvent } from './lib/event-refresh';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -86,6 +87,7 @@ const App: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [isRSVPModalOpen, setIsRSVPModalOpen] = useState(false);
   const [rsvpModalEvent, setRsvpModalEvent] = useState<Event | null>(null);
+  const resumeRefreshRef = useRef({ inFlight: false, lastStartedAt: 0 });
 
   const isTelegramMiniApp = () =>
     typeof window !== 'undefined' && Boolean((window as any).Telegram?.WebApp);
@@ -143,7 +145,7 @@ const App: React.FC = () => {
   // background — обновление поверх уже показанного экрана. Такое обновление не
   // имеет права поднимать загрузочный спиннер: на турнире связь то есть, то
   // нет, и приложение мигало бы пустым экраном поверх живых данных.
-  const loadData = async (options?: { silent?: boolean; background?: boolean }): Promise<InitLoadResult> => {
+  const loadData = async (options?: { silent?: boolean; background?: boolean; skipAncillary?: boolean }): Promise<InitLoadResult> => {
     if (!options?.background) setIsLoading(true);
     try {
         const data = await api.getInitData();
@@ -161,7 +163,9 @@ const App: React.FC = () => {
         setUser(data.user);
         setActiveTeam(data.team);
         setTeams(data.teams || []);
-        setEvents(data.events || []);
+        const nextEvents = data.events || [];
+        setEvents(nextEvents);
+        setSelectedEvent((current) => reconcileSelectedEvent(current, nextEvents));
         setMembers(data.members || []);
         setTransactions(data.transactions || []);
         setOfflineSnapshotAt(typeof data.offlineSnapshotAt === 'number' ? data.offlineSnapshotAt : null);
@@ -169,6 +173,14 @@ const App: React.FC = () => {
         // Финансы и календарь без сети не поднять, и они не нужны для входа —
         // приложение обязано открыться и на турнире, где есть только снимок.
         if (typeof data.offlineSnapshotAt === 'number') {
+          setAppGate('READY');
+          return 'ok';
+        }
+
+        // Возврат в приложение и открытие карточки должны быстро подтянуть
+        // расписание. Финансы и ICS к этому обновлению не относятся, поэтому
+        // не дёргаем ещё два тяжёлых запроса поверх /init.
+        if (options?.skipAncillary) {
           setAppGate('READY');
           return 'ok';
         }
@@ -453,6 +465,45 @@ const App: React.FC = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineSnapshotAt]);
+
+  // Турнирное расписание публикуют и правят, пока приложение уже открыто у
+  // игроков. На возврате из Telegram/другого приложения обновляем /init и
+  // заменяем открытую карточку свежим объектом. Throttle склеивает пачку
+  // focus + pageshow + visibilitychange, которую мобильные браузеры присылают
+  // почти одновременно.
+  useEffect(() => {
+    if (authStep !== 'APP') return;
+
+    const refresh = async () => {
+      if (document.visibilityState === 'hidden' || navigator.onLine === false) return;
+      const state = resumeRefreshRef.current;
+      if (state.inFlight || Date.now() - state.lastStartedAt < 2_000) return;
+      state.inFlight = true;
+      state.lastStartedAt = Date.now();
+      try {
+        await loadData({ silent: true, background: true, skipAncillary: true });
+      } finally {
+        state.inFlight = false;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    const onResume = () => { void refresh(); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
+    // loadData only closes over React setters; rebinding listeners on every
+    // render would defeat the resume-event throttle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStep]);
 
   // --- AUTH HANDLERS ---
   const handleLogin = async () => {
@@ -843,7 +894,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEventClick = (event: Event) => setSelectedEvent(event);
+  const handleEventClick = (event: Event) => {
+    setSelectedEvent(event);
+    void loadData({ silent: true, background: true, skipAncillary: true });
+  };
   const handleEventLongPress = (event: Event) => {
     setRsvpModalEvent(event);
     setIsRSVPModalOpen(true);
