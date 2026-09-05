@@ -20,6 +20,48 @@ export function pairingSecondsLeft(expiresAt: string | number, now: number): num
   return Math.max(0, Math.ceil((deadline - now) / 1000));
 }
 
+export interface StoredPairingAttempt {
+  scope: 'USER' | 'ADMIN';
+  redirectTo: string;
+  code: string;
+  botUrl: string;
+  botUsername: string;
+  expiresAt: string;
+  startedAt: number;
+}
+
+// Возврат из Telegram иногда пересоздаёт React-дерево или перезагружает PWA.
+// Код можно безопасно восстановить: забрать сессию всё равно сможет только
+// браузер с httpOnly pairing-cookie, выданной на /pair/start.
+export function restorePairingAttempt(
+  raw: string | null,
+  scope: StoredPairingAttempt['scope'],
+  redirectTo: string,
+  now: number,
+): StoredPairingAttempt | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<StoredPairingAttempt>;
+    if (
+      value.scope !== scope ||
+      value.redirectTo !== redirectTo ||
+      typeof value.code !== 'string' ||
+      !value.code ||
+      typeof value.botUrl !== 'string' ||
+      typeof value.botUsername !== 'string' ||
+      typeof value.expiresAt !== 'string' ||
+      typeof value.startedAt !== 'number' ||
+      !Number.isFinite(value.startedAt) ||
+      pairingSecondsLeft(value.expiresAt, now) === 0
+    ) {
+      return null;
+    }
+    return value as StoredPairingAttempt;
+  } catch {
+    return null;
+  }
+}
+
 export function formatPairingCountdown(secondsLeft: number): string {
   const safe = Math.max(0, Math.floor(secondsLeft));
   const minutes = Math.floor(safe / 60);
