@@ -294,8 +294,8 @@ initRouter.get(
            confirmed_by_user_id
          FROM event_team_registrations
          WHERE event_id = ANY($1::uuid[])
-           AND team_id = $2`,
-        [eventIds, activeMembership.team_id]
+           AND team_id = ANY($2::uuid[])`,
+        [eventIds, teamIds]
       );
       for (const row of registrationsResult.rows) {
         const list = registrationsMap.get(row.event_id) || [];
@@ -342,9 +342,9 @@ initRouter.get(
            published_at
          FROM event_team_schedule_items
          WHERE event_id = ANY($1::uuid[])
-           AND team_id = $2
+           AND team_id = ANY($2::uuid[])
          ORDER BY COALESCE(starts_at, published_at) ASC, time_label ASC`,
-        [eventIds, activeMembership.team_id]
+        [eventIds, teamIds]
       );
       for (const row of importedScheduleResult.rows) {
         const list = importedTeamScheduleMap.get(row.event_id) || [];
@@ -442,8 +442,11 @@ initRouter.get(
     }
 
     const mapEventForFeed = (e: RawEvent, rsvpStatus: "UNANSWERED" | "PENDING" | "CONFIRMED" | "DECLINED") => {
-      const registration = selectRegistrationForTeam(registrationsMap.get(e.id) || [], activeMembership.team_id);
-      const importedSchedule = selectImportedScheduleForTeam(importedTeamScheduleMap.get(e.id) || [], activeMembership.team_id);
+      // Лента содержит события всех memberships пользователя. Проекции события
+      // должны выбираться по команде самого события, а не по активной вкладке:
+      // иначе multi-team игрок видел событие, но получал пустое расписание (#666).
+      const registration = selectRegistrationForTeam(registrationsMap.get(e.id) || [], e.team_id);
+      const importedSchedule = selectImportedScheduleForTeam(importedTeamScheduleMap.get(e.id) || [], e.team_id);
       const mergedSchedule = mergeTeamEventSchedule(gamesMap.get(e.id) || [], importedSchedule);
       return {
         id: e.id,
