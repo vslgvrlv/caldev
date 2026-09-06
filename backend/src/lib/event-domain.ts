@@ -35,6 +35,7 @@ export type EventGameProjection = {
   score?: string;
   pitZone?: "NEAR" | "FAR";
   gamePair?: "FIRST" | "SECOND";
+  stage?: "GROUP" | "R16" | "QF" | "SF" | "FINAL";
 };
 
 export type ImportedTeamScheduleProjection = EventGameProjection & {
@@ -139,6 +140,7 @@ export function mergeTeamEventSchedule(
     score: item.score,
     pitZone: item.pitZone,
     gamePair: item.gamePair,
+    stage: item.stage,
   }));
 }
 

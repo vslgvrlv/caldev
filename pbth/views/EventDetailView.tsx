@@ -82,6 +82,14 @@ const GAME_PAIR_LABELS: Record<'FIRST' | 'SECOND', string> = {
   SECOND: 'Вторая пара',
 };
 
+const STAGE_LABELS: Record<'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL', string> = {
+  GROUP: 'Групповой этап',
+  R16: '1/8 финала',
+  QF: '1/4 финала',
+  SF: '1/2 финала',
+  FINAL: 'Финал',
+};
+
 // Русская плюрализация «занятие» для баннера серии (#60): 1 занятие, 2 занятия, 5 занятий.
 const pluralizeOccurrence = (count: number): string => {
   const mod100 = Math.abs(count) % 100;
@@ -114,6 +122,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [newGameOpponent, setNewGameOpponent] = useState('');
   const [newGamePitZone, setNewGamePitZone] = useState<'NEAR' | 'FAR'>('NEAR');
   const [newGamePair, setNewGamePair] = useState<'FIRST' | 'SECOND'>('FIRST');
+  const [newGameStage, setNewGameStage] = useState<'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' | ''>('');
 
   const [pointsGame, setPointsGame] = useState<Game | null>(null);
   const [isTableOpen, setIsTableOpen] = useState(false);
@@ -123,6 +132,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [editGameScore, setEditGameScore] = useState('');
   const [editGamePitZone, setEditGamePitZone] = useState<'NEAR' | 'FAR'>('NEAR');
   const [editGamePair, setEditGamePair] = useState<'FIRST' | 'SECOND'>('FIRST');
+  const [editGameStage, setEditGameStage] = useState<'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' | ''>('');
   const [isSavingGame, setIsSavingGame] = useState(false);
   const [isRemindingUnanswered, setIsRemindingUnanswered] = useState(false);
   const [reminderAudience, setReminderAudience] = useState<'ALL' | 'RESPONDED' | 'UNANSWERED' | 'CONFIRMED' | 'PENDING' | 'DECLINED'>('UNANSWERED');
@@ -494,11 +504,13 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         opponent: newGameOpponent.trim(),
         pitZone: newGamePitZone,
         gamePair: newGamePair,
+        stage: newGameStage || undefined,
       });
       setNewGameTime('');
       setNewGameOpponent('');
       setNewGamePitZone('NEAR');
       setNewGamePair('FIRST');
+      setNewGameStage('');
       setIsAddingGame(false);
     }
   };
@@ -516,6 +528,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     setEditGameScore(game.score || '');
     setEditGamePitZone(game.pitZone || 'NEAR');
     setEditGamePair(game.gamePair || 'FIRST');
+    setEditGameStage(game.stage || '');
   };
 
   const handleUpdateGameSubmit = async (e: React.FormEvent) => {
@@ -529,6 +542,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
         score: editGameScore.trim() || undefined,
         pitZone: editGamePitZone,
         gamePair: editGamePair,
+        stage: editGameStage || undefined,
       });
       setEditingGame(null);
     } finally {
@@ -1028,6 +1042,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-pb-subtext">
+                            {game.stage && (
+                              <span className="font-semibold text-pb-primary">{STAGE_LABELS[game.stage]}</span>
+                            )}
                             <span>{game.gamePair ? GAME_PAIR_LABELS[game.gamePair] : 'Пара не указана'}</span>
                             {game.pitZone && (
                               <span title={PIT_ZONE_LABELS[game.pitZone]}>
@@ -1696,6 +1713,21 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                   <option value="SECOND">Вторая пара</option>
                 </select>
               </div>
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Стадия (необязательно)</label>
+                <select
+                  value={newGameStage}
+                  onChange={(e) => setNewGameStage(e.target.value as 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' | '')}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none"
+                >
+                  <option value="">Не указана</option>
+                  <option value="GROUP">Групповой этап</option>
+                  <option value="R16">1/8 финала</option>
+                  <option value="QF">1/4 финала</option>
+                  <option value="SF">1/2 финала</option>
+                  <option value="FINAL">Финал</option>
+                </select>
+              </div>
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -1768,6 +1800,22 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
                 >
                   <option value="FIRST">Первая пара</option>
                   <option value="SECOND">Вторая пара</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-pb-subtext text-xs uppercase font-bold mb-1 block">Стадия (необязательно)</label>
+                <select
+                  value={editGameStage}
+                  onChange={(e) => setEditGameStage(e.target.value as 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL' | '')}
+                  disabled={!isAdminOrCaptain || isSavingGame}
+                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white focus:border-pb-primary focus:outline-none disabled:opacity-60"
+                >
+                  <option value="">Не указана</option>
+                  <option value="GROUP">Групповой этап</option>
+                  <option value="R16">1/8 финала</option>
+                  <option value="QF">1/4 финала</option>
+                  <option value="SF">1/2 финала</option>
+                  <option value="FINAL">Финал</option>
                 </select>
               </div>
               <div>

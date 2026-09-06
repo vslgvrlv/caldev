@@ -46,6 +46,7 @@ const createEventSchema = z.object({
         score: z.string().optional(),
         pitZone: z.enum(["NEAR", "FAR"]).optional(),
         gamePair: z.enum(["FIRST", "SECOND"]).optional(),
+        stage: z.enum(["GROUP", "R16", "QF", "SF", "FINAL"]).optional(),
       })
     )
     .optional(),
@@ -77,6 +78,7 @@ const updateEventSchema = z.object({
         score: z.string().optional(),
         pitZone: z.enum(["NEAR", "FAR"]).optional(),
         gamePair: z.enum(["FIRST", "SECOND"]).optional(),
+        stage: z.enum(["GROUP", "R16", "QF", "SF", "FINAL"]).optional(),
       })
     )
     .optional(),
@@ -454,9 +456,9 @@ eventsRouter.post(
       if (payload.schedule?.length) {
         for (const game of payload.schedule) {
           await client.query(
-            `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [event.id, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null]
+            `INSERT INTO event_games (event_id, time_label, opponent, score, pit_zone, game_pair, stage)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [event.id, game.time, game.opponent, game.score ?? null, game.pitZone ?? null, game.gamePair ?? null, game.stage ?? null]
           );
         }
       }
@@ -756,14 +758,15 @@ eventsRouter.patch(
         const keptGameIds: string[] = [];
         for (const game of payload.schedule) {
           const saved = await client.query<{ id: string }>(
-            `INSERT INTO event_games (id, event_id, time_label, opponent, score, pit_zone, game_pair)
-             VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7)
+            `INSERT INTO event_games (id, event_id, time_label, opponent, score, pit_zone, game_pair, stage)
+             VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE
                SET time_label = EXCLUDED.time_label,
                    opponent   = EXCLUDED.opponent,
                    score      = EXCLUDED.score,
                    pit_zone   = EXCLUDED.pit_zone,
                    game_pair  = EXCLUDED.game_pair,
+                   stage      = EXCLUDED.stage,
                    updated_at = NOW()
              WHERE event_games.event_id = EXCLUDED.event_id
              RETURNING id`,
@@ -775,6 +778,7 @@ eventsRouter.patch(
               game.score ?? null,
               game.pitZone ?? null,
               game.gamePair ?? null,
+              game.stage ?? null,
             ]
           );
           // Пусто = прислали id игры из другого события. Молча создавать дубль нельзя.
