@@ -195,7 +195,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
 
       {/* Upcoming */}
       <section>
-         <h2 className="text-lg font-bold text-white mb-3">На этой неделе</h2>
+         <h2 className="text-lg font-bold text-white mb-3">Ближайшие</h2>
          <div className="space-y-3">
             {upcomingEvents.length === 0 && <p className="text-pb-subtext text-sm">Событий нет</p>}
             {upcomingEvents.map(event => (
