@@ -70,7 +70,7 @@ export function buildDashboardEventSections(events: Event[], nowTs: number): Das
     heroEventIsOngoing: heroEvent ? isEventOngoing(heroEvent, nowTs) : false,
     heroEventNeedsResponse: heroEvent ? isAwaitingResponse(heroEvent) : false,
     pendingEvents: secondaryEvents.filter((event) => isAwaitingResponse(event)),
-    upcomingEvents: secondaryEvents.filter((event) => !isAwaitingResponse(event)).slice(0, 3),
+    upcomingEvents: secondaryEvents.filter((event) => !isAwaitingResponse(event)),
   };
 }
 
