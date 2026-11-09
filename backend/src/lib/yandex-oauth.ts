@@ -41,6 +41,7 @@ export async function exchangeYandexCode(params: { code: string; redirectUri: st
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: body.toString(),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -54,6 +55,7 @@ export async function fetchYandexUserInfo(accessToken: string): Promise<YandexUs
   url.searchParams.set("format", "json");
   const res = await fetch(url.toString(), {
     headers: { Authorization: `OAuth ${accessToken}` },
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

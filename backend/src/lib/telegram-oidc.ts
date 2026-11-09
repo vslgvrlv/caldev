@@ -83,7 +83,7 @@ async function loadJwks(): Promise<JwkKey[]> {
   if (jwksCache && jwksCache.expiresAt > now) {
     return jwksCache.keys;
   }
-  const res = await fetch(env.telegramOidc.jwksUrl, { method: "GET" });
+  const res = await fetch(env.telegramOidc.jwksUrl, { method: "GET", signal: AbortSignal.timeout(10_000) });
   if (!res.ok) {
     throw new Error(`OIDC_JWKS_FETCH_FAILED:${res.status}`);
   }
@@ -118,6 +118,7 @@ export async function exchangeOidcCode(params: {
       authorization: `Basic ${basicAuth}`,
     },
     body: body.toString(),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

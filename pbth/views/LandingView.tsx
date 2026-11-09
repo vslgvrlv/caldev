@@ -2,6 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Users, Wallet, Shield, CheckCircle, ChevronRight, Menu, X } from 'lucide-react';
 
+const HERO_IMAGE_BASE =
+  'https://images.unsplash.com/photo-1552083974-186346191183?q=60&auto=format&fit=crop';
+const HERO_IMAGE_WIDTHS = [640, 828, 1080, 1440, 2070];
+
 export const LandingView: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
@@ -62,11 +66,20 @@ export const LandingView: React.FC = () => {
                 'radial-gradient(circle at 50% -5%, rgba(0,230,118,0.30) 0%, rgba(0,230,118,0.08) 25%, rgba(15,15,15,0) 55%), radial-gradient(circle at 15% 35%, rgba(38,109,255,0.20) 0%, rgba(15,15,15,0) 40%), radial-gradient(circle at 85% 30%, rgba(0,230,118,0.12) 0%, rgba(15,15,15,0) 35%), linear-gradient(180deg, #090b0f 0%, #0c0f14 40%, #0f0f0f 100%)',
             }}
           />
-          <div
-            className="absolute inset-0 opacity-30 bg-cover bg-center mix-blend-soft-light"
-            style={{
-              backgroundImage: 'url("https://images.unsplash.com/photo-1552083974-186346191183?q=80&w=2070&auto=format&fit=crop")',
-            }}
+          {/* Фон — элемент LCP главной (personal-os#1431). Раньше шёл фоном CSS
+              в ширину 2070 px (~220 КБ) на любой экран; теперь браузер берёт
+              ширину под экран через srcset и грузит картинку первой. */}
+          <img
+            src={`${HERO_IMAGE_BASE}&w=1080`}
+            srcSet={HERO_IMAGE_WIDTHS.map((w) => `${HERO_IMAGE_BASE}&w=${w} ${w}w`).join(', ')}
+            sizes="100vw"
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            // React 18 не знает fetchPriority и ругается; атрибут в нижнем регистре браузер понимает.
+            {...({ fetchpriority: 'high' } as Record<string, string>)}
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover object-center opacity-30 mix-blend-soft-light"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-pb-background/55 to-pb-background" />
           <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[28rem] h-[18rem] bg-pb-primary/25 rounded-full blur-[100px] pointer-events-none" />

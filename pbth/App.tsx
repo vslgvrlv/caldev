@@ -1,23 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LandingView } from './views/LandingView';
 import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game, TeamContext } from './types';
 import { BottomNav } from './components/BottomNav';
-import { Dashboard } from './views/Dashboard';
-import { CalendarView } from './views/CalendarView';
-import { TeamView } from './views/TeamView';
-import { EventDetailView } from './views/EventDetailView';
-import { CreateEventView } from './views/CreateEventView';
-import { LoginView } from './views/LoginView';
-import { ProfileView } from './views/ProfileView';
-import { FinanceView } from './views/FinanceView';
-import { PrivacyView } from './views/PrivacyView';
-import { TermsView } from './views/TermsView';
-import { SupportView } from './views/SupportView';
-import { PlayerProfileView } from './views/PlayerProfileView';
-import { InviteView } from './views/InviteView';
-import { AdminConsoleView } from './views/admin/AdminConsoleView';
 import { RSVPModal } from './components/RSVPModal';
+
+// Экраны грузятся отдельными кусками (personal-os#1431): главная страница не
+// должна ждать код админки, финансов и карточки события. Лендинг остаётся в
+// основном файле — это первый экран. Офлайн не страдает: service worker
+// кладёт в кэш все куски при установке.
+const Dashboard = lazy(() => import('./views/Dashboard').then((m) => ({ default: m.Dashboard })));
+const CalendarView = lazy(() => import('./views/CalendarView').then((m) => ({ default: m.CalendarView })));
+const TeamView = lazy(() => import('./views/TeamView').then((m) => ({ default: m.TeamView })));
+const EventDetailView = lazy(() => import('./views/EventDetailView').then((m) => ({ default: m.EventDetailView })));
+const CreateEventView = lazy(() => import('./views/CreateEventView').then((m) => ({ default: m.CreateEventView })));
+const LoginView = lazy(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
+const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })));
+const FinanceView = lazy(() => import('./views/FinanceView').then((m) => ({ default: m.FinanceView })));
+const PrivacyView = lazy(() => import('./views/PrivacyView').then((m) => ({ default: m.PrivacyView })));
+const TermsView = lazy(() => import('./views/TermsView').then((m) => ({ default: m.TermsView })));
+const SupportView = lazy(() => import('./views/SupportView').then((m) => ({ default: m.SupportView })));
+const PlayerProfileView = lazy(() => import('./views/PlayerProfileView').then((m) => ({ default: m.PlayerProfileView })));
+const InviteView = lazy(() => import('./views/InviteView').then((m) => ({ default: m.InviteView })));
+const AdminConsoleView = lazy(() => import('./views/admin/AdminConsoleView').then((m) => ({ default: m.AdminConsoleView })));
+
+const ScreenLoader: React.FC = () => (
+  <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
+    <Loader2 className="animate-spin text-pb-primary" size={48} />
+  </div>
+);
 import { Plus, Loader2 } from 'lucide-react';
 import { api, type NotificationDeliveryResponse } from './api'; // Import API
 import { isOfflineError } from './lib/offline';
@@ -1249,7 +1260,9 @@ const App: React.FC = () => {
             </div>
           )}
           <div className="flex-1">
-               {renderContent()}
+               <Suspense fallback={<ScreenLoader />}>
+                 {renderContent()}
+               </Suspense>
           </div>
           
           {creationAccess.canCreate && !selectedEvent && !selectedMember && currentView !== 'CREATE' && (
@@ -1290,6 +1303,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <Suspense fallback={<ScreenLoader />}>
     <Routes>
       <Route path="/" element={<LandingView />} />
       <Route path="/privacy" element={<PrivacyView />} />
@@ -1326,6 +1340,7 @@ const App: React.FC = () => {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 };
 
