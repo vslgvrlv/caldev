@@ -2,9 +2,13 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Users, Wallet, Shield, CheckCircle, ChevronRight, Menu, X } from 'lucide-react';
 
-const HERO_IMAGE_BASE =
-  'https://images.unsplash.com/photo-1552083974-186346191183?q=60&auto=format&fit=crop';
-const HERO_IMAGE_WIDTHS = [640, 828, 1080, 1440, 2070];
+// Фон главной лежит у нас (personal-os#1438): снимок Unsplash
+// photo-1552083974-186346191183 (лицензия Unsplash), пережат в AVIF и WebP
+// под пять ширин, самый тяжёлый файл ≤ 200 КБ. Лежит в /assets/ — nginx
+// кэширует его на год, поэтому при замене картинки меняется версия в имени.
+const HERO_IMAGE_WIDTHS = [640, 828, 1080, 1440, 1920];
+const heroSrcSet = (format: 'avif' | 'webp') =>
+  HERO_IMAGE_WIDTHS.map((w) => `/assets/hero/hero-v1-${w}.${format} ${w}w`).join(', ');
 
 export const LandingView: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -66,21 +70,26 @@ export const LandingView: React.FC = () => {
                 'radial-gradient(circle at 50% -5%, rgba(0,230,118,0.30) 0%, rgba(0,230,118,0.08) 25%, rgba(15,15,15,0) 55%), radial-gradient(circle at 15% 35%, rgba(38,109,255,0.20) 0%, rgba(15,15,15,0) 40%), radial-gradient(circle at 85% 30%, rgba(0,230,118,0.12) 0%, rgba(15,15,15,0) 35%), linear-gradient(180deg, #090b0f 0%, #0c0f14 40%, #0f0f0f 100%)',
             }}
           />
-          {/* Фон — элемент LCP главной (personal-os#1431). Раньше шёл фоном CSS
-              в ширину 2070 px (~220 КБ) на любой экран; теперь браузер берёт
-              ширину под экран через srcset и грузит картинку первой. */}
-          <img
-            src={`${HERO_IMAGE_BASE}&w=1080`}
-            srcSet={HERO_IMAGE_WIDTHS.map((w) => `${HERO_IMAGE_BASE}&w=${w} ${w}w`).join(', ')}
-            sizes="100vw"
-            alt=""
-            aria-hidden="true"
-            loading="eager"
-            // React 18 не знает fetchPriority и ругается; атрибут в нижнем регистре браузер понимает.
-            {...({ fetchpriority: 'high' } as Record<string, string>)}
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover object-center opacity-30 mix-blend-soft-light"
-          />
+          {/* Фон — элемент LCP главной (personal-os#1431, #1438): ширина под
+              экран через srcset, AVIF где браузер умеет, иначе WebP. Тег стоит
+              в готовой разметке landing.html, браузер находит его без JS. */}
+          <picture>
+            <source type="image/avif" srcSet={heroSrcSet('avif')} sizes="100vw" />
+            <img
+              src="/assets/hero/hero-v1-1080.webp"
+              srcSet={heroSrcSet('webp')}
+              sizes="100vw"
+              width={1080}
+              height={720}
+              alt=""
+              aria-hidden="true"
+              loading="eager"
+              // React 18 не знает fetchPriority и ругается; атрибут в нижнем регистре браузер понимает.
+              {...({ fetchpriority: 'high' } as Record<string, string>)}
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover object-center opacity-30 mix-blend-soft-light"
+            />
+          </picture>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-pb-background/55 to-pb-background" />
           <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[28rem] h-[18rem] bg-pb-primary/25 rounded-full blur-[100px] pointer-events-none" />
         </div>
@@ -235,7 +244,8 @@ export const LandingView: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
             <Shield size={20} className="text-pb-primary" />
-            <span className="font-bold">PaintBall Hub &copy; {new Date().getFullYear()}</span>
+            {/* Год зашит в готовую разметку при сборке; расхождение после Нового года не ломает гидрацию. */}
+            <span className="font-bold" suppressHydrationWarning>PaintBall Hub &copy; {new Date().getFullYear()}</span>
           </div>
           <div className="flex space-x-6 text-sm text-pb-subtext">
             <Link to="/privacy" className="hover:text-white transition-colors">Политика конфиденциальности</Link>
