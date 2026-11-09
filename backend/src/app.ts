@@ -7,6 +7,7 @@ import { sessionMiddleware } from "./lib/session.js";
 import { sendError, withErrorMetadata } from "./lib/http-error.js";
 import { logger } from "./lib/logger.js";
 import { attachRequestContext } from "./middleware/request-context.js";
+import { slowRequestLog } from "./middleware/slow-request-log.js";
 import { authRouter } from "./modules/auth/routes.js";
 import { yandexRouter } from "./modules/auth/yandex-routes.js";
 import { identitiesRouter } from "./modules/auth/identities-routes.js";
@@ -44,6 +45,7 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
+app.use(slowRequestLog);
 app.use(attachRequestContext);
 app.use(sessionMiddleware);
 
