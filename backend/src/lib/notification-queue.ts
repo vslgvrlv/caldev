@@ -70,7 +70,6 @@ async function processTelegramJob(job: any) {
       jobId: job?.id,
       teamId: payload.context?.teamId,
       eventId: payload.context?.eventId,
-      recipientUserId: payload.context?.recipientUserId,
       type: payload.context?.type,
     });
   } catch (error) {
@@ -81,7 +80,6 @@ async function processTelegramJob(job: any) {
       reason: getFailedReason(error),
       teamId: payload.context?.teamId,
       eventId: payload.context?.eventId,
-      recipientUserId: payload.context?.recipientUserId,
       type: payload.context?.type,
     });
     throw error;
