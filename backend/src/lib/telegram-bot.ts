@@ -65,7 +65,7 @@ export async function sendTelegramBotDocument(
   );
 
   const url = `${env.telegram.botApiBaseUrl}/bot${env.telegram.botToken}/sendDocument`;
-  const response = await fetch(url, { method: "POST", body: form });
+  const response = await fetch(url, { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
 
   let payload: TelegramSendMessageResponse | null = null;
   try {
@@ -88,6 +88,7 @@ async function callTelegramBotApi(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
   });
 
   let body: TelegramSendMessageResponse | null = null;
