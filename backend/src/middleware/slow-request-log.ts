@@ -30,7 +30,7 @@ export function normalizeRequestPath(rawPath: string): string {
 
 // Шаблон маршрута Express (`/api/v1/events/:eventId`), если запрос дошёл до
 // роутера; иначе — нормализованный путь.
-function routeTemplate(req: Request): string {
+export function routeTemplate(req: Request): string {
   const routePath = (req.route as { path?: unknown } | undefined)?.path;
   if (typeof routePath === "string") {
     return normalizeRequestPath(`${req.baseUrl || ""}${routePath}`);

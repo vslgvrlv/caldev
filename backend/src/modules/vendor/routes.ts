@@ -185,12 +185,13 @@ vendorRouter.post(
 
     const rawMessageText = String(req.body?.message?.text || "").trim();
     const start = parseTelegramHandoffWebhookStart(req.body ?? {});
+    // Без текста сообщения, id чата и пользователя Telegram и ключа входа
+    // (personal-os#1436): только что пришло и разобралось ли как вход.
     logger.info("telegram.webhook.received", {
       correlationId: req.correlationId,
-      text: rawMessageText.slice(0, 160),
-      parsedAttemptKey: start?.attemptKey ?? null,
-      chatId: req.body?.message?.chat?.id ? String(req.body.message.chat.id) : null,
-      userId: req.body?.message?.from?.id ? String(req.body.message.from.id) : null,
+      hasText: rawMessageText.length > 0,
+      isStartCommand: isTelegramStartCommandText(rawMessageText),
+      parsedHandoffStart: Boolean(start),
     });
 
     if (!start) {
