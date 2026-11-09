@@ -200,7 +200,7 @@ yandexRouter.get(
         if (existing && existing.userId === linkUserId) {
           return res.redirect(302, `/app/profile?linked=yandex`);
         }
-        logger.info("[yandex] link.callback conflict", { userId: linkUserId, conflict: link.conflict });
+        logger.info("[yandex] link.callback conflict", { conflict: link.conflict });
         return res.redirect(302, `/app/profile?link_error=OAUTH_LINK_TAKEN`);
       }
 
