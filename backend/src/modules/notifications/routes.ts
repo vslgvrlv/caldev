@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { classifyDelivery, type DeliveryStatus } from "../../lib/notification-delivery.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { resolveTeamAccess } from "../../lib/team-access.js";
+import { resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 import { isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
 import {
   classifyTelegramSendError,
@@ -78,17 +79,6 @@ async function resolveNotificationsAccess(req: Parameters<typeof requireAuth>[0]
   return { userId: (req as any).authUser.id, actorRole: ctx.role as ActorRole };
 }
 
-async function resolveActorRoleForTeam(access: NotificationsAccess, teamId: string): Promise<ActorRole | null> {
-  if (access.actorRole === "ADMIN") return "ADMIN";
-  const membership = await query<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>(
-    `SELECT role::text AS role
-     FROM team_memberships
-     WHERE user_id = $1 AND team_id = $2
-     LIMIT 1`,
-    [access.userId, teamId]
-  );
-  return membership.rows[0]?.role ?? null;
-}
 
 function assertCanSendEventReminder(actorRole: ActorRole, eventType: EventKind) {
   if (actorRole === "ADMIN" || actorRole === "CAPTAIN") return;
@@ -238,18 +228,16 @@ function isGameReminderTemplate(template: EventReminderTemplate): boolean {
 }
 
 /**
- * Роль в команде события. Участник — по составу; владелец платформы без
- * членства — капитан, но только при явной команде (контракт основы).
+ * Роль в команде события — `resolveEventAccess` (трек 3): участник — по
+ * составу, владелец платформы — как капитан. Гостю события (только чтение)
+ * рассылать и читать журнал нельзя. Владельцу самому напоминания команды не
+ * уходят: получатели — только состав.
  */
-async function roleInTeam(req: any, access: NotificationsAccess, teamId: string): Promise<ActorRole | null> {
-  const role = await resolveActorRoleForTeam(access, teamId);
-  if (role) return role;
-  try {
-    const ctx = await resolveTeamAccess(req, { param: teamId });
-    return ctx ? (ctx.role as ActorRole) : null;
-  } catch {
-    return null;
-  }
+async function eventActor(req: any, eventId: string): Promise<{ userId: string; role: ActorRole; teamId: string } | null> {
+  const access = await resolveEventAccess(req, eventId);
+  const role = teamRoleOf(access);
+  if (!access || !role) return null;
+  return { userId: req.authUser.id, role: role as ActorRole, teamId: access.teamId };
 }
 
 type OutcomeStatus = "SENT" | "QUEUED" | "FAILED" | "NO_CHANNEL";
@@ -507,7 +495,6 @@ notificationsRouter.post(
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
     const payload = eventReminderSchema.parse(req.body ?? {});
-    const access = await resolveNotificationsAccess(req as any);
 
     const eventResult = await query<{
       id: string;
@@ -547,8 +534,9 @@ notificationsRouter.post(
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ detail: "Event not found" });
 
-    const actorRole = await roleInTeam(req, access, event.team_id);
-    if (!actorRole) return res.status(403).json({ detail: "No access to this team event" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "No access to this team event" });
+    const actorRole = actor.role;
     assertCanSendEventReminder(actorRole, event.type);
 
     const recipients = await query<{
@@ -685,7 +673,7 @@ notificationsRouter.post(
           message,
           {
             type: "EVENT_REMINDER",
-            actorUserId: access.userId,
+            actorUserId: actor.userId,
             teamId: event.team_id,
             eventId,
             eventStartAt: startIso,
@@ -716,7 +704,7 @@ notificationsRouter.post(
     }
 
     const totals = totalsOf(outcomes);
-    await writeAudit(access.userId, "notifications.event_reminder.send", {
+    await writeAudit(actor.userId, "notifications.event_reminder.send", {
       eventId,
       teamId: event.team_id,
       actorRole,
@@ -750,14 +738,13 @@ notificationsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
-    const access = await resolveNotificationsAccess(req as any);
-
     const ev = await query<{ team_id: string }>(`SELECT team_id FROM events WHERE id = $1`, [eventId]);
     const teamId = ev.rows[0]?.team_id;
     if (!teamId) return res.status(404).json({ detail: "Event not found" });
 
-    const role = await roleInTeam(req, access, teamId);
-    if (!role) return res.status(403).json({ detail: "Team access denied" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "Team access denied" });
+    const role = actor.role;
     // Кому из команды не дошло и почему — дело капитана и тренера (находка ревью №16).
     if (role === "PLAYER") return res.status(403).json({ detail: "Журнал доставки видят капитан и тренер" });
 
@@ -831,7 +818,6 @@ notificationsRouter.post(
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
     const payload = debtReminderSchema.parse(req.body ?? {});
-    const access = await resolveNotificationsAccess(req as any);
 
     const eventResult = await query<{ id: string; team_id: string }>(
       `SELECT e.id, e.team_id FROM events e WHERE e.id = $1 AND e.is_cancelled = FALSE`,
@@ -840,8 +826,9 @@ notificationsRouter.post(
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ detail: "Event not found" });
 
-    const actorRole = await roleInTeam(req, access, event.team_id);
-    if (!actorRole) return res.status(403).json({ detail: "No access to this team event" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "No access to this team event" });
+    const actorRole = actor.role;
     assertCanSendDebtReminder(actorRole);
 
     const team = await loadTeam(event.team_id);
@@ -856,13 +843,13 @@ notificationsRouter.post(
       debtors,
       customText: payload.customText,
       type: "EVENT_DEBT_REMINDER",
-      actorUserId: access.userId,
+      actorUserId: actor.userId,
       eventId,
       correlationId: req.correlationId,
     });
     const totals = totalsOf(outcomes);
 
-    await writeAudit(access.userId, "notifications.debt_reminder.send", {
+    await writeAudit(actor.userId, "notifications.debt_reminder.send", {
       eventId,
       teamId: event.team_id,
       actorRole,

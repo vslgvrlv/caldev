@@ -5,7 +5,7 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { deliveryReasonText } from "../../lib/notification-dispatch.js";
-import { resolveTeamAccess, sendTeamAccessError } from "../../lib/team-access.js";
+import { resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 import { isWebPushEnabled } from "../../lib/web-push.js";
 import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 import { isAutoRemindersEnabled } from "./auto.js";
@@ -71,16 +71,11 @@ remindersRouter.get(
     const event = ev.rows[0];
     if (!event) return res.status(404).json({ detail: "Событие не найдено", code: "EVENT_NOT_FOUND" });
 
-    let access;
-    try {
-      access = await resolveTeamAccess(req, { param: event.team_id });
-    } catch (error) {
-      if (sendTeamAccessError(res, error)) return;
-      throw error;
-    }
-    // Журнал доставки — капитану и тренеру: игроку незачем видеть, кому из
+    // Журнал доставки — капитану и тренеру (владелец платформы — как капитан,
+    // `resolveEventAccess`): игроку и гостю события незачем видеть, кому из
     // команды не дошло и почему (находка ревью №16).
-    if (!access || (access.role !== "CAPTAIN" && access.role !== "TRAINER")) {
+    const role = teamRoleOf(await resolveEventAccess(req, eventId));
+    if (role !== "CAPTAIN" && role !== "TRAINER") {
       return res.status(403).json({ detail: "Журнал доставки видят капитан и тренер", code: "FORBIDDEN" });
     }
 

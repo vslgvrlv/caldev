@@ -17,6 +17,7 @@ const TG = {
   muted: String(984_000_000 + stamp),
   outsider: String(985_000_000 + stamp),
   far: String(986_000_000 + stamp),
+  owner: String(987_000_000 + stamp),
 };
 type Who = keyof typeof TG;
 
@@ -33,6 +34,7 @@ process.env.FRONTEND_URL = "https://pbthub.test";
 process.env.DEV_AUTH_ENABLED = "1";
 process.env.DEV_AUTH_SECRET = "";
 process.env.NOTIFICATIONS_QUEUE_ENABLED = "0";
+process.env.ADMIN_ROLE_ALLOWLIST_IDS = TG.owner;
 
 let app: typeof import("../../app.js").app;
 let pool: typeof import("../../db/pool.js").pool;
@@ -331,6 +333,39 @@ describe("ручное «Напомнить» и «кому дошло»", () =>
     expect(denied.status).toBe(403);
     const oldDenied = await player.get(`/api/v1/notifications/events/${f.eventId}/deliveries`).set("X-PBTH-Team", f.teamId);
     expect(oldDenied.status).toBe(403);
+  });
+});
+
+describe("права на рассылку по событию (resolveEventAccess)", () => {
+  it("владелец платформы вне состава напоминает как капитан и видит журнал, сам сообщения не получает", async () => {
+    const owner = await login("owner");
+    const res = await owner
+      .post(`/api/v1/notifications/events/${f.eventId}/remind`)
+      .send({ audience: "ALL", template: "EVENT_REMINDER" });
+    expect(res.status).toBe(200);
+    const chats = botCalls.filter((c) => c.method === "sendMessage").map((c) => String(c.payload.chat_id));
+    expect(chats).not.toContain(TG.owner);
+    expect(chats).toContain(TG.captain);
+    const delivery = await owner.get(`/api/v1/reminders/events/${f.eventId}/delivery`);
+    expect(delivery.status).toBe(200);
+    expect((await owner.get(`/api/v1/notifications/events/${f.eventId}/deliveries`)).status).toBe(200);
+  });
+
+  it("гость события (только чтение) рассылать и читать журнал не может", async () => {
+    const { registerEventAccessProvider } = await import("../../lib/event-access.js");
+    const off = registerEventAccessProvider({
+      name: "test-guest",
+      resolve: async ({ userId }) => (userId === f.users.outsider ? { via: "guest", readOnly: true } : null),
+    });
+    try {
+      const guest = await login("outsider");
+      const res = await guest.post(`/api/v1/notifications/events/${f.eventId}/remind`).send({ audience: "ALL" });
+      expect(res.status).toBe(403);
+      expect(botCalls.filter((c) => c.method === "sendMessage")).toHaveLength(0);
+      expect((await guest.get(`/api/v1/reminders/events/${f.eventId}/delivery`)).status).toBe(403);
+    } finally {
+      off();
+    }
   });
 });
 
