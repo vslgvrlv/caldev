@@ -7,6 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { resolveTeamAccess } from "../../lib/team-access.js";
+import { canManageEvent, resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 import { canMarkAttendance } from "../../lib/attendance-permissions.js";
 
@@ -546,14 +547,16 @@ eventsRouter.patch(
     if (effectiveRole === "ADMIN") {
       actorTeamRole = "ADMIN";
     } else {
-      const role = await getMembershipRole(req.authUser!.id, baseEvent.team_id);
-      if (!role) {
+      // Участник команды или владелец платформы (права капитана, п. 11).
+      const access = await resolveEventAccess(req, eventId);
+      if (!access) {
         return res.status(403).json({ detail: "You do not have access to this event" });
       }
-      actorTeamRole = role;
-      if (role === "PLAYER") {
+      const role = teamRoleOf(access);
+      if (!role || role === "PLAYER") {
         return res.status(403).json({ detail: "Player cannot edit events" });
       }
+      actorTeamRole = role;
     }
 
     // Тренер правит только тренировки и собрания. Проверяем и текущий тип, и
@@ -873,8 +876,10 @@ eventsRouter.get(
     }
 
     if (effectiveRole !== "ADMIN") {
-      const membershipRole = await getMembershipRole(req.authUser!.id, event.team_id);
-      if (!membershipRole) {
+      // Чтение события: участник, владелец платформы или тот, кого признал
+      // поставщик доступа (гость события, трек 4).
+      const access = await resolveEventAccess(req, eventId);
+      if (!access) {
         return res.status(403).json({ detail: "You do not have access to this event" });
       }
     }
@@ -1019,7 +1024,7 @@ eventsRouter.get(
       return res.status(404).json({ detail: "Event not found" });
     }
 
-    const teamRole = effectiveRole === "ADMIN" ? null : await getMembershipRole(req.authUser!.id, event.team_id);
+    const teamRole = effectiveRole === "ADMIN" ? null : teamRoleOf(await resolveEventAccess(req, eventId));
     if (
       !canMarkAttendance({
         isPlatformAdmin: effectiveRole === "ADMIN",
@@ -1062,7 +1067,7 @@ eventsRouter.post(
       return res.status(404).json({ detail: "Event not found" });
     }
 
-    const teamRole = effectiveRole === "ADMIN" ? null : await getMembershipRole(req.authUser!.id, event.team_id);
+    const teamRole = effectiveRole === "ADMIN" ? null : teamRoleOf(await resolveEventAccess(req, eventId));
     if (
       !canMarkAttendance({
         isPlatformAdmin: effectiveRole === "ADMIN",
@@ -1154,17 +1159,18 @@ eventsRouter.delete(
     if (effectiveRole === "ADMIN") {
       actorTeamRole = "ADMIN";
     } else {
-      const role = await getMembershipRole(req.authUser!.id, event.team_id);
-      if (!role) {
+      const access = await resolveEventAccess(req, eventId);
+      if (!access) {
         return res.status(403).json({ detail: "You do not have access to this event" });
       }
-      actorTeamRole = role;
-      if (role === "PLAYER") {
+      const role = teamRoleOf(access);
+      if (!role || role === "PLAYER") {
         return res.status(403).json({ detail: "Player cannot delete events" });
       }
-      if (role === "TRAINER" && !TRAINER_ALLOWED_EVENT_TYPES.has(event.type)) {
+      if (!canManageEvent(access, event.type)) {
         return res.status(403).json({ detail: "Trainer can manage only training and meeting events" });
       }
+      actorTeamRole = role;
     }
 
     // Событие с начатым сбором не удаляем: начисления остались бы долгами без
