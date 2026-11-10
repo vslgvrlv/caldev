@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { EventType } from '../types';
 import { EVENT_LABELS, EVENT_COLORS } from '../constants';
-import { ChevronLeft, Calendar, Type, AlignLeft, DollarSign, Repeat } from 'lucide-react';
+import { ChevronLeft, Calendar, Type, AlignLeft, DollarSign, Repeat, Loader2 } from 'lucide-react';
 import { buildRecurrence, type Weekday } from '../lib/recurrence';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
+import { createSingleFlight } from '../lib/single-flight';
 
 const WEEKDAYS: { key: Weekday; label: string }[] = [
   { key: 'MON', label: 'Пн' },
@@ -17,7 +18,8 @@ const WEEKDAYS: { key: Weekday; label: string }[] = [
 
 interface CreateEventViewProps {
   onBack: () => void;
-  onCreate: (eventData: any) => void;
+  /** Промис завершается, когда запрос создания завершился. */
+  onCreate: (eventData: any) => void | Promise<unknown>;
   allowedTypes: EventType[];
   defaultType: EventType;
 }
@@ -46,8 +48,14 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Пока событие создаётся, кнопка недоступна и второе нажатие ничего не
+  // отправляет: иначе получался дубль (ключа идемпотентности у сервера нет).
+  const submitFlight = useRef(createSingleFlight()).current;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
+    if (submitFlight.busy) return;
     
     // Basic Validation
     if (!formData.title.trim()) {
@@ -79,12 +87,17 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
           return;
         }
 
-        onCreate({
+        const payload = {
           ...formData,
           startDate,
           cost: formData.cost ? Number(formData.cost) : 0,
           recurrence: recurrence.kind === 'ok' ? recurrence.value : undefined,
-        });
+        };
+        setIsSubmitting(true);
+        void submitFlight
+          .run(() => onCreate(payload))
+          .catch((error) => console.error('Failed to create event', error))
+          .finally(() => setIsSubmitting(false));
     } catch (error) {
         console.error("Date parsing error", error);
         alert('Ошибка при создании даты');
@@ -278,10 +291,13 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
         <button 
             type="button" 
             onClick={handleSubmit}
-            className="w-full py-4 rounded-xl font-bold text-pb-background text-lg shadow-[0_0_20px_rgba(0,230,118,0.3)] hover:shadow-[0_0_30px_rgba(0,230,118,0.5)] transition-all active:scale-[0.98]"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+            className="w-full py-4 rounded-xl font-bold text-pb-background text-lg shadow-[0_0_20px_rgba(0,230,118,0.3)] hover:shadow-[0_0_30px_rgba(0,230,118,0.5)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60"
             style={{ backgroundColor: currentTypeColor }}
         >
-            Создать событие
+            {isSubmitting && <Loader2 size={20} className="animate-spin" />}
+            {isSubmitting ? 'Создаём…' : 'Создать событие'}
         </button>
       </div>
     </div>
