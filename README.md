@@ -118,7 +118,7 @@ Legacy `/api/*` paths are still supported temporarily and now return deprecation
 ## CI & Artifact Release
 
 Workflows:
-- `.github/workflows/ci.yml` (PR checks for `main`/`staging`)
+- `.github/workflows/ci.yml` (PR checks for `main`/`staging`: backend, frontend, Playwright e2e on the built app with mocked API)
 - `.github/workflows/release-artifact.yml` (manual artifact + GitHub Release tag)
 - `.github/workflows/deploy-staging.yml` (manual staging deploy by `releaseId`)
 - `.github/workflows/deploy-prod.yml` (manual prod deploy by `releaseId`, optional staging match check)
