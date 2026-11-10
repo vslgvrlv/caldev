@@ -105,7 +105,19 @@ else
 fi
 
 log "Restoring into new database ${TMP_DB}"
-if ! docker exec "${DB_CONTAINER}" sh -c 'exec createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$1"' sh "${TMP_DB}"; then
+# Новая база — с той же кодировкой и локалью, что и текущая: иначе
+# изменится сортировка или русский текст не ляжет в базу.
+DB_LOCALE="$(docker exec "${DB_CONTAINER}" sh -c \
+  'exec psql -X -tA -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT pg_encoding_to_char(encoding) || chr(124) || datcollate || chr(124) || datctype FROM pg_database WHERE datname = current_database()"')" \
+  || DB_LOCALE=""
+IFS='|' read -r DB_ENCODING DB_COLLATE DB_CTYPE <<< "${DB_LOCALE}"
+[[ -n "${DB_ENCODING:-}" && -n "${DB_COLLATE:-}" && -n "${DB_CTYPE:-}" ]] || {
+  start_backend
+  die "Could not read encoding/locale of ${CUR_DB}; current database untouched"
+}
+if ! docker exec "${DB_CONTAINER}" sh -c \
+  'exec createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" -T template0 -E "$2" --lc-collate="$3" --lc-ctype="$4" "$1"' \
+  sh "${TMP_DB}" "${DB_ENCODING}" "${DB_COLLATE}" "${DB_CTYPE}"; then
   start_backend
   die "createdb ${TMP_DB} failed; current database untouched"
 fi
