@@ -27,10 +27,17 @@ export const TeamHeader: React.FC<TeamHeaderProps> = ({ user, team, teamCode, te
   const badges = shellExtensions.headerBadges.filter((badge) => !badge.visible || badge.visible(ctx));
   const hasMultipleTeams = teams.length > 1;
   const canOpenMenu = hasMultipleTeams || menuItems.length > 0;
+  // Владелец платформы видит все команды: сначала свои, потом остальные —
+  // там он как владелец, в составе не числится (трек 3).
+  const ownTeams = teams.filter((t) => t.via !== 'owner');
+  const ownerTeams = teams.filter((t) => t.via === 'owner');
+  const headerRole = team.via === 'owner' ? 'Владелец платформы' : roleLabel(team.role);
 
   React.useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  const isActiveTeam = (t: TeamContext) => teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }) === teamCode;
 
   const switchTo = (target: TeamContext) => {
     setMenuOpen(false);
@@ -64,7 +71,7 @@ export const TeamHeader: React.FC<TeamHeaderProps> = ({ user, team, teamCode, te
             <div className="flex items-center space-x-1 text-pb-subtext text-xs uppercase tracking-wide">
               <span>{team.shortCode}</span>
               <span className="w-1 h-1 bg-pb-primary rounded-full"></span>
-              <span>{roleLabel(team.role)}</span>
+              <span>{headerRole}</span>
             </div>
             <div className="flex items-center text-white font-bold text-lg">
               <span className="truncate">{team.name}</span>
@@ -84,26 +91,23 @@ export const TeamHeader: React.FC<TeamHeaderProps> = ({ user, team, teamCode, te
                 role="menu"
                 className="absolute left-0 top-full mt-2 z-40 w-64 rounded-xl bg-pb-surface border border-white/10 shadow-xl overflow-hidden"
               >
-                {hasMultipleTeams &&
-                  teams.map((t) => {
-                    const isActive = teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }) === teamCode;
-                    return (
-                      <button
-                        key={t.teamId}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={isActive}
-                        onClick={() => switchTo(t)}
-                        className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors ${isActive ? 'bg-white/5' : ''}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="text-white font-semibold text-sm truncate">{t.teamName}</div>
-                          <div className="text-pb-subtext text-[11px]">{roleLabel(t.role)}</div>
+                {hasMultipleTeams && (
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {ownTeams.map((t) => (
+                      <TeamOption key={t.teamId} team={t} active={isActiveTeam(t)} hint={roleLabel(t.role)} onPick={switchTo} />
+                    ))}
+                    {ownerTeams.length > 0 && (
+                      <>
+                        <div className="px-4 pt-3 pb-1 text-[11px] text-pb-subtext border-t border-white/10">
+                          Остальные команды — ты там как владелец платформы
                         </div>
-                        {isActive && <Check size={16} className="text-pb-primary shrink-0" />}
-                      </button>
-                    );
-                  })}
+                        {ownerTeams.map((t) => (
+                          <TeamOption key={t.teamId} team={t} active={isActiveTeam(t)} hint="Как владелец" onPick={switchTo} />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
                 {menuItems.length > 0 && (
                   <div className={hasMultipleTeams ? 'border-t border-white/10' : ''}>
                     {menuItems.map((item) => {
@@ -141,3 +145,24 @@ export const TeamHeader: React.FC<TeamHeaderProps> = ({ user, team, teamCode, te
     </header>
   );
 };
+
+const TeamOption: React.FC<{
+  team: TeamContext;
+  active: boolean;
+  hint: string;
+  onPick: (team: TeamContext) => void;
+}> = ({ team, active, hint, onPick }) => (
+  <button
+    type="button"
+    role="menuitemradio"
+    aria-checked={active}
+    onClick={() => onPick(team)}
+    className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors ${active ? 'bg-white/5' : ''}`}
+  >
+    <div className="min-w-0">
+      <div className="text-white font-semibold text-sm truncate">{team.teamName}</div>
+      <div className="text-pb-subtext text-[11px]">{hint}</div>
+    </div>
+    {active && <Check size={16} className="text-pb-primary shrink-0" />}
+  </button>
+);

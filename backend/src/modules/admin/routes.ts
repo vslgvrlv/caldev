@@ -10,7 +10,7 @@ import type { PoolClient } from "pg";
 import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { canChooseAdminRole, getEffectiveEntryRole } from "../../lib/entry-role.js";
+import { canChooseAdminRole } from "../../lib/entry-role.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getUserMemberships } from "../../lib/permissions.js";
 import { env } from "../../config/env.js";
@@ -154,14 +154,14 @@ function ensureDuration(startAt: Date, endAt: Date | null | undefined): Date {
 
 async function resolveAdminAccess(req: Parameters<typeof requireAuth>[0]): Promise<AdminAccess | null> {
   const user = req.authUser!;
-  const effectiveRole = getEffectiveEntryRole(req, user);
   const memberships = await getUserMemberships(user.id);
   const captainedTeamIds = Array.from(new Set(memberships.filter((m) => m.role === "CAPTAIN").map((m) => m.team_id)));
 
   const trustedAdminReady = !env.telegramOidc.adminRequired || isTrustedAdminAuthMethod(req.session.authMethod);
   if (!trustedAdminReady) return null;
 
-  if (effectiveRole === "ADMIN" && canChooseAdminRole(user)) {
+  // Владелец платформы — по списку допуска, без режима учётки (трек 3).
+  if (canChooseAdminRole(user)) {
     const teams = await query<{ id: string }>(`SELECT id FROM teams ORDER BY name ASC`);
     return {
       scope: "PLATFORM",
@@ -390,12 +390,14 @@ async function replaceImportedSchedule(
 }
 
 // --- Legacy admin routes (compat) ---
+//
+// Весь этот модуль — консоль старого фронтенда. Новая консоль ходит в
+// `/platform`. Удалить после выката нового фронтенда (трек 3 ревизии).
 
 function ensureOwnerAdmin(req: Parameters<typeof requireAuth>[0]) {
   const user = req.authUser!;
-  const effectiveRole = getEffectiveEntryRole(req, user);
   const trustedAdminReady = !env.telegramOidc.adminRequired || isTrustedAdminAuthMethod(req.session.authMethod);
-  if (effectiveRole !== "ADMIN" || !canChooseAdminRole(user) || !trustedAdminReady) {
+  if (!canChooseAdminRole(user) || !trustedAdminReady) {
     return false;
   }
   return true;

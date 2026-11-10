@@ -352,7 +352,11 @@ describe("yandex link/unlink routes", () => {
     expect(res.body.code).toBe("OAUTH_LAST_IDENTITY");
   });
 
-  it("POST /unlink rejects removing telegram identity when account_role='ADMIN'", async () => {
+  // Трек 3: владелец платформы узнаётся по Telegram из списка допуска, а не
+  // по режиму учётки — без Telegram он перестал бы быть владельцем.
+  it("POST /unlink rejects removing telegram identity of the platform owner", async () => {
+    const { env } = await import("../../config/env.js");
+    env.adminRoleAllowlist.telegramIds.push(PRIMARY_TG);
     // Add a second identity so the unlink would otherwise be allowed.
     await pool.query(
       `INSERT INTO user_identities (user_id, provider, provider_user_id, email)
@@ -361,17 +365,14 @@ describe("yandex link/unlink routes", () => {
       [primaryUserId, PRIMARY_YANDEX_SUB]
     );
 
-    // Login first (dev/login forces account_role = 'USER'), then promote the
-    // DB row to ADMIN so the route's own SELECT sees ADMIN.
     const agent = await loginAs(PRIMARY_TG, PRIMARY_USERNAME);
-    await pool.query(`UPDATE users SET account_role = 'ADMIN' WHERE id = $1`, [primaryUserId]);
 
     const res = await agent.post("/api/v1/auth/yandex/unlink").send({ provider: "telegram" });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("FORBIDDEN");
 
     // Restore
-    await pool.query(`UPDATE users SET account_role = 'USER' WHERE id = $1`, [primaryUserId]);
+    env.adminRoleAllowlist.telegramIds.splice(env.adminRoleAllowlist.telegramIds.indexOf(PRIMARY_TG), 1);
     await pool.query(
       `DELETE FROM user_identities WHERE user_id = $1 AND provider = 'yandex'`,
       [primaryUserId]

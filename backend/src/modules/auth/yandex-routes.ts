@@ -17,6 +17,7 @@ import {
   countIdentitiesForUser,
 } from "../../lib/identity-repo.js";
 import { writeAudit } from "../../lib/audit.js";
+import { canChooseAdminRole } from "../../lib/entry-role.js";
 import { query } from "../../db/pool.js";
 import { sanitizeRedirectTo, sanitizeRelativeRedirect } from "../../lib/safe-redirect.js";
 
@@ -264,11 +265,14 @@ yandexRouter.post(
     }
 
     if (provider === "telegram") {
-      const r = await query<{ account_role: "ADMIN" | "USER" | null }>(
-        `SELECT account_role FROM users WHERE id = $1`,
+      // Владелец платформы узнаётся по Telegram (список допуска) — без него
+      // он перестал бы быть владельцем. Раньше смотрели режим учётки.
+      const r = await query<{ telegram_id: string | null; username: string | null }>(
+        `SELECT telegram_id::text AS telegram_id, username FROM users WHERE id = $1`,
         [userId]
       );
-      if (r.rows[0]?.account_role === "ADMIN") {
+      const row = r.rows[0];
+      if (row && canChooseAdminRole({ telegram_id: row.telegram_id ?? "", username: row.username })) {
         return sendError(req, res, 403, "FORBIDDEN", "ADMIN must keep Telegram identity");
       }
     }
