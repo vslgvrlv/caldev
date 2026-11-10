@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { checkProductionSecrets } from "../lib/production-guards.js";
 
 dotenv.config({ path: process.env.BACKEND_ENV_FILE || undefined });
 
@@ -195,6 +196,14 @@ export const env = {
     token: process.env.AUTH_SLO_TOKEN || "",
   },
 
+  // Полное описание API в production — только с этим токеном
+  // (заголовок `x-openapi-token`). Без него отдаётся заглушка без путей.
+  healthDbTimeoutMs: asNumber(process.env.HEALTH_DB_TIMEOUT_MS || "2000", "HEALTH_DB_TIMEOUT_MS"),
+
+  openapi: {
+    token: process.env.OPENAPI_TOKEN || "",
+  },
+
   release: {
     id: process.env.RELEASE_ID || "dev",
     commit: process.env.RELEASE_COMMIT || "unknown",
@@ -240,6 +249,20 @@ if (env.telegramHandoff.tokenTtlSeconds < 60) {
 // он живёт дольше, чем внимание человека, и превращается в лишнюю мишень.
 if (env.authPairing.attemptTtlSeconds < 60 || env.authPairing.attemptTtlSeconds > 900) {
   throw new Error("AUTH_PAIRING_ATTEMPT_TTL_SEC must be between 60 and 900");
+}
+
+{
+  const secretsCheck = checkProductionSecrets({
+    isProd: env.isProd,
+    secrets: { SESSION_SECRET: env.session.secret, ICS_TOKEN_SECRET: env.ics.secret },
+  });
+  if (secretsCheck.fatal.length > 0) {
+    throw new Error(secretsCheck.fatal.join("; "));
+  }
+  for (const warning of secretsCheck.warnings) {
+    // logger тянет env, поэтому здесь — прямой вывод в stderr.
+    console.error(JSON.stringify({ level: "error", msg: "env.insecure_secret", detail: warning }));
+  }
 }
 
 if (env.authSlo.windowMinutes < 1) {

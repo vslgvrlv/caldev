@@ -47,9 +47,9 @@ describe("telegram webhook route", () => {
       disable_web_page_preview: true,
     });
     expect(String(res.body.text)).toContain("одноразовый код");
+    // Кнопку консоли платформы бот всем не предлагает (ревизия 11.11.2026).
     expect(res.body.reply_markup.inline_keyboard).toEqual([
       [{ text: "Открыть PBTH", url: "https://staging.pbthub.ru/login" }],
-      [{ text: "Открыть admin", url: "https://staging.pbthub.ru/admin/login" }],
     ]);
   });
 });

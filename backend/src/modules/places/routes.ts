@@ -2,6 +2,7 @@ import { Router } from "express";
 import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { safeHttpUrl } from "../../lib/http-url.js";
 import { getActiveContext } from "../teams/context.js";
 
 export const placesRouter = Router();
@@ -34,7 +35,7 @@ placesRouter.get(
         id: r.id,
         name: r.name,
         address: r.address,
-        yandexUrl: r.yandex_url,
+        yandexUrl: safeHttpUrl(r.yandex_url),
         usageCount: r.usage_count,
       }))
       .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name, "ru"));

@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { getActiveContext } from "../teams/context.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
+import { financeScopeForRole } from "../../lib/finance-visibility.js";
 
 const transactionSchema = z.object({
   id: z.string().optional(),
@@ -136,6 +137,15 @@ function assertCanReadFinance(access: FinanceAccess) {
   }
 }
 
+// Баланс команды и история операций — только капитану (решение 9).
+function assertCanReadLedger(access: FinanceAccess) {
+  if (financeScopeForRole(access.actorRole) !== "FULL") {
+    const err = new Error("Team ledger is visible to the captain only");
+    (err as any).status = 403;
+    throw err;
+  }
+}
+
 function assertCanWriteFinance(access: FinanceAccess) {
   if (!access.canWrite && access.actorRole !== "ADMIN") {
     const err = new Error("Only captain or root admin can manage finance");
@@ -255,7 +265,7 @@ financeRouter.get(
     try {
       const parsed = financeQuerySchema.parse(req.query ?? {});
       const access = await resolveFinanceAccess(req as any, parsed.teamId);
-      assertCanReadFinance(access);
+      assertCanReadLedger(access);
 
       const teamResult = await query<{ id: string; name: string; budget: string }>(
         `SELECT id, name, budget::text FROM teams WHERE id = $1`,
@@ -966,7 +976,9 @@ financeRouter.get(
     try {
       const parsed = financeQuerySchema.parse(req.query ?? {});
       const access = await resolveFinanceAccess(req as any, parsed.teamId);
-      assertCanReadFinance(access);
+      // Список участников с долгами видят все (решение 9). Не капитану —
+      // только долг каждого; свои суммы целиком.
+      const fullScope = financeScopeForRole(access.actorRole) === "FULL";
 
       const rows = await query<{
         user_id: string;
@@ -1010,18 +1022,21 @@ financeRouter.get(
       );
 
       return res.json({
-        items: rows.rows.map((row) => ({
-          userId: row.user_id,
-          name: row.name,
-          nickname: row.nickname,
-          avatar: row.avatar,
-          role: row.role,
-          memberStatus: row.member_status,
-          totalDue: Number(row.total_due),
-          totalPaid: Number(row.total_paid),
-          outstanding: Number(row.outstanding),
-          overpaid: Number(row.overpaid),
-        })),
+        items: rows.rows.map((row) => {
+          const visible = fullScope || row.user_id === access.userId;
+          return {
+            userId: row.user_id,
+            name: row.name,
+            nickname: row.nickname,
+            avatar: row.avatar,
+            role: row.role,
+            memberStatus: row.member_status,
+            totalDue: visible ? Number(row.total_due) : 0,
+            totalPaid: visible ? Number(row.total_paid) : 0,
+            outstanding: Number(row.outstanding),
+            overpaid: visible ? Number(row.overpaid) : 0,
+          };
+        }),
       });
     } catch (err) {
       if (handleKnownFinanceError(err, res)) return;
