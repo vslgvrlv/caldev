@@ -13,6 +13,13 @@ import {
 } from "../../lib/event-domain.js";
 import { resolveFeedRsvpStatus } from "../../lib/series-commitment.js";
 import { safeHttpUrl } from "../../lib/http-url.js";
+import {
+  hasExplicitTeam,
+  isPlatformOwner,
+  resolveTeamAccess,
+  sendTeamAccessError,
+  type TeamAccess,
+} from "../../lib/team-access.js";
 import { debtsOnlyBalance, financeScopeForRole, loadMemberChargeTotals } from "../../lib/finance-visibility.js";
 
 type RawEvent = {
@@ -53,6 +60,38 @@ type AttendeePreviewRow = {
   avatar: string | null;
 };
 
+// Список команд для `/init?team=`: свои — с пометкой `via: "membership"`,
+// владельцу платформы ещё и все остальные — `via: "owner"`, роль капитана.
+async function listTeamsForExplicitInit(
+  req: Parameters<typeof isPlatformOwner>[0],
+  memberships: Awaited<ReturnType<typeof getUserMemberships>>
+) {
+  const own = memberships.map((m) => ({
+    teamId: m.team_id,
+    teamName: m.team_name,
+    shortCode: m.team_short_code,
+    role: m.role,
+    membershipId: m.id as string | null,
+    via: "membership" as "membership" | "owner",
+  }));
+  if (!isPlatformOwner(req)) return own;
+  const mine = new Set(memberships.map((m) => m.team_id));
+  const all = await query<{ id: string; name: string; short_code: string }>(
+    `SELECT id, name, short_code FROM teams ORDER BY name ASC`
+  );
+  const others = all.rows
+    .filter((t) => !mine.has(t.id))
+    .map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      shortCode: t.short_code,
+      role: "CAPTAIN" as const,
+      membershipId: null,
+      via: "owner" as const,
+    }));
+  return [...own, ...others];
+}
+
 export const initRouter = Router();
 
 initRouter.get(
@@ -60,57 +99,82 @@ initRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const user = req.authUser!;
-    const effectiveRole = getEffectiveEntryRole(req, user);
-    if (effectiveRole === null) {
-      return res.status(409).json({ detail: "ROLE_SELECTION_REQUIRED" });
+
+    // Явная команда в запросе (`?team=<код или id>` или заголовок
+    // `X-PBTH-Team`) — новое поведение: команда берётся из запроса, сессия не
+    // меняется (две команды в двух вкладках), владелец платформы получает
+    // команду, где не состоит. Без явной команды — прежняя ветка целиком.
+    const explicitTeam = hasExplicitTeam(req);
+    let explicitAccess: TeamAccess | null = null;
+    if (explicitTeam) {
+      try {
+        explicitAccess = await resolveTeamAccess(req, { allowShortCode: true, explicitOnly: true });
+      } catch (error) {
+        if (sendTeamAccessError(res, error)) return;
+        throw error;
+      }
     }
 
     const memberships = await getUserMemberships(user.id);
+    let active: { teamId: string; role: "CAPTAIN" | "TRAINER" | "PLAYER"; via: "membership" | "owner" };
 
-    if (effectiveRole === "ADMIN") {
-      const managedTeams = await query<{ id: string; name: string; short_code: string; logo: string | null; budget: string; timezone: string }>(
-        `SELECT t.id, t.name, t.short_code, t.logo, t.budget::text, t.timezone
-         FROM teams t
-         ORDER BY t.name ASC`
-      );
+    if (explicitAccess) {
+      active = { teamId: explicitAccess.teamId, role: explicitAccess.role, via: explicitAccess.via };
+    } else {
+      const effectiveRole = getEffectiveEntryRole(req, user);
+      if (effectiveRole === null) {
+        return res.status(409).json({ detail: "ROLE_SELECTION_REQUIRED" });
+      }
 
-      return res.json({
-        admin: true,
-        pendingUsersHint: true,
-        teams: managedTeams.rows.map((t) => ({
-          id: t.id,
-          name: t.name,
-          shortCode: t.short_code,
-          logo: t.logo,
-          budget: Number(t.budget),
-          timezone: t.timezone,
-        })),
-      });
+      if (effectiveRole === "ADMIN") {
+        const managedTeams = await query<{ id: string; name: string; short_code: string; logo: string | null; budget: string; timezone: string }>(
+          `SELECT t.id, t.name, t.short_code, t.logo, t.budget::text, t.timezone
+           FROM teams t
+           ORDER BY t.name ASC`
+        );
+
+        return res.json({
+          admin: true,
+          pendingUsersHint: true,
+          teams: managedTeams.rows.map((t) => ({
+            id: t.id,
+            name: t.name,
+            shortCode: t.short_code,
+            logo: t.logo,
+            budget: Number(t.budget),
+            timezone: t.timezone,
+          })),
+        });
+      }
+
+      if (memberships.length === 0) {
+        return res.json({
+          noTeamYet: true,
+          screen: "PROFILE_WAITING",
+        });
+      }
+
+      if (!req.session.activeMembershipId || !req.session.activeTeamId) {
+        req.session.activeMembershipId = memberships[0].id;
+        req.session.activeTeamId = memberships[0].team_id;
+      }
+
+      let activeMembership = memberships.find((m) => m.id === req.session.activeMembershipId);
+      if (!activeMembership) {
+        req.session.activeMembershipId = memberships[0].id;
+        req.session.activeTeamId = memberships[0].team_id;
+        activeMembership = memberships[0];
+      }
+      active = { teamId: activeMembership.team_id, role: activeMembership.role, via: "membership" };
     }
 
-    if (memberships.length === 0) {
-      return res.json({
-        noTeamYet: true,
-        screen: "PROFILE_WAITING",
-      });
-    }
-
-    if (!req.session.activeMembershipId || !req.session.activeTeamId) {
-      req.session.activeMembershipId = memberships[0].id;
-      req.session.activeTeamId = memberships[0].team_id;
-    }
-
-    let activeMembership = memberships.find((m) => m.id === req.session.activeMembershipId);
-    if (!activeMembership) {
-      req.session.activeMembershipId = memberships[0].id;
-      req.session.activeTeamId = memberships[0].team_id;
-      activeMembership = memberships[0];
-    }
+    // Команда владельца без членства — её события идут в ленту, роль капитана.
+    const ownerTeamId = active.via === "owner" ? active.teamId : null;
 
     const teamResult = await query<{ id: string; name: string; short_code: string; logo: string | null; budget: string; timezone: string }>(
       `SELECT id, name, short_code, logo, budget::text, timezone
        FROM teams WHERE id = $1`,
-      [activeMembership.team_id]
+      [active.teamId]
     );
     const team = teamResult.rows[0];
 
@@ -129,10 +193,11 @@ initRouter.get(
        JOIN users u ON u.id = tm.user_id
        WHERE tm.team_id = $1 AND u.is_active = TRUE
        ORDER BY u.name`,
-      [activeMembership.team_id]
+      [active.teamId]
     );
 
     const teamIds = memberships.map((m) => m.team_id);
+    if (ownerTeamId && !teamIds.includes(ownerTeamId)) teamIds.push(ownerTeamId);
 
     const eventsResult = await query<RawEvent>(
       `SELECT e.id,
@@ -162,7 +227,7 @@ initRouter.get(
               e.source_provider,
               e.source_external_event_id,
               e.is_cancelled,
-              tm.role AS viewer_role,
+              COALESCE(tm.role, 'CAPTAIN'::membership_role) AS viewer_role,
               COALESCE(r.status, CASE WHEN sc.id IS NOT NULL THEN 'CONFIRMED'::rsvp_status ELSE NULL END) AS my_rsvp,
               (sc.id IS NOT NULL) AS series_committed,
               COALESCE((
@@ -175,14 +240,15 @@ initRouter.get(
               ), 0)::text AS attendees_count
        FROM events e
        JOIN teams t ON t.id = e.team_id
-       JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $1
+       LEFT JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $1
        LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = $1
        LEFT JOIN event_series_commitment sc ON sc.series_id = e.series_id AND sc.user_id = $1 AND sc.status = 'COMMITTED'
        WHERE e.team_id = ANY($2::uuid[])
+         AND (tm.id IS NOT NULL OR e.team_id = $3::uuid)
          AND e.is_cancelled = FALSE
-         AND (r.status IN ('CONFIRMED', 'PENDING', 'DECLINED') OR sc.id IS NOT NULL)
+         AND (r.status IN ('CONFIRMED', 'PENDING', 'DECLINED') OR sc.id IS NOT NULL OR e.team_id = $3::uuid)
        ORDER BY e.start_at ASC`,
-      [user.id, teamIds]
+      [user.id, teamIds, ownerTeamId]
     );
 
     const actionRequiredResult = await query<RawEvent>(
@@ -403,8 +469,8 @@ initRouter.get(
     // взносы каждого — видит только капитан. Остальным — свой долг и общий
     // список должников. Форма ответа прежняя: старый фронтенд читает
     // `team.budget` как число, `members[].balance` и `transactions[]`.
-    const financeScope = financeScopeForRole(activeMembership.role);
-    const chargeTotals = financeScope === "FULL" ? null : await loadMemberChargeTotals(activeMembership.team_id);
+    const financeScope = financeScopeForRole(active.role);
+    const chargeTotals = financeScope === "FULL" ? null : await loadMemberChargeTotals(active.teamId);
 
     const transactionsResult = financeScope !== "FULL" ? { rows: [] } : await query<{
       id: string;
@@ -420,14 +486,14 @@ initRouter.get(
        FROM transactions
        WHERE team_id = $1
        ORDER BY date DESC`,
-      [activeMembership.team_id]
+      [active.teamId]
     );
 
     const activeTeamEventsCountResult = await query<{ total: string }>(
       `SELECT COUNT(*)::text AS total
        FROM events
        WHERE team_id = $1 AND is_cancelled = FALSE`,
-      [activeMembership.team_id]
+      [active.teamId]
     );
     const activeTeamEventsTotal = Number(activeTeamEventsCountResult.rows[0]?.total || "0");
 
@@ -441,7 +507,7 @@ initRouter.get(
        JOIN events e ON e.id = r.event_id
        WHERE e.team_id = $1 AND r.status = 'CONFIRMED'
        GROUP BY user_id`,
-      [activeMembership.team_id]
+      [active.teamId]
     );
     for (const row of attendanceStats.rows) {
       const item = memberStats.get(row.user_id);
@@ -507,10 +573,11 @@ initRouter.get(
         name: team.name,
         shortCode: team.short_code,
         logo: team.logo,
-        role: activeMembership.role,
+        role: active.role,
         budget: financeScope === "FULL" ? Number(team.budget) : 0,
         timezone: team.timezone,
         financeScope,
+        ...(explicitTeam ? { via: active.via } : {}),
       },
       members: membersResult.rows.map((m) => {
         const stats = memberStats.get(m.id) || { total: activeTeamEventsTotal, attended: 0 };
@@ -533,7 +600,7 @@ initRouter.get(
           },
         };
       }),
-      teams: memberships.map((m) => ({
+      teams: explicitTeam ? await listTeamsForExplicitInit(req, memberships) : memberships.map((m) => ({
         teamId: m.team_id,
         teamName: m.team_name,
         shortCode: m.team_short_code,

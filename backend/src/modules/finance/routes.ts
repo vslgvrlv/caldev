@@ -3,7 +3,7 @@ import { z } from "zod";
 import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { getActiveContext } from "../teams/context.js";
+import { resolveTeamAccess } from "../../lib/team-access.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { financeScopeForRole } from "../../lib/finance-visibility.js";
@@ -86,7 +86,7 @@ type TransactionRow = {
 
 async function resolveFinanceAccess(req: Parameters<typeof requireAuth>[0], explicitTeamId?: string): Promise<FinanceAccess> {
   const effectiveRole = getEffectiveEntryRole(req as any, (req as any).authUser);
-  const ctx = await getActiveContext(req as any);
+  const ctx = await resolveTeamAccess(req as any);
   const requestedTeamId = explicitTeamId ?? ctx?.teamId;
 
   if (!requestedTeamId) {
@@ -122,7 +122,7 @@ async function resolveFinanceAccess(req: Parameters<typeof requireAuth>[0], expl
   }
 
   return {
-    userId: ctx.userId,
+    userId: (req as any).authUser.id,
     teamId: ctx.teamId,
     actorRole: ctx.role,
     canWrite: ctx.role === "CAPTAIN",
