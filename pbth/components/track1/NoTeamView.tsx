@@ -18,7 +18,8 @@ import { JoinRequestStatusCard } from './JoinRequestStatusCard';
 // Подпись та же, что у прежнего экрана оболочки, — место вызова меняется
 // одной строкой импорта.
 
-const POLL_MS = 6000;
+// Опрос идёт через общий ограничитель записи (120 в минуту на адрес), поэтому редкий.
+const POLL_MS = 10000;
 
 const frameStyle = {
   paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
