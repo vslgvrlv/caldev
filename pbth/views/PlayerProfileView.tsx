@@ -1,7 +1,7 @@
 import React from 'react';
 import { TeamMember, PlayerStatus } from '../types';
 import { ROLE_LABELS, STATUS_LABELS } from '../constants';
-import { ChevronLeft, Phone, Shield, Activity, CalendarDays, Trophy, Coins } from 'lucide-react';
+import { ChevronLeft, Phone, Shield, Activity, Coins } from 'lucide-react';
 
 interface PlayerProfileViewProps {
   member: TeamMember;
@@ -86,20 +86,8 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
             <div className="text-xl font-bold text-white">{stats.attendanceRate}%</div>
             <div className="text-xs text-pb-subtext">{stats.eventsAttended}/{stats.totalEvents} событий</div>
           </div>
-          <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
-            <div className="flex items-center text-pb-subtext text-xs mb-1">
-              <CalendarDays size={14} className="mr-1.5" /> Игр
-            </div>
-            <div className="text-xl font-bold text-white">{stats.matchesPlayed}</div>
-            <div className="text-xs text-pb-subtext">сыграно матчей</div>
-          </div>
-          <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
-            <div className="flex items-center text-pb-subtext text-xs mb-1">
-              <Trophy size={14} className="mr-1.5" /> MVP
-            </div>
-            <div className="text-xl font-bold text-white">{stats.mvpCount}</div>
-            <div className="text-xs text-pb-subtext">лучший игрок</div>
-          </div>
+          {/* «Игр» и MVP убраны: «Игр» равнялось числу событий команды и было
+              одинаковым у всех, MVP приложение не считает (всегда 0). */}
           <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
             <div className="flex items-center text-pb-subtext text-xs mb-1">
               <Coins size={14} className="mr-1.5" /> Баланс

@@ -270,6 +270,10 @@ export interface AttendeePreview {
 export interface Event {
   id: string;
   teamId: string;
+  // Команда самого события: в ленте multi-team игрока лежат события всех его
+  // команд, и активная вкладка — не обязательно команда события.
+  teamName?: string;
+  teamShortCode?: string;
   viewerRole?: Role;
   teamTimezone?: string;
   financeState?: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';

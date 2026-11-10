@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Event, Team, RSVPStatus, TeamContext } from '../types';
 import { EventCard } from '../components/EventCard';
-import { Bell, ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import { EVENT_COLORS, EVENT_LABELS } from '../constants';
 import { buildDashboardEventSections, getCountdownParts, getEventEndTimestamp } from '../lib/events';
 
@@ -108,10 +108,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
             )}
           </div>
         </div>
-        <button className="relative p-2 rounded-full bg-pb-surface hover:bg-white/10">
-          <Bell size={20} className="text-white" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-pb-danger rounded-full border border-pb-surface"></span>
-        </button>
       </header>
 
       {/* Next Event Banner */}
