@@ -3,6 +3,7 @@ import { User, Role } from '../types';
 import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, Edit2, Save, X, Lock, Camera, MessageCircle, Shield, ArrowRight } from 'lucide-react';
 import { ProfileIdentities } from '../components/ProfileIdentities';
 import { GuideEntrypoint } from '../components/GuideEntrypoint';
+import { PushOptIn } from '../components/PushOptIn';
 
 interface ProfileViewProps {
   user: User;
@@ -133,6 +134,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
          </div>
       </div>
+
+      <PushOptIn />
 
       <ProfileIdentities />
 

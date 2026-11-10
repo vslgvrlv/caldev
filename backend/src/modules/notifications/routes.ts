@@ -9,6 +9,7 @@ import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { getActiveContext } from "../teams/context.js";
 import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
 import { enqueueTelegramNotification, isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
+import { isWebPushEnabled, sendWebPush } from "../../lib/web-push.js";
 
 type ActorRole = "ADMIN" | "CAPTAIN" | "TRAINER" | "PLAYER";
 type EventKind = "TRAINING" | "TOURNAMENT" | "CHAMPIONSHIP" | "FRIENDLY_MATCH" | "MEETING" | "MAINTENANCE" | "OTHER";
@@ -100,6 +101,25 @@ type ReminderMessage = { text: string; parseMode: "HTML" };
 function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// Тексты напоминаний собираются как HTML для Telegram parse_mode=HTML.
+// Для push-уведомления нужен обычный текст: ссылка на место схлопывается до
+// названия (push-уведомление не кликабельно построчно), остальная разметка снимается.
+function toPlainText(html: string): string {
+  return html
+    .replace(/<a\s+href="[^"]*">([^<]*)<\/a>/gi, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+const PUSH_TITLE_BY_TYPE: Record<NotificationDeliveryType, string> = {
+  EVENT_REMINDER: "Напоминание о событии",
+  EVENT_DEBT_REMINDER: "Напоминание об оплате",
+  TEAM_DEBT_REMINDER: "Напоминание об оплате",
+  MEMBER_DEBT_REMINDER: "Напоминание об оплате",
+};
 
 function formatLocationHtml(location?: string | null, locationUrl?: string | null): string | null {
   const name = (location ?? "").trim();
@@ -290,6 +310,62 @@ async function dispatchNotificationMessage(params: DispatchMessageParams): Promi
   return { mode: "QUEUE" };
 }
 
+type PushSubscriptionRow = { endpoint: string; p256dh: string; auth: string };
+
+/**
+ * Одним запросом по всем получателям сразу — иначе цикл по получателям
+ * устроил бы N+1 к push_subscriptions на каждое напоминание.
+ */
+async function resolvePushSubscriptionsByUsers(userIds: string[]): Promise<Map<string, PushSubscriptionRow[]>> {
+  const map = new Map<string, PushSubscriptionRow[]>();
+  if (!isWebPushEnabled() || userIds.length === 0) return map;
+  const rows = await query<{ user_id: string; endpoint: string; p256dh: string; auth: string }>(
+    `SELECT user_id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ANY($1)`,
+    [userIds]
+  );
+  for (const row of rows.rows) {
+    const existing = map.get(row.user_id) ?? [];
+    existing.push({ endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth });
+    map.set(row.user_id, existing);
+  }
+  return map;
+}
+
+type DispatchNotificationParams = Omit<DispatchMessageParams, "chatId"> & {
+  chatId?: string;
+  pushSubscriptions: PushSubscriptionRow[];
+};
+
+/**
+ * Push — основной транспорт (#36): пробуем его первым, тихо убираем
+ * протухшие подписки (410/404), и только если ни одна push-подписка не
+ * сработала (или получатель на push вообще не подписан), падаем в Telegram.
+ * Получатель без Telegram и без push-подписки не имеет канала — вызывающий
+ * код обязан проверить это заранее и не звать dispatchNotification вовсе.
+ */
+async function dispatchNotification(
+  params: DispatchNotificationParams
+): Promise<{ mode: "PUSH" | "SYNC" | "QUEUE" }> {
+  if (params.pushSubscriptions.length > 0) {
+    const title = PUSH_TITLE_BY_TYPE[params.type];
+    const body = toPlainText(params.text);
+    let anySent = false;
+    for (const sub of params.pushSubscriptions) {
+      const result = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title, body });
+      if (result.ok) {
+        anySent = true;
+      } else if (result.gone) {
+        await query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [sub.endpoint]).catch(() => {});
+      }
+    }
+    if (anySent) return { mode: "PUSH" };
+  }
+  if (!params.chatId) {
+    throw new Error("No delivery channel available (no push subscription, no Telegram)");
+  }
+  return dispatchNotificationMessage({ ...params, chatId: params.chatId });
+}
+
 export const notificationsRouter = Router();
 
 async function getTeamDebtorsSummary(teamId: string) {
@@ -338,19 +414,23 @@ notificationsRouter.post(
     const selectedIds = new Set(payload.userIds || []);
     const debtors = await getTeamDebtorsSummary(teamId);
     const filtered = debtors.rows.filter((row) => selectedIds.size === 0 || selectedIds.has(row.user_id));
+    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
 
     let sent = 0;
+    let pushed = 0;
     let queued = 0;
     let skippedNoTelegram = 0;
     const failed: Array<{ userId: string; reason: string }> = [];
     for (const row of filtered) {
-      if (!row.telegram_id) {
+      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
+      if (!row.telegram_id && pushSubscriptions.length === 0) {
         skippedNoTelegram += 1;
         continue;
       }
       try {
-        const dispatched = await dispatchNotificationMessage({
-          chatId: row.telegram_id,
+        const dispatched = await dispatchNotification({
+          chatId: row.telegram_id || undefined,
+          pushSubscriptions,
           ...buildTeamDebtReminderText({
             teamName: team.name,
             amountOutstanding: Number(row.amount_outstanding),
@@ -363,6 +443,7 @@ notificationsRouter.post(
           correlationId: req.correlationId,
         });
         if (dispatched.mode === "QUEUE") queued += 1;
+        else if (dispatched.mode === "PUSH") pushed += 1;
         else sent += 1;
       } catch (error) {
         failed.push({ userId: row.user_id, reason: error instanceof Error ? error.message : "Send failed" });
@@ -373,6 +454,7 @@ notificationsRouter.post(
       teamId,
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       failed: failed.length,
@@ -383,6 +465,7 @@ notificationsRouter.post(
       deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       failed,
@@ -506,7 +589,10 @@ notificationsRouter.post(
       customText: payload.customText,
     });
 
+    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
+
     let sent = 0;
+    let pushed = 0;
     let queued = 0;
     let skippedNoTelegram = 0;
     const failed: Array<{
@@ -518,7 +604,7 @@ notificationsRouter.post(
       code: "CHAT_NOT_FOUND" | "BOT_BLOCKED" | "USER_DEACTIVATED" | "SEND_FAILED";
     }> = [];
     // #46: пер-получательский журнал доставки
-    const deliveryRows: Array<{ userId: string; status: DeliveryStatus; errorCode?: string; errorDetail?: string }> = [];
+    const deliveryRows: Array<{ userId: string; channel: "TELEGRAM" | "WEBPUSH"; status: DeliveryStatus; errorCode?: string; errorDetail?: string }> = [];
     const skippedNoTelegramUsers: Array<{
       userId: string;
       name: string;
@@ -528,7 +614,8 @@ notificationsRouter.post(
     }> = [];
 
     for (const row of filtered) {
-      if (!row.telegram_id) {
+      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
+      if (!row.telegram_id && pushSubscriptions.length === 0) {
         skippedNoTelegram += 1;
         skippedNoTelegramUsers.push({
           userId: row.user_id,
@@ -540,8 +627,9 @@ notificationsRouter.post(
         continue;
       }
       try {
-        const dispatched = await dispatchNotificationMessage({
-          chatId: row.telegram_id,
+        const dispatched = await dispatchNotification({
+          chatId: row.telegram_id || undefined,
+          pushSubscriptions,
           text: message.text,
           parseMode: message.parseMode,
           type: "EVENT_REMINDER",
@@ -552,8 +640,13 @@ notificationsRouter.post(
           correlationId: req.correlationId,
         });
         if (dispatched.mode === "QUEUE") queued += 1;
+        else if (dispatched.mode === "PUSH") pushed += 1;
         else sent += 1;
-        deliveryRows.push({ userId: row.user_id, ...classifyDelivery({ mode: dispatched.mode }) });
+        deliveryRows.push({
+          userId: row.user_id,
+          channel: dispatched.mode === "PUSH" ? "WEBPUSH" : "TELEGRAM",
+          ...classifyDelivery({ mode: dispatched.mode }),
+        });
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Send failed";
         const code = classifyTelegramSendError(reason);
@@ -565,7 +658,7 @@ notificationsRouter.post(
           reason,
           code,
         });
-        deliveryRows.push({ userId: row.user_id, ...classifyDelivery({ error }), errorCode: code });
+        deliveryRows.push({ userId: row.user_id, channel: "TELEGRAM", ...classifyDelivery({ error }), errorCode: code });
       }
     }
 
@@ -574,8 +667,8 @@ notificationsRouter.post(
       for (const d of deliveryRows) {
         await query(
           `INSERT INTO notification_deliveries (team_id, event_id, user_id, kind, channel, status, error_code, error_detail)
-           VALUES ($1, $2, $3, 'EVENT_REMINDER', 'TELEGRAM', $4, $5, $6)`,
-          [event.team_id, eventId, d.userId, d.status, d.errorCode ?? null, d.errorDetail ?? null]
+           VALUES ($1, $2, $3, 'EVENT_REMINDER', $4, $5, $6, $7)`,
+          [event.team_id, eventId, d.userId, d.channel, d.status, d.errorCode ?? null, d.errorDetail ?? null]
         );
       }
     } catch (err) {
@@ -591,6 +684,7 @@ notificationsRouter.post(
       gameId: gameContext?.id || null,
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       failed: failed.length,
@@ -601,6 +695,7 @@ notificationsRouter.post(
       deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       skippedNoTelegramUsers,
@@ -664,13 +759,17 @@ notificationsRouter.post(
     const row = debtors.rows.find((d) => d.user_id === userId);
     if (!row) return res.status(400).json({ detail: "Selected user has no debt in current team" });
 
-    if (!row.telegram_id) return res.status(400).json({ detail: "User has no Telegram linked" });
+    const pushSubscriptions = (await resolvePushSubscriptionsByUsers([row.user_id])).get(row.user_id) ?? [];
+    if (!row.telegram_id && pushSubscriptions.length === 0) {
+      return res.status(400).json({ detail: "User has no Telegram linked and no push subscription" });
+    }
 
-    let dispatched: { mode: "SYNC" | "QUEUE" } | null = null;
+    let dispatched: { mode: "SYNC" | "QUEUE" | "PUSH" } | null = null;
     const failed: Array<{ userId: string; reason: string }> = [];
     try {
-      dispatched = await dispatchNotificationMessage({
-        chatId: row.telegram_id,
+      dispatched = await dispatchNotification({
+        chatId: row.telegram_id || undefined,
+        pushSubscriptions,
         ...buildTeamDebtReminderText({
           teamName: team.name,
           amountOutstanding: Number(row.amount_outstanding),
@@ -690,6 +789,7 @@ notificationsRouter.post(
       teamId,
       userId,
       sent: dispatched?.mode === "SYNC" ? 1 : 0,
+      pushed: dispatched?.mode === "PUSH" ? 1 : 0,
       queued: dispatched?.mode === "QUEUE" ? 1 : 0,
       failed: failed.length,
     });
@@ -698,6 +798,7 @@ notificationsRouter.post(
       deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
       attempted: 1,
       sent: dispatched?.mode === "SYNC" ? 1 : 0,
+      pushed: dispatched?.mode === "PUSH" ? 1 : 0,
       queued: dispatched?.mode === "QUEUE" ? 1 : 0,
       skippedNoTelegram: 0,
       failed,
@@ -770,19 +871,23 @@ notificationsRouter.post(
     );
 
     const filtered = debtors.rows.filter((row) => selectedIds.size === 0 || selectedIds.has(row.user_id));
+    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
 
     let sent = 0;
+    let pushed = 0;
     let queued = 0;
     let skippedNoTelegram = 0;
     const failed: Array<{ userId: string; reason: string }> = [];
     for (const row of filtered) {
-      if (!row.telegram_id) {
+      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
+      if (!row.telegram_id && pushSubscriptions.length === 0) {
         skippedNoTelegram += 1;
         continue;
       }
       try {
-        const dispatched = await dispatchNotificationMessage({
-          chatId: row.telegram_id,
+        const dispatched = await dispatchNotification({
+          chatId: row.telegram_id || undefined,
+          pushSubscriptions,
           ...buildDebtReminderText({
             event,
             amountOutstanding: Number(row.amount_outstanding),
@@ -796,6 +901,7 @@ notificationsRouter.post(
           correlationId: req.correlationId,
         });
         if (dispatched.mode === "QUEUE") queued += 1;
+        else if (dispatched.mode === "PUSH") pushed += 1;
         else sent += 1;
       } catch (error) {
         failed.push({ userId: row.user_id, reason: error instanceof Error ? error.message : "Send failed" });
@@ -808,6 +914,7 @@ notificationsRouter.post(
       actorRole,
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       failed: failed.length,
@@ -818,6 +925,7 @@ notificationsRouter.post(
       deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
       attempted: filtered.length,
       sent,
+      pushed,
       queued,
       skippedNoTelegram,
       failed,

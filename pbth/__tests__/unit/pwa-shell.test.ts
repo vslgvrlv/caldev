@@ -11,8 +11,16 @@ const iconSvgPath = fileURLToPath(new URL("../../public/icons/icon.svg", import.
 const icon192Path = fileURLToPath(new URL("../../public/icons/icon-192.png", import.meta.url));
 const icon512Path = fileURLToPath(new URL("../../public/icons/icon-512.png", import.meta.url));
 const appleTouchIconPath = fileURLToPath(new URL("../../public/icons/apple-touch-icon.png", import.meta.url));
+const pushSwHandlerPath = fileURLToPath(new URL("../../public/push-sw-handler.js", import.meta.url));
 
 describe("pwa shell", () => {
+  it("ships a push notification handler for the service worker (#36)", () => {
+    expect(existsSync(pushSwHandlerPath)).toBe(true);
+    const handler = readFileSync(pushSwHandlerPath, "utf8");
+    expect(handler).toContain('addEventListener("push"');
+    expect(handler).toContain('addEventListener("notificationclick"');
+  });
+
   it("ships a web manifest with installable icon assets", () => {
     expect(existsSync(manifestPath)).toBe(true);
     expect(existsSync(iconSvgPath)).toBe(true);

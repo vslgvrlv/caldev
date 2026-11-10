@@ -10,6 +10,10 @@ describe("classifyDelivery", () => {
     expect(classifyDelivery({ mode: "QUEUE" })).toEqual({ status: "QUEUED" });
   });
 
+  it("maps PUSH dispatch to SENT", () => {
+    expect(classifyDelivery({ mode: "PUSH" })).toEqual({ status: "SENT" });
+  });
+
   it("maps an error to FAILED with detail from the error message", () => {
     const result = classifyDelivery({ error: new Error("chat not found") });
     expect(result.status).toBe("FAILED");

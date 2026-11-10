@@ -1072,6 +1072,25 @@ export const api = {
     return request<IcsInfo>(`/profile/ics/rotate${qs}`, { method: 'POST' });
   },
 
+  // Push (#36). Сервер отдаёт 204 без тела, когда push выключен на этой
+  // инсталляции (нет VAPID-ключей) — это не ошибка, generic request()
+  // упал бы на res.json() пустого тела, поэтому запрос собран вручную.
+  async getVapidPublicKey(): Promise<string | null> {
+    const res = await fetchWithDeadline(`${API_URL}/push/vapid-key`, { credentials: 'include' });
+    if (res.status === 204) return null;
+    if (!res.ok) throw new Error(`VAPID_KEY_FAILED:${res.status}`);
+    const data = (await res.json()) as { publicKey: string };
+    return data.publicKey;
+  },
+
+  async subscribePush(subscription: PushSubscriptionJSON): Promise<void> {
+    await request<{ ok: true }>('/push/subscribe', { method: 'POST', body: subscription });
+  },
+
+  async unsubscribePush(endpoint: string): Promise<void> {
+    await request<{ ok: true }>('/push/unsubscribe', { method: 'POST', body: { endpoint } });
+  },
+
   async getFinanceOverview(teamId: string): Promise<FinanceOverviewResponse> {
     return request<FinanceOverviewResponse>(`/finance/overview?teamId=${encodeURIComponent(teamId)}`);
   },

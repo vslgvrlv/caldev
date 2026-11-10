@@ -17,6 +17,7 @@ import { financeRouter } from "./modules/finance/routes.js";
 import { icsRouter } from "./modules/ics/routes.js";
 import { initRouter } from "./modules/init/routes.js";
 import { notificationsRouter } from "./modules/notifications/routes.js";
+import { pushRouter } from "./modules/push/routes.js";
 import { placesRouter } from "./modules/places/routes.js";
 import { reflectionsRouter } from "./modules/reflections/routes.js";
 import { profileRouter } from "./modules/profile/routes.js";
@@ -118,6 +119,7 @@ function mountApiV1(router: express.Router) {
   router.use("/finance", writeRateLimiter, financeRouter);
   router.use("/transactions", writeRateLimiter, financeRouter);
   router.use("/notifications", writeRateLimiter, notificationsRouter);
+  router.use("/push", writeRateLimiter, pushRouter);
   router.use("/profile", profileRouter);
   router.use("/teams", teamsRouter);
   router.use("/admin", adminRouter);
