@@ -37,6 +37,7 @@ import { OfflineBanner } from './components/OfflineBanner';
 import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
 import { reconcileSelectedEvent } from './lib/event-refresh';
 import { resolvePostLoginAction } from './lib/post-login';
+import { resolveEventTeamName } from './lib/event-team';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -1090,7 +1091,7 @@ const App: React.FC = () => {
         <EventDetailView
           event={selectedEvent}
           currentUserRole={selectedEvent.viewerRole || activeTeam!.role}
-          teamName={activeTeam!.name}
+          teamName={resolveEventTeamName(selectedEvent, teams, activeTeam)}
           onBack={() => setSelectedEvent(null)}
           onRsvp={handleRsvp}
           onAddGame={handleAddGame}
@@ -1155,7 +1156,6 @@ const App: React.FC = () => {
         return (
           <ProfileView
             user={user!}
-            onUpdateUser={() => {}}
             onLogout={handleLogout}
             calendarLink={calendarLink || 'Ссылка пока недоступна'}
             onCopyLink={handleCopyIcsLink}
@@ -1295,13 +1295,22 @@ const App: React.FC = () => {
           </div>
           
           {creationAccess.canCreate && !selectedEvent && !selectedMember && currentView !== 'CREATE' && (
-              <div className="absolute bottom-24 right-4 z-50">
-                  <button 
+              // Fixed над нижней навигацией (85px) и в пределах колонки
+              // приложения: раньше кнопка стояла absolute внутри
+              // прокручиваемого блока и на «Главной» уезжала ниже экрана.
+              <div
+                className="fixed inset-x-0 z-50 pointer-events-none"
+                style={{ bottom: 'calc(85px + 1rem)' }}
+              >
+                <div className="max-w-md mx-auto px-4 flex justify-end">
+                  <button
+                    aria-label="Создать событие"
                     onClick={() => setCurrentView('CREATE')}
-                    className="w-14 h-14 bg-pb-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,230,118,0.5)] active:scale-95 transition-transform hover:bg-white text-pb-background"
+                    className="pointer-events-auto w-14 h-14 bg-pb-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,230,118,0.5)] active:scale-95 transition-transform hover:bg-white text-pb-background"
                   >
                       <Plus size={32} strokeWidth={3} />
                   </button>
+                </div>
               </div>
           )}
         </main>

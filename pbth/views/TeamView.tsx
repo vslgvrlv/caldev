@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { TeamMemberCard } from '../components/TeamMemberCard';
-import { UserPlus, Search, Shield, Users, Check, BarChart2, Star, Trophy } from 'lucide-react';
+import { UserPlus, Search, Shield, Users, Check, BarChart2, Star } from 'lucide-react';
 import { api } from '../api';
 import { buildInviteLink } from '../lib/team-invite-link';
 
@@ -190,12 +190,16 @@ export const TeamView: React.FC<TeamViewProps> = ({
   };
 
   const renderStats = () => {
-    // Sort by MVP or Attendance
-    const sortedByMVP = [...filteredMembers].sort((a, b) => (b.stats?.mvpCount || 0) - (a.stats?.mvpCount || 0));
+    // Только то, что приложение действительно считает, — посещаемость.
+    // K/D, MVP и «Игр» убраны: K/D был зашит числом 1.4 у всех, MVP всегда 0,
+    // «Игр» равнялось числу событий команды и было одинаковым у всех.
+    const sortedByAttendance = [...filteredMembers].sort(
+      (a, b) => (b.stats?.attendanceRate || 0) - (a.stats?.attendanceRate || 0)
+    );
 
     return (
       <div className="space-y-4">
-        {sortedByMVP.map(member => {
+        {sortedByAttendance.map(member => {
             const stats = member.stats || { attendanceRate: 0, eventsAttended: 0, totalEvents: 0, mvpCount: 0, matchesPlayed: 0 };
             return (
                 <button
@@ -211,12 +215,6 @@ export const TeamView: React.FC<TeamViewProps> = ({
                                 <div className="text-pb-primary text-xs">@{member.nickname}</div>
                             </div>
                         </div>
-                        {stats.mvpCount > 0 && (
-                             <div className="flex items-center text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-lg">
-                                <Trophy size={14} className="mr-1" />
-                                <span className="text-xs font-bold">{stats.mvpCount} MVP</span>
-                             </div>
-                        )}
                     </div>
 
                     <div className="space-y-3">
@@ -231,17 +229,6 @@ export const TeamView: React.FC<TeamViewProps> = ({
                                     style={{ width: `${stats.attendanceRate}%` }}
                                 ></div>
                             </div>
-                        </div>
-                        <div className="flex gap-4 pt-2 border-t border-white/5">
-                             <div className="text-center flex-1">
-                                 <div className="text-lg font-bold text-white">{stats.matchesPlayed}</div>
-                                 <div className="text-[10px] text-pb-subtext uppercase">Игр</div>
-                             </div>
-                             {/* Placeholder for Win Rate if we tracked game results per player */}
-                             <div className="text-center flex-1 border-l border-white/10">
-                                 <div className="text-lg font-bold text-pb-secondary">1.4</div>
-                                 <div className="text-[10px] text-pb-subtext uppercase">K/D Ratio</div>
-                             </div>
                         </div>
                     </div>
                 </button>

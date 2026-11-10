@@ -11,7 +11,6 @@ const GUIDE_ARIA_LABEL = "Открыть инструкцию по работе 
 function renderProfile(role: React.ComponentProps<typeof ProfileView>["role"]) {
   const props: React.ComponentProps<typeof ProfileView> = {
     user: { id: "guide-user", name: "Guide User", nickname: "guide_user" },
-    onUpdateUser: () => undefined,
     onLogout: () => undefined,
     calendarLink: "https://example.test/calendar.ics",
     onCopyLink: () => undefined,
