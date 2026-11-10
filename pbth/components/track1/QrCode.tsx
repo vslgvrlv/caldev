@@ -1,8 +1,8 @@
 import React from 'react';
 
-// QR-код ссылки команды. Кодирует библиотека uqr (MIT, без зависимостей,
-// версия закреплена) — грузится отдельным куском, только когда капитан
-// открыл ссылку команды. Рисуем сами в реальных пикселях: модуль — целое
+// QR-код ссылки команды. Кодирует библиотека lean-qr (MIT, версия закреплена,
+// та же, что у слотов трека 4) — грузится отдельным куском, только когда
+// капитан открыл ссылку команды. Рисуем сами в реальных пикселях: модуль — целое
 // число пикселей, viewBox равен размеру, без растяжения.
 // ui-kit-allow: QR-код — данные ссылки, не иконка; в ui-kit QR нет, ui-kit в ревизии не подключаем (решение Василия 10.11.2026)
 
@@ -13,9 +13,23 @@ export const QrCode: React.FC<{ value: string; moduleSize?: number; label?: stri
 
   React.useEffect(() => {
     let cancelled = false;
-    void import('uqr').then(({ encode }) => {
+    void import('lean-qr').then(({ generate, correction }) => {
       if (cancelled) return;
-      setMatrix(encode(value, { ecc: 'M', border: 2 }).data);
+      const code = generate(value, { minCorrectionLevel: correction.M });
+      // Белая рамка в два модуля, как требует считывание с экрана.
+      const border = 2;
+      const size = code.size + border * 2;
+      const rows: Matrix = [];
+      for (let y = 0; y < size; y += 1) {
+        const row: boolean[] = [];
+        for (let x = 0; x < size; x += 1) {
+          const cx = x - border;
+          const cy = y - border;
+          row.push(cx >= 0 && cy >= 0 && cx < code.size && cy < code.size && code.get(cx, cy));
+        }
+        rows.push(row);
+      }
+      setMatrix(rows);
     });
     return () => {
       cancelled = true;
