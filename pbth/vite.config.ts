@@ -25,6 +25,9 @@ export default defineConfig({
         // невидимую копию правды.
         navigateFallbackDenylist: [/^\/api\//, /^\/calendar\//],
         cleanupOutdatedCaches: true,
+        // Push-уведомления (#36): отдельного service worker'а не заводим —
+        // обработчик push/notificationclick вшивается в тот же Workbox SW.
+        importScripts: ['/push-sw-handler.js'],
       },
       devOptions: { enabled: false },
     }),

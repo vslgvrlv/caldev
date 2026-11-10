@@ -177,6 +177,16 @@ export const env = {
     secret: process.env.DEV_AUTH_SECRET || "",
   },
 
+  // Web Push (VAPID) заменяет Telegram bot как основной транспорт напоминаний (#36).
+  // Отключён по умолчанию: без ключей сервер не падает, просто push недоступен
+  // и dispatch молча уходит в Telegram-фолбэк.
+  push: {
+    enabled: asBoolean(process.env.PUSH_NOTIFICATIONS_ENABLED, false),
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY || "",
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || "",
+    vapidSubject: process.env.VAPID_SUBJECT || "mailto:admin@pbthub.ru",
+  },
+
   authSlo: {
     enabled: asBoolean(process.env.AUTH_SLO_ENABLED, true),
     windowMinutes: asNumber(process.env.AUTH_SLO_WINDOW_MINUTES || "60", "AUTH_SLO_WINDOW_MINUTES"),
@@ -191,6 +201,12 @@ export const env = {
     builtAt: process.env.RELEASE_BUILT_AT || "unknown",
   },
 };
+
+if (env.push.enabled) {
+  if (!env.push.vapidPublicKey || !env.push.vapidPrivateKey) {
+    throw new Error("Missing VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY while PUSH_NOTIFICATIONS_ENABLED=true");
+  }
+}
 
 if (env.telegramOidc.enabled) {
   if (!env.telegramOidc.clientId) {

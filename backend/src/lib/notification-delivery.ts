@@ -9,11 +9,12 @@ export interface DeliveryClassification {
 }
 
 /**
- * SYNC → SENT, QUEUE → QUEUED. Любая ошибка перевешивает режим → FAILED
+ * SYNC/PUSH → SENT, QUEUE → QUEUED. Любая ошибка перевешивает режим → FAILED
  * с человекочитаемым detail. Этого достаточно, чтобы показать капитану,
- * кому реально ушло, а кому нет.
+ * кому реально ушло, а кому нет. Канал (TELEGRAM/WEBPUSH) — отдельное
+ * измерение, в этот статус не входит.
  */
-export function classifyDelivery(input: { mode?: "SYNC" | "QUEUE"; error?: unknown }): DeliveryClassification {
+export function classifyDelivery(input: { mode?: "SYNC" | "QUEUE" | "PUSH"; error?: unknown }): DeliveryClassification {
   if (input.error !== undefined && input.error !== null) {
     const errorDetail = input.error instanceof Error ? input.error.message : String(input.error);
     return { status: "FAILED", errorDetail };
