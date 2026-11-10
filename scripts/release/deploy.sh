@@ -113,6 +113,16 @@ echo "Target dir: ${TARGET_DIR}"
   export RELEASE_BUILT_AT="$(grep -oE '"builtAt"[[:space:]]*:[[:space:]]*"[^"]+"' release-manifest.json | sed -E 's/.*"([^"]+)"/\1/')"
 
   compose_cmd "${ENV_NAME}" "${TARGET_DIR}" "${ENV_FILE}" up -d db
+
+  # Копия базы до миграций. Не снялась — выкат останавливается здесь,
+  # ничего ещё не изменено. Свежая копия с той же меткой (её снимает
+  # workflow выката) переиспользуется.
+  BACKUP_FILE="$("${SCRIPT_DIR}/db-backup.sh" --env "${ENV_NAME}" --root "${PBTH_ROOT}" \
+    --label "pre-${RELEASE_ID}" --reuse-minutes 60)" \
+    || die "Database backup failed; deploy stopped before migrations"
+  echo "Database backup: ${BACKUP_FILE}"
+  echo "${RELEASE_ID} ${BACKUP_FILE}" > "${SHARED_DIR}/manifests/last-backup-${ENV_NAME}.txt"
+
   compose_cmd "${ENV_NAME}" "${TARGET_DIR}" "${ENV_FILE}" build backend frontend
   compose_cmd "${ENV_NAME}" "${TARGET_DIR}" "${ENV_FILE}" run --rm backend node dist/db/migrate.js
   compose_cmd "${ENV_NAME}" "${TARGET_DIR}" "${ENV_FILE}" up -d backend frontend

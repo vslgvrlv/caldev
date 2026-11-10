@@ -1,5 +1,10 @@
 # PBTH Execution Plan (Atomic)
 
+> **Архив.** Файл не ведётся с марта 2026 (последняя запись — Auth v2 и вход
+> через бота). Пути `/Users/pk/Documents/CalDEV/...` ниже устарели. Текущее
+> состояние: задачи в `vslgvrlv/caldev`, выкаты — `docs/releases.md`, порядок
+> выката и бэкапы — `RELEASE_PROTOCOL.md`.
+
 Date: 2026-03-10
 Owner: Codex + Vasiliy
 Rule: every task is atomic and deployable.

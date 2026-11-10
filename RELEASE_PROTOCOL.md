@@ -97,6 +97,147 @@ And run auth error-budget check:
 ./scripts/rollback.sh staging <releaseId> https://staging.pbthub.ru
 ```
 
+Rollback returns code only. Migrations are not reverted: the old code runs on
+the new schema. If a migration damaged data, restore the database from the
+backup taken before that release (next section).
+
+## Бэкап базы перед миграциями
+
+Каждый выкат (`deploy.sh`, а значит и `deploy-staging.sh` / `deploy-prod.sh`,
+и workflow `Deploy Staging` / `Deploy Production`) снимает копию базы до сборки
+и миграций:
+
+- скрипт `scripts/release/db-backup.sh`, дамп делает `pg_dump` внутри
+  контейнера базы (`pbth-<env>-db-1`), на сервере нужен только `docker`;
+- файл `/opt/pbth/shared/backups/<env>/pbth-<env>-<время UTC>-pre-<releaseId>.dump`
+  (формат custom, сжат), каталог только для root (700);
+- архив проверяется `pg_restore --list`; не снялся или не читается — выкат
+  останавливается до миграций, ничего не изменено;
+- хранятся последние 20 копий каждого окружения (`--keep`, переменная
+  `PBTH_DB_BACKUP_KEEP`);
+- последний дамп выката записан в `/opt/pbth/shared/manifests/last-backup-<env>.txt`.
+
+Workflow снимает копию отдельным шагом «Backup database before deploy»: скрипт
+из текущего коммита уходит на сервер через `ssh ... bash -s`, поэтому копия
+снимается, даже если чекаут `/root/caldev` на сервере старый. `deploy.sh` видит
+свежую копию с той же меткой (до 60 минут) и второй раз не снимает.
+
+Ручные команды ниже и `deploy-*.sh` запускаются из чекаута `/root/caldev`.
+Новые скрипты появятся там, только когда чекаут обновят до `main` с этим
+изменением — до тех пор бэкап при выкате снимает шаг workflow.
+
+Ручная копия в любой момент:
+
+```bash
+cd /root/caldev
+./scripts/release/db-backup.sh --env prod --label manual
+ls -lh /opt/pbth/shared/backups/prod/
+```
+
+Копии лежат на том же сервере. Если умрёт сервер, умрут и они — копия вне
+сервера пока не настроена (отдельная задача).
+
+### Восстановление
+
+Когда: миграция или выкат испортили данные. Если сломан только код —
+достаточно `rollback.sh`, базу не трогать: восстановление теряет всё, что
+записали после снятия копии.
+
+1. Вернуть код на прошлый релиз (схема в копии соответствует ему):
+
+   ```bash
+   cd /root/caldev
+   ./scripts/rollback.sh prod <прошлый releaseId> https://pbthub.ru
+   ```
+
+2. Найти копию, снятую перед сломавшим релизом:
+
+   ```bash
+   cat /opt/pbth/shared/manifests/last-backup-prod.txt
+   ls -lt /opt/pbth/shared/backups/prod/ | head
+   ```
+
+3. Восстановить:
+
+   ```bash
+   ./scripts/release/db-restore.sh --env prod \
+     --file /opt/pbth/shared/backups/prod/pbth-prod-<время>-pre-<releaseId>.dump \
+     --confirm prod
+   ```
+
+   Скрипт снимает ещё одну копию текущей базы (`before-restore`), останавливает
+   бэкенд, разворачивает дамп в новую базу `<db>_restore_<время>` с той же
+   кодировкой и локалью, и только если разворот прошёл — меняет базы именами.
+   Текущая база остаётся как `<db>_before_restore_<время>`. Бэкенд запускается.
+
+4. Проверить: `curl -fsS https://pbthub.ru/api/v1/health`, вход в мини-приложение,
+   главная команды, календарь.
+
+5. Когда всё проверено, удалить старую базу (команду печатает скрипт):
+
+   ```bash
+   docker exec pbth-prod-db-1 sh -c 'dropdb -U "$POSTGRES_USER" pbth_prod_before_restore_<время>'
+   ```
+
+Если `db-restore.sh` недоступен, то же руками: `docker exec -i pbth-prod-db-1
+pg_restore --list < файл` (проверка), остановить бэкенд, `createdb` новой базы,
+`pg_restore -d <новая> --no-owner --exit-on-error --single-transaction < файл`,
+затем `ALTER DATABASE ... RENAME` из базы `postgres`.
+
+## Заголовки защиты (применить на сервере руками)
+
+Бэкенд уже ставит заголовки на `/api/` и `/calendar/` (helmet: HSTS, `nosniff`,
+`X-Frame-Options`, `Referrer-Policy: no-referrer`). Страницы фронтенда идут
+от контейнера фронтенда без заголовков. В репозитории это уже описано, на
+сервере — нет:
+
+- `infra/nginx/pbth-security-headers.conf.example` — фрагмент с заголовками:
+  HSTS (те же параметры, что у бэкенда), `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: frame-ancestors 'self' https://web.telegram.org
+  https://*.telegram.org` (мини-приложение в web.telegram.org открывается во
+  фрейме, поэтому не `X-Frame-Options`), `Referrer-Policy:
+  strict-origin-when-cross-origin`;
+- `infra/nginx/pbth.conf.example` — `include` фрагмента в локациях `/`,
+  `/assets/`, `/icons/` обоих доменов. В `/api/` и `/calendar/` не включать —
+  заголовки задвоятся.
+
+Порядок на сервере:
+
+```bash
+cp /etc/nginx/sites-available/pbth.conf /etc/nginx/sites-available/pbth.conf.bak-$(date +%F)
+cp infra/nginx/pbth-security-headers.conf.example /etc/nginx/snippets/pbth-security-headers.conf
+# в pbth.conf добавить строку include в location /, /assets/, /icons/ (staging и prod)
+nginx -t && systemctl reload nginx
+```
+
+Сначала staging, потом prod. Проверка:
+
+```bash
+curl -sI https://staging.pbthub.ru/ | grep -iE 'strict-transport|x-content-type|content-security|referrer-policy'
+curl -sI https://staging.pbthub.ru/assets/ | grep -ic 'strict-transport'   # 1, не 2
+curl -sI https://staging.pbthub.ru/api/v1/health | grep -ic 'strict-transport'  # 1: только от бэкенда
+```
+
+И руками: мини-приложение открывается в Telegram на телефоне, в Telegram Desktop
+и в web.telegram.org (там оно во фрейме — если пусто, виноват `frame-ancestors`).
+Откат: убрать строки `include`, `nginx -t && systemctl reload nginx`.
+
+## Риск: фронтенд в проде раздаёт `vite preview`
+
+`pbth/Dockerfile` собирает фронтенд и запускает `npm run preview` — сервер
+предпросмотра Vite. Это инструмент разработки: в образе лежат все
+dev-зависимости (Vite, Vitest, Playwright), у него свои правила хостов
+(`preview.allowedHosts`), уязвимости Vite из `npm audit` относятся и к нему, а
+кэш и сжатие настроены не нами. Сейчас это работает за nginx и не ломается,
+поэтому ночью не менялось.
+
+Предложение: многоступенчатый `pbth/Dockerfile` — сборка в `node:20-alpine`,
+раздача `dist` из `nginx:alpine` на том же порту 3000 с запасным
+`try_files $uri /index.html` для адресов приложения, `no-cache` для
+`index.html`, `sw.js`, манифеста и годовым кэшем для `/assets/`. Порт и
+compose не меняются, внешний nginx не трогается. Проверка до прода: staging,
+вход в мини-приложение, офлайн-открытие (сервис-воркер), пререндер главной.
+
 ## Operator note
 
 Only `releaseId` changes between runs (`vYYYY.MM.DD-...`).  
