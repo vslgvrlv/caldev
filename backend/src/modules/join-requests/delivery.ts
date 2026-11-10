@@ -41,9 +41,13 @@ export function decisionKeyboard(prefix: RequestKind, requestId: string, openPat
   return { inline_keyboard: rows };
 }
 
+/**
+ * Кнопка-ссылка под сообщением человеку («Открыть команду»). Ставится всегда,
+ * как «Открыть событие» в напоминаниях трека 2: в проде и на staging адрес
+ * https, а локальный стенд ходит в заглушку Bot API.
+ */
 export function linkKeyboard(text: string, path: string) {
-  const button = urlButton(text, path);
-  return button ? { inline_keyboard: [[button]] } : undefined;
+  return { inline_keyboard: [[{ text, url: appUrl(path) }]] };
 }
 
 export async function sendBotMessageSafe(

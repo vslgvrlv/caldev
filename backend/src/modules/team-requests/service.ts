@@ -250,12 +250,16 @@ export async function decideTeamRequest(params: {
 
   const verdict = decision === "approve" ? `✅ Команда создана, код ${view.team?.shortCode ?? ""}` : "✋ Отклонена";
   const tasks: Array<Promise<unknown>> = [closeRequestCards("team", requestId, verdict)];
+  const requester = await query<{ telegram_id: string | null }>(
+    `SELECT telegram_id::text AS telegram_id FROM users WHERE id = $1`,
+    [outcome.userId]
+  );
+  if (decision === "decline") {
+    // Отказ — коротко и без имени того, кто отклонил.
+    tasks.push(sendBotMessageSafe(requester.rows[0]?.telegram_id, `Заявку на команду «${view.name}» отклонили.`));
+  }
   if (decision === "approve" && view.team) {
-    const requester = await query<{ telegram_id: string | null }>(
-      `SELECT telegram_id::text AS telegram_id FROM users WHERE id = $1`,
-      [outcome.userId]
-    );
-    const path = `/t/${encodeURIComponent(view.team.shortCode.toLowerCase())}/roster`;
+    const path = `/t/${encodeURIComponent(view.team.shortCode.toLowerCase())}`;
     tasks.push(
       sendBotMessageSafe(
         requester.rows[0]?.telegram_id,

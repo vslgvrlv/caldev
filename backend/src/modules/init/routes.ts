@@ -47,6 +47,8 @@ type RawEvent = {
   source_external_event_id: string | null;
   is_cancelled: boolean;
   viewer_role: "CAPTAIN" | "TRAINER" | "PLAYER";
+  /** Человек в составе команды события. Владелец в чужой команде — нет. */
+  viewer_in_roster: boolean;
   my_rsvp: "PENDING" | "CONFIRMED" | "DECLINED" | null;
   series_committed: boolean;
   attendees_count: string;
@@ -228,6 +230,7 @@ initRouter.get(
               e.source_external_event_id,
               e.is_cancelled,
               COALESCE(tm.role, 'CAPTAIN'::membership_role) AS viewer_role,
+              (tm.id IS NOT NULL) AS viewer_in_roster,
               COALESCE(r.status, CASE WHEN sc.id IS NOT NULL THEN 'CONFIRMED'::rsvp_status ELSE NULL END) AS my_rsvp,
               (sc.id IS NOT NULL) AS series_committed,
               COALESCE((
@@ -280,6 +283,7 @@ initRouter.get(
               e.source_external_event_id,
               e.is_cancelled,
               tm.role AS viewer_role,
+              TRUE AS viewer_in_roster,
               NULL::rsvp_status AS my_rsvp,
               FALSE AS series_committed,
               COALESCE((
@@ -530,6 +534,9 @@ initRouter.get(
         isRecurring: Boolean(e.series_id),
         seriesCommitted: Boolean(e.series_committed),
         viewerRole: e.viewer_role,
+        // Не в составе (владелец платформы в чужой команде) — свой ответ на
+        // явку ему не предлагают: `POST /rsvp` для него 404.
+        viewerInRoster: Boolean(e.viewer_in_roster),
         teamName: e.team_name,
         teamShortCode: e.team_short_code,
         teamTimezone: e.team_timezone,

@@ -94,11 +94,18 @@ const authRateLimiter = rateLimit({
     req.path === "/telegram/oidc/callback",
 });
 
+// Ограничитель записи считает только запись. Он навешен на роутеры целиком,
+// а экран ожидания заявки опрашивает `/join-requests` и `/team-requests`
+// каждые 10 с: чтение не должно съедать предел тех, кто на том же Wi-Fi
+// площадки отвечает на явку. Ключ — прежний (IP).
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 const writeRateLimiter = rateLimit({
   windowMs: env.rateLimit.writeWindowMs,
   limit: env.rateLimit.writeMax,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => SAFE_METHODS.has(req.method),
 });
 
 const openapiSpec = buildOpenApiSpec();

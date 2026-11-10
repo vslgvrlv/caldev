@@ -329,11 +329,15 @@ async function afterDecision(result: DecideJoinResult, actorId: string) {
   const verdict = result.status === "APPROVED" ? `✅ Принят${by}` : `✋ Отклонён${by}`;
 
   const tasks: Array<Promise<unknown>> = [closeRequestCards("join", result.requestId, verdict)];
+  const requester = await query<{ telegram_id: string | null }>(
+    `SELECT telegram_id::text AS telegram_id FROM users WHERE id = $1`,
+    [result.userId]
+  );
+  if (result.status === "DECLINED") {
+    // Отказ — коротко и без имени того, кто отклонил.
+    tasks.push(sendBotMessageSafe(requester.rows[0]?.telegram_id, `Заявку в команду «${result.teamName}» отклонили.`));
+  }
   if (result.status === "APPROVED") {
-    const requester = await query<{ telegram_id: string | null }>(
-      `SELECT telegram_id::text AS telegram_id FROM users WHERE id = $1`,
-      [result.userId]
-    );
     const teamPath = `/t/${encodeURIComponent(result.teamShortCode.toLowerCase())}`;
     tasks.push(
       sendBotMessageSafe(

@@ -63,6 +63,7 @@ async function resolveTeamManager(req: Request, teamId: string) {
   return {
     isRootAdmin,
     isCaptain: access?.role === "CAPTAIN",
+    isTrainer: access?.role === "TRAINER",
     isOwner: isRootAdmin || access?.via === "owner",
   };
 }
@@ -366,7 +367,8 @@ teamsRouter.post(
   })
 );
 
-// Ссылка команды `/join/<код>` (трек 1). Видит, выпускает и отзывает капитан
+// Ссылка команды `/join/<код>` (трек 1). Видят капитан и тренер — заявки
+// одобряют оба (решение Василия); отзывает и выпускает новую только капитан
 // (владелец платформы — как капитан). Ссылка не впускает сразу: она создаёт
 // заявку, которую одобряет капитан или тренер.
 teamsRouter.get(
@@ -376,9 +378,9 @@ teamsRouter.get(
     const teamId = z.string().uuid().parse(req.params.teamId);
     const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
     if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
-    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
-    if (!isOwner && !isCaptain) {
-      return res.status(403).json({ detail: "Only the team captain can see the team link" });
+    const { isOwner, isCaptain, isTrainer } = await resolveTeamManager(req, teamId);
+    if (!isOwner && !isCaptain && !isTrainer) {
+      return res.status(403).json({ detail: "Only the team captain or trainer can see the team link" });
     }
     const link = await ensureActiveJoinLink(teamId, req.authUser!.id);
     return res.json({ code: link.code, url: joinLinkUrl(link.code), createdAt: link.createdAt });

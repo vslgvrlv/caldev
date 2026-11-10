@@ -1,6 +1,6 @@
 // Уведомления об открытых слотах: подписчикам — «есть свободный слот» с
 // кнопкой «Записаться», капитану и тренеру — «<имя> занял слот» с кнопкой
-// «Снять». Уходят пушем и в бота сразу (решение 27), готовыми функциями
+// «Снять», снятому гостю — «тебя сняли со слота» с кнопкой «Свободные слоты». Уходят пушем и в бота сразу (решение 27), готовыми функциями
 // `lib/telegram-bot.ts` и `lib/web-push.ts`; сами эти файлы не меняются.
 //
 // Дубли. Перед отправкой в `slot_notifications` вставляется строка с ключом
@@ -16,7 +16,7 @@ import { query } from "../../db/pool.js";
 import { logger } from "../../lib/logger.js";
 import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
 import { isWebPushEnabled, sendWebPush } from "../../lib/web-push.js";
-import { buildSlotBookedText, buildSlotOpenText } from "./format.js";
+import { buildSlotBookedText, buildSlotOpenText, buildSlotRemovedText } from "./format.js";
 
 export type SlotNotificationKind = "OPEN" | "FREED" | "BOOKED";
 
@@ -277,4 +277,48 @@ export async function notifySlotBooked(params: { guestId: string; now?: Date }):
     keyboard: slotGuestKeyboard(row.id, eventPath),
     push: { title: `${row.name.trim()} занял слот`, body: text.split("\n").slice(1).join(" "), url: eventPath },
   });
+}
+
+/** Кнопка под сообщением снятому гостю: экран свободных слотов. */
+export const SLOTS_SCREEN_PATH = "/teams";
+
+export function slotRemovedKeyboard() {
+  return { inline_keyboard: [[{ text: "Свободные слоты", url: appUrl(SLOTS_SCREEN_PATH) }]] };
+}
+
+/**
+ * Снятому гостю — «<Команда>: тебя сняли со слота — <событие>, <когда>» в бот
+ * и пушем. Только когда снял капитан или тренер: гость, снявшийся сам, об
+ * этом знает. Дубли не нужны: запись снимается одним запросом (`status =
+ * 'BOOKED'` в UPDATE), второй вызов на ту же запись сюда не доходит.
+ */
+export async function notifySlotRemoved(params: { eventId: string; guestUserId: string; now?: Date }): Promise<boolean> {
+  const event = await query<{ title: string; start_at: string; team_name: string; timezone: string | null }>(
+    `SELECT e.title, e.start_at, t.name AS team_name, t.timezone
+     FROM events e JOIN teams t ON t.id = e.team_id
+     WHERE e.id = $1`,
+    [params.eventId]
+  );
+  const row = event.rows[0];
+  if (!row) return false;
+  const guest = await query<Recipient>(
+    `SELECT id AS user_id, telegram_id::text AS telegram_id FROM users WHERE id = $1 AND is_active = TRUE`,
+    [params.guestUserId]
+  );
+  const recipient = guest.rows[0];
+  if (!recipient) return false;
+  const text = buildSlotRemovedText({
+    teamName: row.team_name,
+    eventTitle: row.title,
+    startAt: row.start_at,
+    timeZone: row.timezone,
+    now: params.now,
+  });
+  const subs = await pushSubscriptions([recipient.user_id]);
+  await deliver(recipient, subs.get(recipient.user_id) ?? [], {
+    text,
+    keyboard: slotRemovedKeyboard(),
+    push: { title: "Тебя сняли со слота", body: text, url: SLOTS_SCREEN_PATH },
+  });
+  return true;
 }
