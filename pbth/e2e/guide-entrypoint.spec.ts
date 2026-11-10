@@ -60,6 +60,11 @@ async function installApiMocks(page: Page, auth: "local" | "anonymous" = "local"
       await route.fulfill({ status: 200, json: { identities: [] } });
       return;
     }
+    // Профиль: переключатель авто-напоминаний (трек 2 «Явка»).
+    if (auth === "local" && request.method() === "GET" && url.pathname === "/api/v1/reminders/settings") {
+      await route.fulfill({ status: 200, json: { autoEventReminders: true } });
+      return;
+    }
 
     unexpectedRequests.push(`${request.method()} ${url.pathname}${url.search}`);
     await route.abort("failed");

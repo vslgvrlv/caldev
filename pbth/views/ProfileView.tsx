@@ -4,6 +4,7 @@ import { Calendar as CalendarIcon, LogOut, Copy, Share2, Download, MessageCircle
 import { ProfileIdentities } from '../components/ProfileIdentities';
 import { GuideEntrypoint } from '../components/GuideEntrypoint';
 import { PushOptIn } from '../components/PushOptIn';
+import { ReminderSettings } from '../components/track2/ReminderSettings';
 
 interface ProfileViewProps {
   user: User;
@@ -67,6 +68,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       <PushOptIn />
+
+      <ReminderSettings />
 
       <ProfileIdentities />
 

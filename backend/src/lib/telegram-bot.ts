@@ -126,6 +126,8 @@ export async function editTelegramBotMessageText(params: {
   text: string;
   parseMode?: "HTML" | "MarkdownV2";
   replyMarkup?: Record<string, unknown>;
+  /** Разметка текста отдельно от него (как её присылает Telegram); вместо parseMode. */
+  entities?: Array<Record<string, unknown>>;
 }): Promise<void> {
   await callTelegramBotApi("editMessageText", {
     chat_id: params.chatId,
@@ -133,6 +135,7 @@ export async function editTelegramBotMessageText(params: {
     text: params.text,
     disable_web_page_preview: true,
     ...(params.parseMode ? { parse_mode: params.parseMode } : {}),
+    ...(!params.parseMode && params.entities?.length ? { entities: params.entities } : {}),
     // Пустой inline_keyboard снимает кнопки: решение принято, нажимать больше
     // нечего, и повторный тап не должен выглядеть возможным.
     reply_markup: params.replyMarkup ?? { inline_keyboard: [] },

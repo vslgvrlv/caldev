@@ -4,16 +4,38 @@ import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
+import { randomUUID } from "node:crypto";
 import { classifyDelivery, type DeliveryStatus } from "../../lib/notification-delivery.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { resolveTeamAccess } from "../../lib/team-access.js";
-import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
-import { enqueueTelegramNotification, isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
-import { isWebPushEnabled, sendWebPush } from "../../lib/web-push.js";
+import { resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
+import { isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
+import {
+  classifyTelegramSendError,
+  deliveryReasonText,
+  dispatchNotification,
+  eventUrlFor,
+  moneyUrlFor,
+  resolvePushSubscriptionsByUsers,
+  type OutgoingMessage,
+  type PushSubscriptionRow,
+} from "../../lib/notification-dispatch.js";
+import {
+  buildDebtMessage,
+  buildEventRsvpMessage,
+  escapeHtml,
+  htmlToPlain,
+  linkKeyboard,
+  type DebtItem,
+  type RsvpState,
+} from "../../lib/notification-messages.js";
+import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 
 type ActorRole = "ADMIN" | "CAPTAIN" | "TRAINER" | "PLAYER";
 type EventKind = "TRAINING" | "TOURNAMENT" | "CHAMPIONSHIP" | "FRIENDLY_MATCH" | "MEETING" | "MAINTENANCE" | "OTHER";
-type EventReminderAudience = "ALL" | "RESPONDED" | "UNANSWERED" | "CONFIRMED" | "PENDING" | "DECLINED";
+// SILENT — «молчат», как на карте явки: нет ответа или «думаю». Ответом
+// считается и согласие на серию занятий (как в списке участников).
+type EventReminderAudience = "ALL" | "RESPONDED" | "UNANSWERED" | "SILENT" | "CONFIRMED" | "PENDING" | "DECLINED";
 type EventReminderTemplate =
   | "EVENT_REMINDER"
   | "WARMUP_REMINDER"
@@ -22,7 +44,7 @@ type EventReminderTemplate =
   | "GAME_WARMUP";
 
 const eventReminderSchema = z.object({
-  audience: z.enum(["ALL", "RESPONDED", "UNANSWERED", "CONFIRMED", "PENDING", "DECLINED"]).default("UNANSWERED"),
+  audience: z.enum(["ALL", "RESPONDED", "UNANSWERED", "SILENT", "CONFIRMED", "PENDING", "DECLINED"]).default("UNANSWERED"),
   template: z.enum(["EVENT_REMINDER", "WARMUP_REMINDER", "ROLE_REMINDER", "GAME_GATHERING", "GAME_WARMUP"]).default("EVENT_REMINDER"),
   gameId: z.string().uuid().optional(),
   customText: z.string().trim().max(2000).optional(),
@@ -57,17 +79,6 @@ async function resolveNotificationsAccess(req: Parameters<typeof requireAuth>[0]
   return { userId: (req as any).authUser.id, actorRole: ctx.role as ActorRole };
 }
 
-async function resolveActorRoleForTeam(access: NotificationsAccess, teamId: string): Promise<ActorRole | null> {
-  if (access.actorRole === "ADMIN") return "ADMIN";
-  const membership = await query<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>(
-    `SELECT role::text AS role
-     FROM team_memberships
-     WHERE user_id = $1 AND team_id = $2
-     LIMIT 1`,
-    [access.userId, teamId]
-  );
-  return membership.rows[0]?.role ?? null;
-}
 
 function assertCanSendEventReminder(actorRole: ActorRole, eventType: EventKind) {
   if (actorRole === "ADMIN" || actorRole === "CAPTAIN") return;
@@ -84,42 +95,12 @@ function assertCanSendDebtReminder(actorRole: ActorRole) {
   throw err;
 }
 
-function classifyTelegramSendError(reason: string): "CHAT_NOT_FOUND" | "BOT_BLOCKED" | "USER_DEACTIVATED" | "SEND_FAILED" {
-  const text = reason.toLowerCase();
-  if (text.includes("chat not found")) return "CHAT_NOT_FOUND";
-  if (text.includes("blocked by the user")) return "BOT_BLOCKED";
-  if (text.includes("user is deactivated")) return "USER_DEACTIVATED";
-  return "SEND_FAILED";
-}
 
 // Все напоминания отправляются с parse_mode=HTML, поэтому любые пользовательские
 // значения (название, команда, соперник, произвольный текст) обязательно экранируем,
 // а место оформляем кликабельной ссылкой на Яндекс.Карты.
 const TELEGRAM_PARSE_MODE = "HTML" as const;
 type ReminderMessage = { text: string; parseMode: "HTML" };
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// Тексты напоминаний собираются как HTML для Telegram parse_mode=HTML.
-// Для push-уведомления нужен обычный текст: ссылка на место схлопывается до
-// названия (push-уведомление не кликабельно построчно), остальная разметка снимается.
-function toPlainText(html: string): string {
-  return html
-    .replace(/<a\s+href="[^"]*">([^<]*)<\/a>/gi, "$1")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
-
-const PUSH_TITLE_BY_TYPE: Record<NotificationDeliveryType, string> = {
-  EVENT_REMINDER: "Напоминание о событии",
-  EVENT_DEBT_REMINDER: "Напоминание об оплате",
-  TEAM_DEBT_REMINDER: "Напоминание об оплате",
-  MEMBER_DEBT_REMINDER: "Напоминание об оплате",
-};
 
 function formatLocationHtml(location?: string | null, locationUrl?: string | null): string | null {
   const name = (location ?? "").trim();
@@ -184,7 +165,13 @@ function buildEventReminderText(params: {
   } | null;
   customText?: string;
 }): ReminderMessage {
-  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
+  if (params.customText) {
+    // Название команды — в каждом сообщении (решение Василия 10.11.2026, п. 8).
+    return {
+      text: `<b>${escapeHtml(params.event.team_name)}</b>\n${escapeHtml(params.customText)}`,
+      parseMode: TELEGRAM_PARSE_MODE,
+    };
+  }
   const whenWhere = formatDateTime(params.event.start_at, params.event.team_timezone, params.event.location, params.event.location_url);
   const title = escapeHtml(params.event.title);
   const teamName = escapeHtml(params.event.team_name);
@@ -230,7 +217,7 @@ function buildEventReminderText(params: {
       teamName,
       whenWhere,
       ``,
-      `Пожалуйста, проверь RSVP и время.`,
+      `Ответь в приложении, идёшь ли.`,
     ].join("\n");
   }
   return { text, parseMode: TELEGRAM_PARSE_MODE };
@@ -240,159 +227,228 @@ function isGameReminderTemplate(template: EventReminderTemplate): boolean {
   return template === "GAME_GATHERING" || template === "GAME_WARMUP";
 }
 
-function buildDebtReminderText(params: {
-  event: { title: string; start_at: string; location: string | null; location_url: string | null; team_name: string; team_timezone: string | null };
-  amountOutstanding: number;
-  customText?: string;
-}): ReminderMessage {
-  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
-  const whenWhere = formatDateTime(params.event.start_at, params.event.team_timezone, params.event.location, params.event.location_url);
-  const text = [
-    `Напоминание по оплате события`,
-    escapeHtml(params.event.title),
-    escapeHtml(params.event.team_name),
-    whenWhere,
-    ``,
-    `Осталось сдать: ${Math.round(params.amountOutstanding * 100) / 100} ₽`,
-  ].join("\n");
-  return { text, parseMode: TELEGRAM_PARSE_MODE };
+/**
+ * Роль в команде события — `resolveEventAccess` (трек 3): участник — по
+ * составу, владелец платформы — как капитан. Гостю события (только чтение)
+ * рассылать и читать журнал нельзя. Владельцу самому напоминания команды не
+ * уходят: получатели — только состав.
+ */
+async function eventActor(req: any, eventId: string): Promise<{ userId: string; role: ActorRole; teamId: string } | null> {
+  const access = await resolveEventAccess(req, eventId);
+  const role = teamRoleOf(access);
+  if (!access || !role) return null;
+  return { userId: req.authUser.id, role: role as ActorRole, teamId: access.teamId };
 }
 
-function buildTeamDebtReminderText(params: {
-  teamName: string;
-  amountOutstanding: number;
-  customText?: string;
-}): ReminderMessage {
-  if (params.customText) return { text: escapeHtml(params.customText), parseMode: TELEGRAM_PARSE_MODE };
-  const text = [
-    `Напоминание по оплате задолженности`,
-    escapeHtml(params.teamName),
-    ``,
-    `Осталось сдать: ${Math.round(params.amountOutstanding * 100) / 100} ₽`,
-    `Подробности в приложении`,
-  ].join("\n");
-  return { text, parseMode: TELEGRAM_PARSE_MODE };
-}
+type OutcomeStatus = "SENT" | "QUEUED" | "FAILED" | "NO_CHANNEL";
 
-type NotificationDeliveryType = "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER";
-
-type DispatchMessageParams = {
-  chatId: string;
-  text: string;
-  parseMode?: "HTML" | "MarkdownV2";
-  type: NotificationDeliveryType;
-  actorUserId: string;
-  recipientUserId?: string;
-  teamId?: string;
-  eventId?: string;
-  correlationId?: string;
+type RecipientOutcome = {
+  userId: string;
+  name: string;
+  nickname: string;
+  username: string | null;
+  status: OutcomeStatus;
+  channel: "TELEGRAM" | "WEBPUSH" | null;
+  code?: string;
+  reason?: string;
 };
 
-async function dispatchNotificationMessage(params: DispatchMessageParams): Promise<{ mode: "SYNC" | "QUEUE" }> {
-  if (!isNotificationsQueueEnabled()) {
-    await sendTelegramBotMessage(params.chatId, params.text, params.parseMode ? { parseMode: params.parseMode } : undefined);
-    return { mode: "SYNC" };
-  }
-
-  await enqueueTelegramNotification({
-    chatId: params.chatId,
-    text: params.text,
-    parseMode: params.parseMode,
-    context: {
-      type: params.type,
-      actorUserId: params.actorUserId,
-      recipientUserId: params.recipientUserId,
-      teamId: params.teamId,
-      eventId: params.eventId,
-      correlationId: params.correlationId,
-    },
-  });
-  return { mode: "QUEUE" };
-}
-
-type PushSubscriptionRow = { endpoint: string; p256dh: string; auth: string };
-
-/**
- * Одним запросом по всем получателям сразу — иначе цикл по получателям
- * устроил бы N+1 к push_subscriptions на каждое напоминание.
- */
-async function resolvePushSubscriptionsByUsers(userIds: string[]): Promise<Map<string, PushSubscriptionRow[]>> {
-  const map = new Map<string, PushSubscriptionRow[]>();
-  if (!isWebPushEnabled() || userIds.length === 0) return map;
-  const rows = await query<{ user_id: string; endpoint: string; p256dh: string; auth: string }>(
-    `SELECT user_id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ANY($1)`,
-    [userIds]
-  );
-  for (const row of rows.rows) {
-    const existing = map.get(row.user_id) ?? [];
-    existing.push({ endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth });
-    map.set(row.user_id, existing);
-  }
-  return map;
-}
-
-type DispatchNotificationParams = Omit<DispatchMessageParams, "chatId"> & {
-  chatId?: string;
-  pushSubscriptions: PushSubscriptionRow[];
+type DeliveryTotals = {
+  /** Ушло сразу любым каналом: Telegram или пуш. Так «Отправлено: N» не врёт, когда ушли только пуши. */
+  sent: number;
+  /** Из них пушем. */
+  pushed: number;
+  /** Из них в Telegram. */
+  telegram: number;
+  queued: number;
+  skippedNoTelegram: number;
 };
 
-/**
- * Push — основной транспорт (#36): пробуем его первым, тихо убираем
- * протухшие подписки (410/404), и только если ни одна push-подписка не
- * сработала (или получатель на push вообще не подписан), падаем в Telegram.
- * Получатель без Telegram и без push-подписки не имеет канала — вызывающий
- * код обязан проверить это заранее и не звать dispatchNotification вовсе.
- */
-async function dispatchNotification(
-  params: DispatchNotificationParams
-): Promise<{ mode: "PUSH" | "SYNC" | "QUEUE" }> {
-  if (params.pushSubscriptions.length > 0) {
-    const title = PUSH_TITLE_BY_TYPE[params.type];
-    const body = toPlainText(params.text);
-    let anySent = false;
-    for (const sub of params.pushSubscriptions) {
-      const result = await sendWebPush({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title, body });
-      if (result.ok) {
-        anySent = true;
-      } else if (result.gone) {
-        await query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [sub.endpoint]).catch(() => {});
-      }
-    }
-    if (anySent) return { mode: "PUSH" };
+function totalsOf(outcomes: RecipientOutcome[]): DeliveryTotals {
+  const pushed = outcomes.filter((o) => o.status === "SENT" && o.channel === "WEBPUSH").length;
+  const telegram = outcomes.filter((o) => o.status === "SENT" && o.channel === "TELEGRAM").length;
+  return {
+    sent: pushed + telegram,
+    pushed,
+    telegram,
+    queued: outcomes.filter((o) => o.status === "QUEUED").length,
+    skippedNoTelegram: outcomes.filter((o) => o.status === "NO_CHANNEL").length,
+  };
+}
+
+type Recipient = { userId: string; name: string; nickname: string; username: string | null; telegramId: string | null };
+
+/** Отправка одному человеку с итогом для ответа и журнала; ошибки не бросает. */
+async function deliverTo(
+  recipient: Recipient,
+  pushSubscriptions: PushSubscriptionRow[],
+  message: OutgoingMessage,
+  context: {
+    type: "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER";
+    actorUserId: string;
+    teamId: string;
+    eventId?: string;
+    eventStartAt?: string | null;
+    correlationId?: string;
   }
-  if (!params.chatId) {
-    throw new Error("No delivery channel available (no push subscription, no Telegram)");
+): Promise<RecipientOutcome> {
+  const base = { userId: recipient.userId, name: recipient.name, nickname: recipient.nickname, username: recipient.username };
+  if (!recipient.telegramId && pushSubscriptions.length === 0) {
+    return { ...base, status: "NO_CHANNEL", channel: null, code: "NO_CHANNEL", reason: deliveryReasonText("NO_CHANNEL") };
   }
-  return dispatchNotificationMessage({ ...params, chatId: params.chatId });
+  try {
+    const { mode } = await dispatchNotification({
+      chatId: recipient.telegramId,
+      pushSubscriptions,
+      message,
+      type: context.type,
+      actorUserId: context.actorUserId,
+      recipientUserId: recipient.userId,
+      teamId: context.teamId,
+      eventId: context.eventId,
+      eventStartAt: context.eventStartAt ?? null,
+      correlationId: context.correlationId,
+    });
+    return {
+      ...base,
+      status: mode === "QUEUE" ? "QUEUED" : "SENT",
+      channel: mode === "PUSH" ? "WEBPUSH" : "TELEGRAM",
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Send failed";
+    const code = classifyTelegramSendError(detail);
+    return { ...base, status: "FAILED", channel: "TELEGRAM", code, reason: deliveryReasonText(code) };
+  }
+}
+
+/** Ответ клиенту: прежние поля (старый фронтенд) и подробный список получателей. */
+function deliveryResponse(outcomes: RecipientOutcome[], extra: Record<string, unknown> = {}) {
+  const totals = totalsOf(outcomes);
+  return {
+    success: true,
+    deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
+    attempted: outcomes.length,
+    ...totals,
+    failed: outcomes
+      .filter((o) => o.status === "FAILED")
+      .map((o) => ({ userId: o.userId, name: o.name, nickname: o.nickname, username: o.username, reason: o.reason, code: o.code })),
+    recipients: outcomes.map((o) => ({
+      userId: o.userId,
+      name: o.name,
+      nickname: o.nickname,
+      status: o.status,
+      channel: o.channel,
+      reason: o.reason ?? null,
+    })),
+    ...extra,
+  };
 }
 
 export const notificationsRouter = Router();
 
-async function getTeamDebtorsSummary(teamId: string) {
-  return query<{
-    user_id: string;
-    telegram_id: string | null;
-    amount_outstanding: string;
-  }>(
+type DebtRow = {
+  user_id: string;
+  name: string;
+  nickname: string;
+  username: string | null;
+  telegram_id: string | null;
+  event_id: string;
+  event_title: string;
+  event_start_at: Date;
+  outstanding: string;
+};
+
+type Debtor = Recipient & { total: number; items: DebtItem[] };
+
+/** Долги по событиям: кто, за что и сколько осталось (только положительные остатки). */
+async function getDebtItems(teamId: string, eventId?: string): Promise<Debtor[]> {
+  const result = await query<DebtRow>(
     `WITH charge_paid AS (
        SELECT c.id,
               c.user_id,
+              c.event_id,
               c.amount_due,
               COALESCE(SUM(a.amount), 0)::numeric AS amount_paid
        FROM event_member_charges c
        LEFT JOIN event_payment_allocations a ON a.event_member_charge_id = c.id
-       WHERE c.team_id = $1
-       GROUP BY c.id, c.user_id, c.amount_due
+       WHERE c.team_id = $1 AND ($2::uuid IS NULL OR c.event_id = $2::uuid)
+       GROUP BY c.id, c.user_id, c.event_id, c.amount_due
      )
      SELECT u.id AS user_id,
+            u.name,
+            u.nickname,
+            u.username,
             u.telegram_id::text AS telegram_id,
-            COALESCE(SUM(GREATEST(cp.amount_due - cp.amount_paid, 0)), 0)::text AS amount_outstanding
+            e.id AS event_id,
+            e.title AS event_title,
+            e.start_at AS event_start_at,
+            GREATEST(cp.amount_due - cp.amount_paid, 0)::text AS outstanding
      FROM charge_paid cp
      JOIN users u ON u.id = cp.user_id AND u.is_active = TRUE
-     GROUP BY u.id, u.telegram_id
-     HAVING COALESCE(SUM(GREATEST(cp.amount_due - cp.amount_paid, 0)), 0) > 0`,
-    [teamId]
+     JOIN events e ON e.id = cp.event_id
+     WHERE cp.amount_due - cp.amount_paid > 0
+     ORDER BY u.id, e.start_at ASC`,
+    [teamId, eventId ?? null]
   );
+  const byUser = new Map<string, Debtor>();
+  for (const row of result.rows) {
+    const amount = Number(row.outstanding);
+    const entry: Debtor = byUser.get(row.user_id) ?? {
+      userId: row.user_id,
+      name: row.name,
+      nickname: row.nickname,
+      username: row.username,
+      telegramId: row.telegram_id,
+      total: 0,
+      items: [],
+    };
+    entry.total += amount;
+    entry.items.push({ title: row.event_title, startAt: row.event_start_at, amount });
+    byUser.set(row.user_id, entry);
+  }
+  return [...byUser.values()];
+}
+
+type TeamRow = { id: string; name: string; short_code: string | null; timezone: string | null };
+
+async function loadTeam(teamId: string): Promise<TeamRow | null> {
+  const result = await query<TeamRow>(`SELECT id, name, short_code, timezone FROM teams WHERE id = $1`, [teamId]);
+  return result.rows[0] ?? null;
+}
+
+async function sendDebtReminders(params: {
+  team: TeamRow;
+  debtors: Debtor[];
+  customText?: string;
+  type: "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER";
+  actorUserId: string;
+  eventId?: string;
+  correlationId?: string;
+}): Promise<RecipientOutcome[]> {
+  const moneyUrl = moneyUrlFor({ shortCode: params.team.short_code, teamId: params.team.id });
+  const pushByUser = await resolvePushSubscriptionsByUsers(params.debtors.map((d) => d.userId));
+  const outcomes: RecipientOutcome[] = [];
+  for (const debtor of params.debtors) {
+    const message = buildDebtMessage({
+      teamName: params.team.name,
+      total: debtor.total,
+      items: debtor.items,
+      timezone: params.team.timezone,
+      moneyUrl,
+      customText: params.customText,
+      tag: params.eventId ? `debt-${params.eventId}` : `debt-${params.team.id}`,
+    });
+    outcomes.push(
+      await deliverTo(debtor, pushByUser.get(debtor.userId) ?? [], message, {
+        type: params.type,
+        actorUserId: params.actorUserId,
+        teamId: params.team.id,
+        eventId: params.eventId,
+        correlationId: params.correlationId,
+      })
+    );
+  }
+  return outcomes;
 }
 
 notificationsRouter.post(
@@ -404,72 +460,32 @@ notificationsRouter.post(
     assertCanSendDebtReminder(access.actorRole);
 
     const ctx = await resolveTeamAccess(req as any);
-    const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
+    const teamId = ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
 
-    const teamResult = await query<{ id: string; name: string }>(`SELECT id, name FROM teams WHERE id = $1`, [teamId]);
-    const team = teamResult.rows[0];
+    const team = await loadTeam(teamId);
     if (!team) return res.status(404).json({ detail: "Team not found" });
 
     const selectedIds = new Set(payload.userIds || []);
-    const debtors = await getTeamDebtorsSummary(teamId);
-    const filtered = debtors.rows.filter((row) => selectedIds.size === 0 || selectedIds.has(row.user_id));
-    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
-
-    let sent = 0;
-    let pushed = 0;
-    let queued = 0;
-    let skippedNoTelegram = 0;
-    const failed: Array<{ userId: string; reason: string }> = [];
-    for (const row of filtered) {
-      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
-      if (!row.telegram_id && pushSubscriptions.length === 0) {
-        skippedNoTelegram += 1;
-        continue;
-      }
-      try {
-        const dispatched = await dispatchNotification({
-          chatId: row.telegram_id || undefined,
-          pushSubscriptions,
-          ...buildTeamDebtReminderText({
-            teamName: team.name,
-            amountOutstanding: Number(row.amount_outstanding),
-            customText: payload.customText,
-          }),
-          type: "TEAM_DEBT_REMINDER",
-          actorUserId: access.userId,
-          recipientUserId: row.user_id,
-          teamId,
-          correlationId: req.correlationId,
-        });
-        if (dispatched.mode === "QUEUE") queued += 1;
-        else if (dispatched.mode === "PUSH") pushed += 1;
-        else sent += 1;
-      } catch (error) {
-        failed.push({ userId: row.user_id, reason: error instanceof Error ? error.message : "Send failed" });
-      }
-    }
+    const debtors = (await getDebtItems(teamId)).filter((d) => selectedIds.size === 0 || selectedIds.has(d.userId));
+    const outcomes = await sendDebtReminders({
+      team,
+      debtors,
+      customText: payload.customText,
+      type: "TEAM_DEBT_REMINDER",
+      actorUserId: access.userId,
+      correlationId: req.correlationId,
+    });
+    const totals = totalsOf(outcomes);
 
     await writeAudit(access.userId, "notifications.team_debt_reminder.send", {
       teamId,
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      failed: failed.length,
+      attempted: outcomes.length,
+      ...totals,
+      failed: outcomes.filter((o) => o.status === "FAILED").length,
     });
 
-    return res.json({
-      success: true,
-      deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      failed,
-    });
+    return res.json(deliveryResponse(outcomes));
   })
 );
 
@@ -479,23 +495,26 @@ notificationsRouter.post(
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
     const payload = eventReminderSchema.parse(req.body ?? {});
-    const access = await resolveNotificationsAccess(req as any);
 
     const eventResult = await query<{
       id: string;
       team_id: string;
       title: string;
       start_at: string;
+      start_at_iso: Date;
       location: string | null;
       location_url: string | null;
       type: EventKind;
+      series_id: string | null;
       team_name: string;
+      team_short_code: string | null;
       team_timezone: string | null;
     }>(
       `SELECT e.id,
               e.team_id,
               e.title,
               e.start_at::text,
+              e.start_at AS start_at_iso,
               e.location,
               (SELECT sp.yandex_url FROM saved_places sp
                  WHERE lower(sp.name) = lower(e.location)
@@ -503,7 +522,9 @@ notificationsRouter.post(
                  ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
                  LIMIT 1) AS location_url,
               e.type,
+              e.series_id::text AS series_id,
               t.name AS team_name,
+              t.short_code AS team_short_code,
               t.timezone AS team_timezone
        FROM events e
        JOIN teams t ON t.id = e.team_id
@@ -513,8 +534,9 @@ notificationsRouter.post(
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ detail: "Event not found" });
 
-    const actorRole = await resolveActorRoleForTeam(access, event.team_id);
-    if (!actorRole) return res.status(403).json({ detail: "No access to this team event" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "No access to this team event" });
+    const actorRole = actor.role;
     assertCanSendEventReminder(actorRole, event.type);
 
     const recipients = await query<{
@@ -524,28 +546,51 @@ notificationsRouter.post(
       username: string | null;
       telegram_id: string | null;
       rsvp_status: "CONFIRMED" | "PENDING" | "DECLINED" | null;
+      committed: boolean;
     }>(
       `SELECT tm.user_id,
               u.name,
               u.nickname,
               u.username,
               u.telegram_id::text AS telegram_id,
-              r.status AS rsvp_status
+              r.status AS rsvp_status,
+              (c.id IS NOT NULL) AS committed
        FROM team_memberships tm
        JOIN users u ON u.id = tm.user_id AND u.is_active = TRUE
        LEFT JOIN rsvps r ON r.event_id = $1 AND r.user_id = tm.user_id
+       LEFT JOIN event_series_commitment c
+         ON c.series_id = $3::uuid AND c.user_id = tm.user_id AND c.status = 'COMMITTED'
        WHERE tm.team_id = $2`,
-      [eventId, event.team_id]
+      [eventId, event.team_id, event.series_id]
     );
 
-    const filtered = recipients.rows.filter((row) => {
-      if (payload.audience === "ALL") return true;
-      if (payload.audience === "RESPONDED") return row.rsvp_status !== null;
-      if (payload.audience === "UNANSWERED") return row.rsvp_status === null;
-      if (payload.audience === "CONFIRMED") return row.rsvp_status === "CONFIRMED";
-      if (payload.audience === "PENDING") return row.rsvp_status === "PENDING";
-      if (payload.audience === "DECLINED") return row.rsvp_status === "DECLINED";
-      return false;
+    // Ответ человека — как в списке участников: явный ответ, иначе согласие
+    // на серию считается «иду». Так «Напомнить (5)» шлёт ровно тем пятерым,
+    // кого капитан видит в «Молчат».
+    const hasSeries = Boolean(event.series_id);
+    const withState = recipients.rows.map((row) => ({
+      ...row,
+      state: resolveEffectiveRsvp({ explicit: row.rsvp_status, hasSeries, committedToSeries: row.committed }) as RsvpState,
+    }));
+    const filtered = withState.filter((row) => {
+      switch (payload.audience as EventReminderAudience) {
+        case "ALL":
+          return true;
+        case "RESPONDED":
+          return row.state !== "UNANSWERED";
+        case "UNANSWERED":
+          return row.state === "UNANSWERED";
+        case "SILENT":
+          return row.state === "UNANSWERED" || row.state === "PENDING";
+        case "CONFIRMED":
+          return row.state === "CONFIRMED";
+        case "PENDING":
+          return row.state === "PENDING";
+        case "DECLINED":
+          return row.state === "DECLINED";
+        default:
+          return false;
+      }
     });
 
     let gameContext: {
@@ -582,125 +627,109 @@ notificationsRouter.post(
       }
     }
 
-    const message = buildEventReminderText({
-      template: payload.template as EventReminderTemplate,
-      event,
-      game: gameContext,
-      customText: payload.customText,
-    });
-
-    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
-
-    let sent = 0;
-    let pushed = 0;
-    let queued = 0;
-    let skippedNoTelegram = 0;
-    const failed: Array<{
-      userId: string;
-      name: string;
-      nickname: string;
-      username: string | null;
-      reason: string;
-      code: "CHAT_NOT_FOUND" | "BOT_BLOCKED" | "USER_DEACTIVATED" | "SEND_FAILED";
-    }> = [];
-    // #46: пер-получательский журнал доставки
-    const deliveryRows: Array<{ userId: string; channel: "TELEGRAM" | "WEBPUSH"; status: DeliveryStatus; errorCode?: string; errorDetail?: string }> = [];
-    const skippedNoTelegramUsers: Array<{
-      userId: string;
-      name: string;
-      nickname: string;
-      username: string | null;
-      rsvpStatus: "CONFIRMED" | "PENDING" | "DECLINED" | null;
-    }> = [];
-
-    for (const row of filtered) {
-      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
-      if (!row.telegram_id && pushSubscriptions.length === 0) {
-        skippedNoTelegram += 1;
-        skippedNoTelegramUsers.push({
-          userId: row.user_id,
-          name: row.name,
-          nickname: row.nickname,
-          username: row.username,
-          rsvpStatus: row.rsvp_status,
-        });
-        continue;
-      }
-      try {
-        const dispatched = await dispatchNotification({
-          chatId: row.telegram_id || undefined,
-          pushSubscriptions,
-          text: message.text,
-          parseMode: message.parseMode,
-          type: "EVENT_REMINDER",
-          actorUserId: access.userId,
-          recipientUserId: row.user_id,
-          teamId: event.team_id,
-          eventId,
-          correlationId: req.correlationId,
-        });
-        if (dispatched.mode === "QUEUE") queued += 1;
-        else if (dispatched.mode === "PUSH") pushed += 1;
-        else sent += 1;
-        deliveryRows.push({
-          userId: row.user_id,
-          channel: dispatched.mode === "PUSH" ? "WEBPUSH" : "TELEGRAM",
-          ...classifyDelivery({ mode: dispatched.mode }),
-        });
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : "Send failed";
-        const code = classifyTelegramSendError(reason);
-        failed.push({
-          userId: row.user_id,
-          name: row.name,
-          nickname: row.nickname,
-          username: row.username,
-          reason,
-          code,
-        });
-        deliveryRows.push({ userId: row.user_id, channel: "TELEGRAM", ...classifyDelivery({ error }), errorCode: code });
-      }
+    const eventUrl = eventUrlFor({ shortCode: event.team_short_code, teamId: event.team_id }, eventId);
+    const startIso = new Date(event.start_at_iso).toISOString();
+    const card = {
+      eventId,
+      title: event.title,
+      startAt: startIso,
+      location: event.location,
+      locationUrl: event.location_url,
+      teamName: event.team_name,
+      timezone: event.team_timezone,
+    };
+    // «Обычное напоминание» — карточка с кнопками «Иду / Не иду», у каждого
+    // своя строка ответа. Остальные шаблоны — сообщение со ссылкой на событие.
+    let plainMessage: OutgoingMessage | null = null;
+    if (payload.template !== "EVENT_REMINDER") {
+      const built = buildEventReminderText({
+        template: payload.template as EventReminderTemplate,
+        event,
+        game: gameContext,
+        customText: payload.customText,
+      });
+      plainMessage = {
+        text: built.text,
+        parseMode: built.parseMode,
+        replyMarkup: linkKeyboard("Открыть событие", eventUrl),
+        push: {
+          title: `${event.team_name}: ${event.title}`,
+          body: htmlToPlain(built.text),
+          url: eventUrl,
+          tag: `event-${eventId}`,
+        },
+      };
     }
 
-    // #46: записываем пер-получательский журнал доставки (best-effort — не ломает ответ)
+    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
+    const outcomes: RecipientOutcome[] = [];
+    for (const row of filtered) {
+      const message: OutgoingMessage =
+        plainMessage ?? buildEventRsvpMessage({ card, kind: "MANUAL", state: row.state, eventUrl, customText: payload.customText });
+      outcomes.push(
+        await deliverTo(
+          { userId: row.user_id, name: row.name, nickname: row.nickname, username: row.username, telegramId: row.telegram_id },
+          pushByUser.get(row.user_id) ?? [],
+          message,
+          {
+            type: "EVENT_REMINDER",
+            actorUserId: actor.userId,
+            teamId: event.team_id,
+            eventId,
+            eventStartAt: startIso,
+            correlationId: req.correlationId,
+          }
+        )
+      );
+    }
+
+    // #46: журнал доставки по каждому получателю, одним номером рассылки —
+    // по нему экран «кому дошло» показывает последнюю рассылку целиком.
+    // «Нет канала» — неудача с кодом NO_CHANNEL (статусы журнала прежние).
+    const batchId = randomUUID();
     try {
-      for (const d of deliveryRows) {
+      for (const o of outcomes) {
+        const classified: { status: DeliveryStatus; errorDetail?: string } =
+          o.status === "NO_CHANNEL" || o.status === "FAILED"
+            ? { status: "FAILED", errorDetail: o.reason }
+            : classifyDelivery({ mode: o.status === "QUEUED" ? "QUEUE" : o.channel === "WEBPUSH" ? "PUSH" : "SYNC" });
         await query(
-          `INSERT INTO notification_deliveries (team_id, event_id, user_id, kind, channel, status, error_code, error_detail)
-           VALUES ($1, $2, $3, 'EVENT_REMINDER', $4, $5, $6, $7)`,
-          [event.team_id, eventId, d.userId, d.channel, d.status, d.errorCode ?? null, d.errorDetail ?? null]
+          `INSERT INTO notification_deliveries (team_id, event_id, user_id, kind, channel, status, error_code, error_detail, batch_id)
+           VALUES ($1, $2, $3, 'EVENT_REMINDER', $4, $5, $6, $7, $8)`,
+          [event.team_id, eventId, o.userId, o.channel ?? "NONE", classified.status, o.code ?? null, classified.errorDetail ?? null, batchId]
         );
       }
     } catch (err) {
       console.error("notification_deliveries insert failed", err);
     }
 
-    await writeAudit(access.userId, "notifications.event_reminder.send", {
+    const totals = totalsOf(outcomes);
+    await writeAudit(actor.userId, "notifications.event_reminder.send", {
       eventId,
       teamId: event.team_id,
       actorRole,
       audience: payload.audience as EventReminderAudience,
       template: payload.template as EventReminderTemplate,
       gameId: gameContext?.id || null,
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      failed: failed.length,
+      attempted: outcomes.length,
+      ...totals,
+      failed: outcomes.filter((o) => o.status === "FAILED").length,
     });
 
-    return res.json({
-      success: true,
-      deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      skippedNoTelegramUsers,
-      failed,
-    });
+    return res.json(
+      deliveryResponse(outcomes, {
+        batchId,
+        skippedNoTelegramUsers: outcomes
+          .filter((o) => o.status === "NO_CHANNEL")
+          .map((o) => ({
+            userId: o.userId,
+            name: o.name,
+            nickname: o.nickname,
+            username: o.username,
+            rsvpStatus: withState.find((row) => row.user_id === o.userId)?.rsvp_status ?? null,
+          })),
+      })
+    );
   })
 );
 
@@ -709,14 +738,15 @@ notificationsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
-    const access = await resolveNotificationsAccess(req as any);
-
     const ev = await query<{ team_id: string }>(`SELECT team_id FROM events WHERE id = $1`, [eventId]);
     const teamId = ev.rows[0]?.team_id;
     if (!teamId) return res.status(404).json({ detail: "Event not found" });
 
-    const role = await resolveActorRoleForTeam(access, teamId);
-    if (!role) return res.status(403).json({ detail: "Team access denied" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "Team access denied" });
+    const role = actor.role;
+    // Кому из команды не дошло и почему — дело капитана и тренера (находка ревью №16).
+    if (role === "PLAYER") return res.status(403).json({ detail: "Журнал доставки видят капитан и тренер" });
 
     // Последний статус доставки по каждому получателю (#46).
     const rows = await query<{ user_id: string; status: string; error_detail: string | null; created_at: string }>(
@@ -748,61 +778,37 @@ notificationsRouter.post(
     assertCanSendDebtReminder(access.actorRole);
 
     const ctx = await resolveTeamAccess(req as any);
-    const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
+    const teamId = ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
 
-    const teamResult = await query<{ id: string; name: string }>(`SELECT id, name FROM teams WHERE id = $1`, [teamId]);
-    const team = teamResult.rows[0];
+    const team = await loadTeam(teamId);
     if (!team) return res.status(404).json({ detail: "Team not found" });
 
-    const debtors = await getTeamDebtorsSummary(teamId);
-    const row = debtors.rows.find((d) => d.user_id === userId);
-    if (!row) return res.status(400).json({ detail: "Selected user has no debt in current team" });
+    const debtor = (await getDebtItems(teamId)).find((d) => d.userId === userId);
+    if (!debtor) return res.status(400).json({ detail: "Selected user has no debt in current team" });
 
-    const pushSubscriptions = (await resolvePushSubscriptionsByUsers([row.user_id])).get(row.user_id) ?? [];
-    if (!row.telegram_id && pushSubscriptions.length === 0) {
+    const pushSubscriptions = (await resolvePushSubscriptionsByUsers([debtor.userId])).get(debtor.userId) ?? [];
+    if (!debtor.telegramId && pushSubscriptions.length === 0) {
       return res.status(400).json({ detail: "User has no Telegram linked and no push subscription" });
     }
 
-    let dispatched: { mode: "SYNC" | "QUEUE" | "PUSH" } | null = null;
-    const failed: Array<{ userId: string; reason: string }> = [];
-    try {
-      dispatched = await dispatchNotification({
-        chatId: row.telegram_id || undefined,
-        pushSubscriptions,
-        ...buildTeamDebtReminderText({
-          teamName: team.name,
-          amountOutstanding: Number(row.amount_outstanding),
-          customText: payload.customText,
-        }),
-        type: "MEMBER_DEBT_REMINDER",
-        actorUserId: access.userId,
-        recipientUserId: row.user_id,
-        teamId,
-        correlationId: req.correlationId,
-      });
-    } catch (error) {
-      failed.push({ userId: row.user_id, reason: error instanceof Error ? error.message : "Send failed" });
-    }
+    const outcomes = await sendDebtReminders({
+      team,
+      debtors: [debtor],
+      customText: payload.customText,
+      type: "MEMBER_DEBT_REMINDER",
+      actorUserId: access.userId,
+      correlationId: req.correlationId,
+    });
+    const totals = totalsOf(outcomes);
 
     await writeAudit(access.userId, "notifications.member_debt_reminder.send", {
       teamId,
       userId,
-      sent: dispatched?.mode === "SYNC" ? 1 : 0,
-      pushed: dispatched?.mode === "PUSH" ? 1 : 0,
-      queued: dispatched?.mode === "QUEUE" ? 1 : 0,
-      failed: failed.length,
+      ...totals,
+      failed: outcomes.filter((o) => o.status === "FAILED").length,
     });
-    return res.json({
-      success: true,
-      deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
-      attempted: 1,
-      sent: dispatched?.mode === "SYNC" ? 1 : 0,
-      pushed: dispatched?.mode === "PUSH" ? 1 : 0,
-      queued: dispatched?.mode === "QUEUE" ? 1 : 0,
-      skippedNoTelegram: 0,
-      failed,
-    });
+    return res.json(deliveryResponse(outcomes));
   })
 );
 
@@ -812,123 +818,46 @@ notificationsRouter.post(
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
     const payload = debtReminderSchema.parse(req.body ?? {});
-    const access = await resolveNotificationsAccess(req as any);
 
-    const eventResult = await query<{
-      id: string;
-      team_id: string;
-      title: string;
-      start_at: string;
-      location: string | null;
-      location_url: string | null;
-      team_name: string;
-      team_timezone: string | null;
-    }>(
-      `SELECT e.id, e.team_id, e.title, e.start_at::text, e.location,
-              (SELECT sp.yandex_url FROM saved_places sp
-                 WHERE lower(sp.name) = lower(e.location)
-                   AND (sp.team_id = e.team_id OR sp.team_id IS NULL)
-                 ORDER BY (sp.team_id = e.team_id) DESC NULLS LAST
-                 LIMIT 1) AS location_url,
-              t.name AS team_name,
-              t.timezone AS team_timezone
-       FROM events e
-       JOIN teams t ON t.id = e.team_id
-       WHERE e.id = $1 AND e.is_cancelled = FALSE`,
+    const eventResult = await query<{ id: string; team_id: string }>(
+      `SELECT e.id, e.team_id FROM events e WHERE e.id = $1 AND e.is_cancelled = FALSE`,
       [eventId]
     );
     const event = eventResult.rows[0];
     if (!event) return res.status(404).json({ detail: "Event not found" });
 
-    const actorRole = await resolveActorRoleForTeam(access, event.team_id);
-    if (!actorRole) return res.status(403).json({ detail: "No access to this team event" });
+    const actor = await eventActor(req, eventId);
+    if (!actor) return res.status(403).json({ detail: "No access to this team event" });
+    const actorRole = actor.role;
     assertCanSendDebtReminder(actorRole);
 
+    const team = await loadTeam(event.team_id);
+    if (!team) return res.status(404).json({ detail: "Team not found" });
+
     const selectedIds = new Set(payload.userIds || []);
-    const debtors = await query<{
-      user_id: string;
-      telegram_id: string | null;
-      amount_outstanding: string;
-    }>(
-      `WITH charge_paid AS (
-         SELECT c.id,
-                c.user_id,
-                c.amount_due,
-                COALESCE(SUM(a.amount), 0)::numeric AS amount_paid
-         FROM event_member_charges c
-         LEFT JOIN event_payment_allocations a ON a.event_member_charge_id = c.id
-         WHERE c.event_id = $1
-         GROUP BY c.id, c.user_id, c.amount_due
-       )
-       SELECT u.id AS user_id,
-              u.telegram_id::text AS telegram_id,
-              COALESCE(SUM(GREATEST(cp.amount_due - cp.amount_paid, 0)), 0)::text AS amount_outstanding
-       FROM charge_paid cp
-       JOIN users u ON u.id = cp.user_id AND u.is_active = TRUE
-       GROUP BY u.id, u.telegram_id
-       HAVING COALESCE(SUM(GREATEST(cp.amount_due - cp.amount_paid, 0)), 0) > 0`,
-      [eventId]
+    const debtors = (await getDebtItems(event.team_id, eventId)).filter(
+      (d) => selectedIds.size === 0 || selectedIds.has(d.userId)
     );
+    const outcomes = await sendDebtReminders({
+      team,
+      debtors,
+      customText: payload.customText,
+      type: "EVENT_DEBT_REMINDER",
+      actorUserId: actor.userId,
+      eventId,
+      correlationId: req.correlationId,
+    });
+    const totals = totalsOf(outcomes);
 
-    const filtered = debtors.rows.filter((row) => selectedIds.size === 0 || selectedIds.has(row.user_id));
-    const pushByUser = await resolvePushSubscriptionsByUsers(filtered.map((row) => row.user_id));
-
-    let sent = 0;
-    let pushed = 0;
-    let queued = 0;
-    let skippedNoTelegram = 0;
-    const failed: Array<{ userId: string; reason: string }> = [];
-    for (const row of filtered) {
-      const pushSubscriptions = pushByUser.get(row.user_id) ?? [];
-      if (!row.telegram_id && pushSubscriptions.length === 0) {
-        skippedNoTelegram += 1;
-        continue;
-      }
-      try {
-        const dispatched = await dispatchNotification({
-          chatId: row.telegram_id || undefined,
-          pushSubscriptions,
-          ...buildDebtReminderText({
-            event,
-            amountOutstanding: Number(row.amount_outstanding),
-            customText: payload.customText,
-          }),
-          type: "EVENT_DEBT_REMINDER",
-          actorUserId: access.userId,
-          recipientUserId: row.user_id,
-          teamId: event.team_id,
-          eventId,
-          correlationId: req.correlationId,
-        });
-        if (dispatched.mode === "QUEUE") queued += 1;
-        else if (dispatched.mode === "PUSH") pushed += 1;
-        else sent += 1;
-      } catch (error) {
-        failed.push({ userId: row.user_id, reason: error instanceof Error ? error.message : "Send failed" });
-      }
-    }
-
-    await writeAudit(access.userId, "notifications.debt_reminder.send", {
+    await writeAudit(actor.userId, "notifications.debt_reminder.send", {
       eventId,
       teamId: event.team_id,
       actorRole,
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      failed: failed.length,
+      attempted: outcomes.length,
+      ...totals,
+      failed: outcomes.filter((o) => o.status === "FAILED").length,
     });
 
-    return res.json({
-      success: true,
-      deliveryMode: isNotificationsQueueEnabled() ? "QUEUE" : "SYNC",
-      attempted: filtered.length,
-      sent,
-      pushed,
-      queued,
-      skippedNoTelegram,
-      failed,
-    });
+    return res.json(deliveryResponse(outcomes));
   })
 );
