@@ -1,4 +1,5 @@
 import { sanitizeNext } from './login-next-param';
+import { isAppDeepPath } from './team-url';
 
 /**
  * Куда вести человека сразу после входа.
@@ -8,7 +9,8 @@ import { sanitizeNext } from './login-next-param';
  * - `invite` — человек пришёл по ссылке-приглашению. Он ещё не в команде,
  *   поэтому грузить приложение рано: /init ответит «нет команды», и раньше
  *   это давало системное окно и тупиковый экран вместо экрана приглашения.
- * - `app` — обычный вход в приложение команды.
+ * - `app` — вход в приложение: туда, куда человек шёл (экран команды,
+ *   событие, профиль), иначе `/app` — последняя команда на устройстве.
  */
 export type PostLoginAction =
   | { kind: 'admin' }
@@ -23,5 +25,6 @@ export function resolvePostLoginAction(target: string | null | undefined): PostL
   const safe = sanitizeNext(target) ?? '/app';
   if (safe === '/admin' || safe.startsWith('/admin/') || safe.startsWith('/admin?')) return { kind: 'admin' };
   if (isInvitePath(safe)) return { kind: 'invite', path: safe };
+  if (isAppDeepPath(safe)) return { kind: 'app', path: safe };
   return { kind: 'app', path: '/app' };
 }

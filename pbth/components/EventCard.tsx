@@ -13,9 +13,11 @@ interface EventCardProps {
   onClick?: (event: Event) => void;
   onLongPress?: (event: Event) => void;
   onCommitSeries?: (seriesId: string) => void;
+  /** Чьё событие: в общей ленте человека из нескольких команд. */
+  teamLabel?: string;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, onRsvp, onClick, onLongPress, onCommitSeries }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, onRsvp, onClick, onLongPress, onCommitSeries, teamLabel }) => {
   const Icon = getEventIcon(event.type);
   const color = EVENT_COLORS[event.type];
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,6 +86,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, on
             >
               {EVENT_LABELS[event.type]}
             </span>
+            {teamLabel && (
+              <span className="text-[10px] font-semibold text-pb-subtext truncate max-w-[140px]">{teamLabel}</span>
+            )}
             {event.isConflict && (
               <span className="flex items-center text-[10px] text-pb-warning font-bold gap-1">
                  <AlertTriangle size={10} /> Конфликт

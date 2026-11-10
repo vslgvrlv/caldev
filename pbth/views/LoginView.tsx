@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { UserRoleOption, Role } from '../types';
 import { Shield, User as UserIcon, LogOut, Loader2 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { isTelegramMiniApp, readMiniAppInitData } from '../shell/telegram';
 import { api, type AuthMeResponse } from '../api';
 import {
   extractAuthError,
@@ -64,7 +65,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     setAuthError(message);
     sendAuthTelemetry({
       scope: wantsAdmin ? 'ADMIN' : 'USER',
-      flow: Boolean((window as any)?.Telegram?.WebApp) ? 'MINIAPP' : 'BOT_HANDOFF',
+      flow: isTelegramMiniApp() ? 'MINIAPP' : 'BOT_HANDOFF',
       event: 'error_page',
       code,
       detail,
@@ -101,23 +102,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     return Boolean(payload?.authenticated);
   };
 
-  const waitMiniAppInitData = async (timeoutMs = 1200): Promise<string> => {
+  // Данные запуска Mini App читаются сразу (из адреса или SDK): ждать их в
+  // обычном браузере бессмысленно — там их не будет, а пауза стояла перед
+  // кодом входа больше секунды.
+  const readMiniAppLaunch = (): string => {
+    const initData = readMiniAppInitData();
+    if (!initData) return '';
     const tg = (window as any).Telegram?.WebApp;
-    if (!tg) return '';
     try {
-      tg.ready?.();
-      tg.expand?.();
+      tg?.ready?.();
+      tg?.expand?.();
     } catch {
       // ignore telegram webapp readiness errors
     }
-
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const initData = String(tg.initData || '').trim();
-      if (initData) return initData;
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    }
-    return String(tg.initData || '').trim();
+    return initData;
   };
 
   const handleContinueExisting = () => {
@@ -171,14 +169,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       sessionStorage.removeItem('pbth:skip-auto-auth-after-logout');
       sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
       localStorage.removeItem('pbth:skip-auto-auth-after-logout');
-      const hasTelegramWebApp = Boolean((window as any).Telegram?.WebApp);
+      const initData = readMiniAppLaunch();
+      const hasTelegramWebApp = Boolean(initData);
       const telemetryScope = wantsAdmin ? 'ADMIN' : 'USER';
       sendAuthTelemetry({
         scope: telemetryScope,
         flow: hasTelegramWebApp ? 'MINIAPP' : 'BOT_HANDOFF',
         event: 'login_start',
       });
-      const initData = hasTelegramWebApp ? await waitMiniAppInitData() : '';
       const transport = resolveTelegramLoginTransport({
         hasTelegramWebApp,
         initData,
