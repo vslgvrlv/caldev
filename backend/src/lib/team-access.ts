@@ -83,7 +83,8 @@ export function isPlatformOwner(req: Request): boolean {
   return true;
 }
 
-async function findTeamId(value: string, allowShortCode: boolean): Promise<string | null> {
+/** Команда по id или короткому коду (без учёта регистра). `null` — нет такой. */
+export async function findTeamId(value: string, allowShortCode: boolean): Promise<string | null> {
   if (isUuid(value)) {
     const byId = await query<{ id: string }>(`SELECT id FROM teams WHERE id = $1`, [value]);
     if (byId.rows[0]) return byId.rows[0].id;

@@ -34,28 +34,6 @@ export const NoTeamScreen: React.FC<{
   </Frame>
 );
 
-export const AdminModeScreen: React.FC<{
-  onOpenAdmin: () => void;
-  onSwitchToUser: () => void;
-  onLogout: () => void;
-}> = ({ onOpenAdmin, onSwitchToUser, onLogout }) => (
-  <Frame>
-    <div className="text-xl font-bold mb-3">Включён режим владельца</div>
-    <p className="text-pb-subtext mb-6">Экраны владельца платформы открываются в консоли.</p>
-    <div className="flex flex-col gap-3">
-      <button onClick={onOpenAdmin} className={primary}>
-        Открыть консоль
-      </button>
-      <button onClick={onSwitchToUser} className={secondary}>
-        Открыть приложение команды
-      </button>
-      <button onClick={onLogout} className={secondary}>
-        Выйти
-      </button>
-    </div>
-  </Frame>
-);
-
 export const DataUnavailableScreen: React.FC<{ onRetry: () => void; onLogin: () => void }> = ({ onRetry, onLogin }) => (
   <Frame>
     <div className="text-xl font-bold mb-3">Данные команды не загрузились</div>
