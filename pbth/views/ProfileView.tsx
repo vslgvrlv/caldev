@@ -16,7 +16,7 @@ interface ProfileViewProps {
   role: Role | null | undefined;
   /**
    * True when the current user is allowlisted as a platform owner.
-   * Renders the "Платформа админа" entry-point card.
+   * Плитка «Консоль владельца» — только владельцу платформы.
    */
   canEnterAdmin?: boolean;
   /** Called when the admin-entry card is tapped. */
@@ -75,10 +75,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       <GuideEntrypoint role={role} />
 
-      {/* Entry point to the Platform Admin Console — visible only for
-          allowlist-eligible users (owners). Hidden for regular players /
-          captains because they have no PLATFORM scope on the backend
-          anyway, so the link would lead to a permission error. */}
+      {/* Консоль владельца платформы — только владельцу (трек 3). */}
       {canEnterAdmin && (
         <button
           onClick={() => onEnterAdmin?.()}
@@ -89,8 +86,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <Shield size={22} className="text-pb-primary" strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
-              <div className="text-white font-bold text-sm">Платформа админа</div>
-              <div className="text-pb-subtext text-xs truncate">Управление командами, события, биллинг</div>
+              <div className="text-white font-bold text-sm">Консоль владельца</div>
+              <div className="text-pb-subtext text-xs truncate">Все команды, заявки на создание, помощь командам</div>
             </div>
           </div>
           <ArrowRight size={18} className="text-pb-primary flex-shrink-0" />

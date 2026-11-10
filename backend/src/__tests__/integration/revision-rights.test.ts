@@ -320,7 +320,10 @@ describe("капитаны", () => {
   it("добавление в команду не меняет человеку режим учётной записи", async () => {
     const owner = request.agent(app);
     await owner.post("/api/v1/auth/dev/login").send({ telegramId: TG.owner, username: `rr_owner_${stamp}`, ensureTeam: false }).expect(200);
+    // Режима больше нет (трек 3): ручка выбора — пустышка и базу не трогает.
+    // Старые учётки с ADMIN в базе остаются как есть.
     await owner.post("/api/v1/auth/select-role").send({ accountRole: "ADMIN" }).expect(200);
+    await pool.query(`UPDATE users SET account_role = 'ADMIN' WHERE id = $1`, [f.users.owner]);
     const before = await pool.query<{ account_role: string }>(`SELECT account_role FROM users WHERE id = $1`, [f.users.owner]);
     expect(before.rows[0].account_role).toBe("ADMIN");
 

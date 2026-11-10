@@ -106,6 +106,8 @@ export type AuthMeResponse =
       roleSelectionRequired: boolean;
       canChooseAdminRole: boolean;
       isOwnerAdminEligible: boolean;
+      /** Владелец платформы с доверенным входом (трек 3). Нет в ответе старого сервера. */
+      platformOwner?: boolean;
       hasMemberships: boolean;
       activeMembershipId: string | null;
       activeTeamId: string | null;

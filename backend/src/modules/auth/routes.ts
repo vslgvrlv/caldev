@@ -1567,8 +1567,10 @@ authRouter.get(
           .map((m) => [m.team_id, { id: m.team_id, name: m.team_name }])
       ).values()
     );
+    // Владелец платформы — по тому, кто он, а не по режиму (трек 3): все
+    // команды доступны ему всегда, когда вход доверенный.
     const platformTeamsRaw =
-      effectiveRole === "ADMIN" && allowAdminChoice
+      allowAdminChoice
         ? (
             await query<{ id: string; name: string }>(
               `SELECT id, name FROM teams ORDER BY name ASC`
@@ -1603,6 +1605,9 @@ authRouter.get(
       roleSelectionRequired: effectiveRole === null && allowAdminChoice,
       canChooseAdminRole: allowAdminChoice,
       isOwnerAdminEligible: allowAdminChoice,
+      // Новый клиент: владелец платформы с доверенным входом — плитка консоли
+      // и все команды в переключателе.
+      platformOwner: allowAdminChoice && trustedAdminReady,
       hasMemberships: memberships.length > 0,
       activeMembershipId: req.session.activeMembershipId || null,
       activeTeamId: req.session.activeTeamId || null,
@@ -1649,34 +1654,19 @@ authRouter.post(
   })
 );
 
+// Пустышка для старого фронтенда (трек 3): режима «админ или игрок» больше
+// нет, права владельца определяются тем, кто он. Ручка проверяет запрос как
+// раньше и отвечает успехом, но ни сессию, ни базу не трогает — активная
+// команда больше не сбрасывается. Удалить после выката нового фронтенда.
 authRouter.post(
   "/select-role",
   requireAuth,
   asyncHandler(async (req, res) => {
     const parsed = selectRoleSchema.parse(req.body);
     const user = req.authUser!;
-    const allowAdminChoice = canChooseAdminRole(user);
-    if (parsed.accountRole === "ADMIN" && !allowAdminChoice) {
+    if (parsed.accountRole === "ADMIN" && !canChooseAdminRole(user)) {
       return res.status(403).json({ detail: "Admin role is not allowed for this account" });
     }
-    if (!allowAdminChoice && parsed.accountRole !== "USER") {
-      return res.status(403).json({ detail: "Only user role is available for this account" });
-    }
-
-    await query(
-      `UPDATE users
-       SET account_role = $2::account_role, role_selected_at = NOW(), updated_at = NOW()
-       WHERE id = $1`,
-      [user.id, parsed.accountRole]
-    );
-
-    req.session.entryRole = parsed.accountRole;
-
-    delete req.session.activeMembershipId;
-    delete req.session.activeTeamId;
-
-    await writeAudit(user.id, "auth.account_role.select", { accountRole: parsed.accountRole });
-
     return res.json({ ok: true, accountRole: parsed.accountRole });
   })
 );

@@ -82,15 +82,18 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [authBootstrapDone, setAuthBootstrapDone] = useState(false);
-  const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM' | 'ADMIN_MODE'>('READY');
+  const [appGate, setAppGate] = useState<'READY' | 'NO_TEAM'>('READY');
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   // Момент снятия снимка, из которого поднялось приложение. null — данные
   // свежие. Показывается человеку: состав недельной давности легко принять за
   // сегодняшний, и это хуже, чем отсутствие данных.
   const [offlineSnapshotAt, setOfflineSnapshotAt] = useState<number | null>(null);
   const [outboxState, setOutboxState] = useState<{ pending: number; blocked: number }>({ pending: 0, blocked: 0 });
-  // Владелец из списка допуска: плитка «Платформа админа» в профиле.
+  // Владелец платформы (список допуска и доверенный вход): плитка консоли в
+  // профиле и все команды в переключателе. Режима «админ или игрок» больше
+  // нет — владелец остаётся в приложении (трек 3 ревизии).
   const [canEnterAdmin, setCanEnterAdmin] = useState(false);
+  const platformOwnerRef = useRef(false);
 
   // Data State
   const [user, setUser] = useState<User | null>(null);
@@ -310,6 +313,23 @@ const App: React.FC = () => {
 
       const code = applyInit(data);
       setAppGate('READY');
+
+      // Владельцу без явной команды сервер отдаёт только его команды. Все
+      // команды (чужие — с пометкой владельца) приходят на запрос с командой.
+      if (
+        !requested &&
+        !isSnapshot &&
+        platformOwnerRef.current &&
+        Array.isArray(data.teams) &&
+        !data.teams.some((t: TeamContext) => t.via)
+      ) {
+        try {
+          const full = await api.getInitData(code);
+          if (seq === loadSeqRef.current && Array.isArray(full?.teams)) setTeams(full.teams as TeamContext[]);
+        } catch (error) {
+          console.warn('Owner team list fallback to own teams', error);
+        }
+      }
       setTeamLoad(result === 'forbidden' ? 'forbidden' : 'ready');
 
       // Финансы и календарь без сети не поднять, и они не нужны для входа —
@@ -339,8 +359,7 @@ const App: React.FC = () => {
         return 'no_team';
       }
       if (message.includes('INIT_ADMIN_MODE')) {
-        setAppGate('ADMIN_MODE');
-        setTeamLoad('ready');
+        // Старый сервер с режимом учётки: tryEnterUserApp вернёт обычный режим.
         return 'admin_mode';
       }
       if (message.includes('ROLE_SELECTION_REQUIRED')) {
@@ -418,21 +437,14 @@ const App: React.FC = () => {
     await loadDataRef.current({ silent: true, background: true });
   }, []);
 
-  const handleSwitchToUserMode = async () => {
-    try {
-      await api.selectAccountRole('USER');
-      setAppGate('READY');
-      const ok = await tryEnterUserApp({ team: readLastTeam() });
-      if (ok) {
-        setAuthStep('APP');
-        navigate('/app', { replace: true });
-      } else {
-        navigate('/login', { replace: true });
-      }
-    } catch (error) {
-      console.error('Failed to switch to USER mode', error);
-      navigate('/login', { replace: true });
-    }
+  const applyAuthMe = (payload: Awaited<ReturnType<typeof api.getAuthMe>>) => {
+    if (!payload?.authenticated) return;
+    const owner =
+      typeof payload.platformOwner === 'boolean'
+        ? payload.platformOwner
+        : Boolean(payload.canChooseAdminRole) && payload.adminScope !== 'NONE';
+    platformOwnerRef.current = owner;
+    setCanEnterAdmin(owner);
   };
 
   // Восстановление сессии — один раз при запуске. Раньше эффект зависел от
@@ -463,8 +475,7 @@ const App: React.FC = () => {
         if (!payload?.authenticated || cancelled) return;
         clearLogoutGuard();
         setOnboardingRequired(Boolean(payload.onboardingRequired));
-        // Плитка «Платформа админа»: и допуск, и доверенный способ входа.
-        setCanEnterAdmin(Boolean(payload.canChooseAdminRole) && payload.adminScope !== 'NONE');
+        applyAuthMe(payload);
 
         if (payload?.user) {
           setUser((prev) => {
@@ -480,8 +491,9 @@ const App: React.FC = () => {
         }
 
         const currentPath = window.location.pathname;
-        // /admin и /invite ведут свой вход сами: загрузка приложения команды
-        // переключила бы владельца в режим USER (см. tryEnterUserApp).
+        // Консоль и приглашение данных команды не ждут — их грузят сами.
+        // Из консоли владелец возвращается в приложение кнопкой: команда
+        // загрузится на входе /app.
         if (currentPath.startsWith('/admin') || currentPath.startsWith('/invite/')) {
           setAuthStep('APP');
           sessionStorage.removeItem('pbth:post-auth-app');
@@ -593,6 +605,19 @@ const App: React.FC = () => {
       navigate(action.path, { replace: true });
       return;
     }
+    try {
+      applyAuthMe(await api.getAuthMe());
+    } catch (error) {
+      console.warn('Auth state refresh failed', error);
+    }
+    if (action.kind === 'admin') {
+      // Консоль владельца — часть приложения: данные команды она не ждёт.
+      sessionStorage.removeItem('pbth:post-auth-app');
+      setAuthStep('APP');
+      setAuthBootstrapDone(true);
+      navigate('/admin', { replace: true });
+      return;
+    }
     const path = action.kind === 'app' ? action.path : '/app';
     const team = parseTeamPath(path)?.team ?? readLastTeam() ?? '';
     desiredTeamRef.current = team;
@@ -639,6 +664,7 @@ const App: React.FC = () => {
     setOnboardingRequired(false);
     setOfflineSnapshotAt(null);
     setCanEnterAdmin(false);
+    platformOwnerRef.current = false;
     desiredTeamRef.current = '';
     loadedCodeRef.current = null;
     inflightCodeRef.current = null;
@@ -1082,7 +1108,6 @@ const App: React.FC = () => {
       logout: handleLogout,
       login: handleLogin,
       joinedTeam: handleJoinedTeam,
-      switchToUserMode: handleSwitchToUserMode,
       openRsvpModal,
     },
   };

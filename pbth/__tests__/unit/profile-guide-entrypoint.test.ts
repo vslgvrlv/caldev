@@ -33,7 +33,7 @@ describe("ProfileView guide entrypoint wiring", () => {
 
     expect(guideIndex).toBeGreaterThan(-1);
     expect(html).toContain('href="/guide/trainer.html"');
-    expect(guideIndex).toBeLessThan(html.indexOf("Платформа админа"));
+    expect(guideIndex).toBeLessThan(html.indexOf("Консоль владельца"));
     expect(guideIndex).toBeLessThan(html.indexOf("Интеграция календаря"));
   });
 
