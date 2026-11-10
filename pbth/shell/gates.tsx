@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useShell } from './context';
 import { ScreenLoader } from '../components/shell/ScreenLoader';
-import { AdminModeScreen, DataUnavailableScreen } from '../components/shell/StateScreens';
+import { DataUnavailableScreen } from '../components/shell/StateScreens';
 import { NoTeamScreen } from '../components/track1/NoTeamView';
 import { readLastTeam, resolveEntryTeam, teamPath } from '../lib/team-url';
 
@@ -20,24 +20,16 @@ export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children 
   return <Navigate to={`/login${next}`} replace />;
 };
 
-/** Экраны «нет команды» и «режим владельца» — до любого экрана команды. */
+/** Экран «нет команды» — до любого экрана команды. */
 export const AppGateScreens: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const shell = useShell();
-  const navigate = useNavigate();
   if (shell.appGate === 'NO_TEAM') {
+    // Владелец без своей команды открывает любую из консоли.
+    if (shell.canEnterAdmin) return <Navigate to="/admin" replace />;
     return (
       <NoTeamScreen
         userName={shell.user?.name}
         onboardingRequired={shell.onboardingRequired}
-        onLogout={() => void shell.actions.logout()}
-      />
-    );
-  }
-  if (shell.appGate === 'ADMIN_MODE') {
-    return (
-      <AdminModeScreen
-        onOpenAdmin={() => navigate('/admin', { replace: true })}
-        onSwitchToUser={() => void shell.actions.switchToUserMode()}
         onLogout={() => void shell.actions.logout()}
       />
     );

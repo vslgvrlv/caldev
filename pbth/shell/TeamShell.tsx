@@ -123,6 +123,7 @@ const TeamShellInner: React.FC = () => {
         name: pending.teamName,
         shortCode: pending.shortCode || '',
         role: pending.role,
+        via: pending.via,
         budget: 0,
       };
     }
@@ -147,7 +148,7 @@ const TeamShellInner: React.FC = () => {
         )}
       </div>
 
-      {canCreate && section !== 'requests' && (
+      {canCreate && section !== 'requests' && section !== 'journal' && (
         // Fixed над нижней навигацией (85px) и в пределах колонки приложения.
         <div className="fixed inset-x-0 z-50 pointer-events-none" style={{ bottom: 'calc(85px + 1rem)' }}>
           <div className="max-w-md mx-auto px-4 flex justify-end">

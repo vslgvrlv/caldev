@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
-import { resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
+import { isPlatformOwner, resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
   assertCaptainChangeAllowed,
   loadMembershipByUserForUpdate,
@@ -11,7 +11,6 @@ import {
 import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { canChooseAdminRole } from "../../lib/entry-role.js";
 import { writeAudit } from "../../lib/audit.js";
 import { sendError } from "../../lib/http-error.js";
@@ -51,7 +50,10 @@ const createInviteSchema = z.object({
 // при этом считается владельцем для правил про капитанов. Отказ доступа здесь
 // не ошибка: ручки сами отвечают прежним текстом 403.
 async function resolveTeamManager(req: Request, teamId: string) {
-  const isRootAdmin = getEffectiveEntryRole(req, req.authUser!) === "ADMIN";
+  // Владелец платформы — по `isPlatformOwner` (режима «админ или игрок» больше
+  // нет, трек 3). Так владелец, который сам капитан команды, тоже может
+  // назначить второго капитана и выдать приглашение капитана.
+  const isRootAdmin = isPlatformOwner(req);
   let access: Awaited<ReturnType<typeof resolveTeamAccess>> = null;
   try {
     access = await resolveTeamAccess(req, { param: teamId });
@@ -71,9 +73,8 @@ teamsRouter.get(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
     const ownTeams =
-      effectiveRole === "ADMIN"
+      isPlatformOwner(req)
         ? await query<{ id: string; name: string; short_code: string; logo: string | null; budget: string; role: string; timezone: string }>(
             `SELECT t.id, t.name, t.short_code, t.logo, t.budget::text, t.timezone, 'CAPTAIN'::text AS role
              FROM teams t
@@ -105,9 +106,8 @@ teamsRouter.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    if (effectiveRole !== "ADMIN") {
-      return res.status(403).json({ detail: "Only account admin can create teams" });
+    if (!isPlatformOwner(req)) {
+      return res.status(403).json({ detail: "Only the platform owner can create teams" });
     }
 
     const payload = createTeamSchema.parse(req.body);
@@ -276,19 +276,9 @@ teamsRouter.post(
   requireAuth,
   asyncHandler(async (req, res) => {
     const token = z.string().uuid().parse(req.params.token);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    console.info("[teams] invite.accept attempt", {
-      userId: req.authUser!.id,
-      accountRole: req.authUser!.account_role,
-      entryRole: effectiveRole,
-    });
-    if (effectiveRole !== "USER") {
-      console.warn("[teams] invite.accept denied: non-user entry role", {
-        userId: req.authUser!.id,
-        entryRole: effectiveRole,
-      });
-      return sendError(req, res, 403, "ROLE_REQUIRED", "Only user entry-role can accept invite");
-    }
+    // Режима «админ или игрок» больше нет (трек 3): приглашение принимает
+    // любой вошедший, в том числе владелец платформы.
+    console.info("[teams] invite.accept attempt", { userId: req.authUser!.id });
 
     // Проверка и расход приглашения — в одной транзакции под блокировкой
     // строки: одноразовое приглашение (капитана) не сработает дважды, даже
@@ -539,6 +529,7 @@ teamsRouter.patch(
     }
 
     await writeAudit(req.authUser!.id, "teams.membership.update", {
+      teamId,
       membershipId,
       role: payload.teamRole ?? null,
       status: payload.status ?? null,
@@ -584,7 +575,8 @@ teamsRouter.delete(
       return res.status(404).json({ detail: "Membership not found" });
     }
 
-    await writeAudit(req.authUser!.id, "teams.membership.delete", { membershipId });
+    // teamId — чтобы запись попала в журнал команды (трек 3).
+    await writeAudit(req.authUser!.id, "teams.membership.delete", { teamId, membershipId });
     return res.json({ ok: true });
   })
 );

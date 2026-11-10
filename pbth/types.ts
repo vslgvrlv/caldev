@@ -56,6 +56,8 @@ export interface Team {
   timezone?: string;
   role: Role;
   budget: number; // New: Team treasury
+  /** 'owner' — владелец платформы в команде, где не состоит (права капитана). */
+  via?: 'membership' | 'owner';
 }
 
 export interface Game {
@@ -323,6 +325,8 @@ export interface TeamContext {
   teamName: string;
   shortCode?: string;
   role: Role;
+  /** 'owner' — команда, где владелец платформы не состоит: он там как владелец. */
+  via?: 'membership' | 'owner';
 }
 
 export type TransferConfirmationStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';

@@ -399,6 +399,46 @@ describe("приглашение капитана — именное и одно
     expect(used.body.code).toBe("INVITE_USED");
   });
 
+  it("владелец, который сам капитан команды, выдаёт приглашение второму капитану", async () => {
+    // Владелец становится капитаном команды без тренера (как Василий в своей).
+    await pool.query(`INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, 'CAPTAIN') ON CONFLICT DO NOTHING`, [
+      f.users.owner,
+      f.soloTeam,
+    ]);
+    const owner = await login("owner");
+    const created = await owner
+      .post(`/api/v1/teams/${f.soloTeam}/invites`)
+      .send({ teamRole: "CAPTAIN", singleUse: true, note: "Второй капитан" })
+      .expect(201);
+    expect(created.body).toMatchObject({ role: "CAPTAIN", singleUse: true });
+    await pool.query(`DELETE FROM team_memberships WHERE user_id = $1 AND team_id = $2`, [f.users.owner, f.soloTeam]);
+  });
+
+  it("владелец создаёт команду напрямую, капитан — нет", async () => {
+    const owner = await login("owner");
+    const created = await owner
+      .post("/api/v1/teams")
+      .send({ name: `Прямая ${stamp}`, shortCode: `J3${stamp}` })
+      .expect(201);
+    f.createdTeams.push(created.body.team.id);
+    const captain = await login("captain");
+    await captain.post("/api/v1/teams").send({ name: `Чужая ${stamp}`, shortCode: `J4${stamp}` }).expect(403);
+  });
+
+  it("удаление участника пишется в журнал с командой", async () => {
+    const extra = await pool.query<{ id: string }>(
+      `INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, 'PLAYER') RETURNING id`,
+      [f.users.second, f.team]
+    );
+    const captain = await login("captain");
+    await captain.delete(`/api/v1/teams/${f.team}/memberships/${extra.rows[0].id}`).expect(200);
+    const audit = await pool.query<{ payload: any }>(
+      `SELECT payload FROM audit_logs WHERE action = 'teams.membership.delete' AND payload->>'membershipId' = $1`,
+      [extra.rows[0].id]
+    );
+    expect(audit.rows[0].payload.teamId).toBe(f.team);
+  });
+
   it("капитан не выпускает приглашение капитана", async () => {
     const captain = await login("captain");
     await captain.post(`/api/v1/teams/${f.team}/invites`).send({ teamRole: "CAPTAIN", singleUse: true }).expect(403);
