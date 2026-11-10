@@ -7,7 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { sendError } from "../../lib/http-error.js";
 import { logger } from "../../lib/logger.js";
 import { recordAuthMetric } from "../../lib/auth-slo.js";
-import { createState, consumeState } from "../../lib/oauth-state.js";
+import { createState, consumeState, sameBrowserAsState } from "../../lib/oauth-state.js";
 import { buildYandexAuthorizeUrl, exchangeYandexCode, fetchYandexUserInfo } from "../../lib/yandex-oauth.js";
 import { completeOAuthLogin } from "../../lib/oauth-login.js";
 import {
@@ -27,7 +27,7 @@ const callbackQuerySchema = z.object({ code: z.string().min(1), state: z.string(
 const linkCallbackQuerySchema = z.object({ code: z.string().min(1), state: z.string().min(1) });
 const unlinkSchema = z.object({ provider: z.enum(["telegram", "yandex"]) });
 
-function hashRequestPart(value: string | undefined): string | null {
+export function hashRequestPart(value: string | undefined): string | null {
   if (!value) return null;
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 32);
 }
@@ -186,6 +186,18 @@ yandexRouter.get(
 
     // Defensive: a session swap mid-flow would be a security issue, refuse.
     if (req.session?.userId && req.session.userId !== linkUserId) {
+      return res.redirect(302, `/app/profile?link_error=OAUTH_STATE_INVALID`);
+    }
+    // Без сессии того же человека поток должен завершать тот же браузер, что
+    // его начал: иначе ссылку на согласие Яндекса можно переслать другому.
+    if (
+      req.session?.userId !== linkUserId &&
+      !sameBrowserAsState(stateRow, {
+        ipHash: hashRequestPart(String(req.ip || "")),
+        uaHash: hashRequestPart(String(req.get("user-agent") || "")),
+      })
+    ) {
+      logger.info("[yandex] link.callback browser mismatch");
       return res.redirect(302, `/app/profile?link_error=OAUTH_STATE_INVALID`);
     }
 

@@ -26,6 +26,8 @@ import { teamsRouter } from "./modules/teams/routes.js";
 import { adminRouter } from "./modules/admin/routes.js";
 import { vendorRouter } from "./modules/vendor/routes.js";
 import { buildOpenApiSpec } from "./openapi/spec.js";
+import { openApiForRequest } from "./lib/production-guards.js";
+import { checkDatabase } from "./lib/health.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -93,8 +95,17 @@ const writeRateLimiter = rateLimit({
 const openapiSpec = buildOpenApiSpec();
 
 function mountApiV1(router: express.Router) {
-  router.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+  // `/health` — быстрый ответ процесса, на нём держатся проверки выката.
+  // `/health?deep=1` — ещё и база: SELECT 1 с таймаутом, при сбое 503.
+  router.get("/health", async (req, res) => {
+    if (req.query.deep !== "1" && req.query.deep !== "true") {
+      return res.json({ status: "ok" });
+    }
+    const db = await checkDatabase(env.healthDbTimeoutMs);
+    if (!db.ok) {
+      return res.status(503).json({ status: "degraded", db: "error" });
+    }
+    return res.json({ status: "ok", db: "ok", dbLatencyMs: db.latencyMs });
   });
   router.get("/release/version", (_req, res) => {
     res.json({
@@ -103,8 +114,15 @@ function mountApiV1(router: express.Router) {
       builtAt: env.release.builtAt,
     });
   });
-  router.get("/openapi.json", (_req, res) => {
-    res.json(openapiSpec);
+  // В production полное описание API — только с токеном; без него заглушка.
+  router.get("/openapi.json", (req, res) => {
+    res.json(
+      openApiForRequest(openapiSpec, {
+        isProd: env.isProd,
+        configuredToken: env.openapi.token,
+        providedToken: String(req.get("x-openapi-token") || ""),
+      })
+    );
   });
   router.use("/auth/yandex", authRateLimiter, yandexRouter);
   router.use("/auth/identities", identitiesRouter);

@@ -64,13 +64,21 @@ icsRouter.get(
       start_at: string;
       end_at: string | null;
     }>(
-      `SELECT id, title, description, location, start_at, end_at
+      // Эффективный статус, как в ленте приложения: явный ответ на занятие
+      // главнее, запись на серию целиком даёт «иду» на каждое её занятие.
+      // Раньше брались только явные ответы, и занятия серии, на которую
+      // человек записан «на все», в календарь не попадали.
+      `SELECT e.id, e.title, e.description, e.location, e.start_at, e.end_at
        FROM events e
-       JOIN rsvps r ON r.event_id = e.id
+       LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = $2
+       LEFT JOIN event_series_commitment sc
+         ON sc.series_id = e.series_id AND sc.user_id = $2 AND sc.status = 'COMMITTED'
        WHERE e.team_id = ANY($1::uuid[])
          AND e.is_cancelled = FALSE
-         AND r.user_id = $2
-         AND r.status IN ('CONFIRMED', 'PENDING')
+         AND (
+           r.status IN ('CONFIRMED', 'PENDING')
+           OR (r.event_id IS NULL AND sc.id IS NOT NULL)
+         )
          AND (e.series_id IS NULL OR e.start_at <= NOW() + make_interval(days => $3::int))
        ORDER BY e.start_at ASC`,
       [selectedTeamIds, tokenData.user_id, env.ics.recurringWindowDays]

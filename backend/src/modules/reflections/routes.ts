@@ -9,6 +9,12 @@ import { compareDeltaOtb, computeDeltaOtb, type ReflectionPhase } from "../../li
 import { checkPointResults, parseScore } from "../../lib/game-points.js";
 import { renderSummaryCsv, renderTableCsv } from "../../lib/reflection-csv.js";
 import { buildEventSummary } from "../../lib/reflection-summary.js";
+import {
+  anonymizeEventSummary,
+  anonymizeEventTable,
+  keepOwnReflections,
+  reflectionScopeForRole,
+} from "../../lib/reflection-visibility.js";
 import { sendTelegramBotDocument } from "../../lib/telegram-bot.js";
 
 // Рефлексия (#89). Единица — ПОЙНТ, а не игра: игра со счётом 4:3 состоит из
@@ -706,7 +712,16 @@ reflectionsRouter.get(
       totalKills: kills.length,
       captainReport: report,
       deltaOtbMismatch: compareDeltaOtb(deltaOtb, report?.deltaOtb),
-      reflections: reflections.rows.map((row) => serializeReflection(row, kills)),
+      // Чужие ответы — только капитану и тренеру (решение 10); цифры выше
+      // обезличены и остаются всем.
+      scope: reflectionScopeForRole(access.role),
+      reflections:
+        reflectionScopeForRole(access.role) === "TEAM"
+          ? reflections.rows.map((row) => serializeReflection(row, kills))
+          : keepOwnReflections(
+              reflections.rows.map((row) => serializeReflection(row, kills)),
+              req.authUser!.id
+            ),
     });
   })
 );
@@ -735,7 +750,18 @@ reflectionsRouter.get(
     // Сводка едет вместе с таблицей, а не отдельным запросом: экран разбора
     // открывается сразу с ответами, а данные для них те же самые.
     const table = await buildEventTable(eventId, membership.rows[0].title);
-    return res.json({ ...table, summary: buildEventSummary(table) });
+    const summary = buildEventSummary(table);
+    // Игроку — обезличенная сводка и свои строки (решение 10). Сводка
+    // считается по полной таблице, чтобы командные цифры не зависели от того,
+    // кто смотрит.
+    if (reflectionScopeForRole(membership.rows[0].role) === "OWN") {
+      return res.json({
+        ...anonymizeEventTable(table, userId),
+        summary: anonymizeEventSummary(summary, userId),
+        scope: "OWN",
+      });
+    }
+    return res.json({ ...table, summary, scope: "TEAM" });
   })
 );
 
@@ -835,9 +861,11 @@ function csvFileName(prefix: string, eventTitle: string): string {
   return `${prefix} — ${safe || "событие"}.csv`;
 }
 
+// Выгрузка — все строки с именами, поэтому только капитану и тренеру
+// (решение 10). Игроку — 403, а не пустой файл: так понятнее, что не так.
 async function loadTableForUser(eventId: string, userId: string) {
-  const membership = await query<{ title: string; telegram_id: string | null }>(
-    `SELECT e.title, u.telegram_id
+  const membership = await query<{ title: string; telegram_id: string | null; role: Role }>(
+    `SELECT e.title, u.telegram_id, tm.role
      FROM events e
      JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
      JOIN users u ON u.id = $2
@@ -845,6 +873,7 @@ async function loadTableForUser(eventId: string, userId: string) {
     [eventId, userId]
   );
   if (!membership.rows.length) return null;
+  if (reflectionScopeForRole(membership.rows[0].role) !== "TEAM") return "FORBIDDEN" as const;
 
   const title = membership.rows[0].title;
   const table = await buildEventTable(eventId, title);
@@ -867,6 +896,9 @@ reflectionsRouter.get(
     const loaded = await loadTableForUser(eventId, req.authUser!.id);
     if (!loaded) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
+    }
+    if (loaded === "FORBIDDEN") {
+      return sendError(req, res, 403, "ROLE_REQUIRED", "Выгрузка разбора доступна капитану и тренеру");
     }
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -892,6 +924,9 @@ reflectionsRouter.post(
     const loaded = await loadTableForUser(eventId, userId);
     if (!loaded) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
+    }
+    if (loaded === "FORBIDDEN") {
+      return sendError(req, res, 403, "ROLE_REQUIRED", "Выгрузка разбора доступна капитану и тренеру");
     }
     if (!loaded.telegramId) {
       return sendError(req, res, 409, "TELEGRAM_NOT_LINKED", "Telegram account is not linked");

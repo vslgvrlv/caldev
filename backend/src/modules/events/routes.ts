@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { locationUrlSchema } from "../../lib/http-url.js";
 import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -34,7 +35,7 @@ const createEventSchema = z.object({
   endDate: z.string().optional(),
   endAt: z.string().optional(),
   location: z.string().optional(),
-  locationUrl: z.string().trim().max(1000).optional(),
+  locationUrl: locationUrlSchema.optional(),
   locationAddress: z.string().trim().max(500).optional(),
   cost: z.number().optional(),
   costStatus: eventCostStatusSchema.optional(),
@@ -62,7 +63,7 @@ const updateEventSchema = z.object({
   endDate: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
   location: z.string().nullable().optional(),
-  locationUrl: z.string().trim().max(1000).nullable().optional(),
+  locationUrl: locationUrlSchema.nullable().optional(),
   locationAddress: z.string().trim().max(500).nullable().optional(),
   cost: z.number().nullable().optional(),
   costStatus: eventCostStatusSchema.optional(),
@@ -80,6 +81,9 @@ const updateEventSchema = z.object({
       })
     )
     .optional(),
+  // Игры с рефлексиями, которые клиент явно разрешил удалить вместе с ними.
+  // Без этого такая игра из расписания не удаляется (409 GAMES_HAVE_REFLECTIONS).
+  confirmDeleteGameIds: z.array(z.string().uuid()).max(200).optional(),
 });
 
 const deleteEventSchema = z.object({
@@ -552,8 +556,15 @@ eventsRouter.patch(
       }
     }
 
+    // Тренер правит только тренировки и собрания. Проверяем и текущий тип, и
+    // новый: иначе тренер превращал турнир в тренировку и дальше правил и
+    // удалял его (ревью безопасности 10.11.2026, №3).
     const nextType = payload.type ?? baseEvent.type;
-    if (effectiveRole !== "ADMIN" && actorTeamRole === "TRAINER" && !TRAINER_ALLOWED_EVENT_TYPES.has(nextType)) {
+    if (
+      effectiveRole !== "ADMIN" &&
+      actorTeamRole === "TRAINER" &&
+      (!TRAINER_ALLOWED_EVENT_TYPES.has(baseEvent.type) || !TRAINER_ALLOWED_EVENT_TYPES.has(nextType))
+    ) {
       return res.status(403).json({ detail: "Trainer can manage only training and meeting events" });
     }
 
@@ -783,6 +794,36 @@ eventsRouter.patch(
             return res.status(400).json({ detail: "Game does not belong to this event" });
           }
           keptGameIds.push(saved.rows[0].id);
+        }
+        // Расписание приходит целиком, и игра, которой нет в запросе, удаляется
+        // вместе с пойнтами, рефлексиями и разбором (каскад). Так стирались
+        // заполненные формы, если у капитана был открыт старый экран. Игру, на
+        // которой есть рефлексии или разбор, удаляем только по явному списку.
+        const confirmed = new Set(payload.confirmDeleteGameIds ?? []);
+        const withReflections = await client.query<{ id: string; time_label: string; opponent: string; reflections: string; reports: string }>(
+          `SELECT g.id, g.time_label, g.opponent,
+                  (SELECT COUNT(*) FROM game_reflections r JOIN game_points p ON p.id = r.point_id WHERE p.game_id = g.id)::text AS reflections,
+                  (SELECT COUNT(*) FROM game_captain_reports c JOIN game_points p ON p.id = c.point_id WHERE p.game_id = g.id)::text AS reports
+           FROM event_games g
+           WHERE g.event_id = $1 AND NOT (g.id = ANY($2::uuid[]))`,
+          [eventId, keptGameIds]
+        );
+        const blocked = withReflections.rows.filter(
+          (g) => (Number(g.reflections) > 0 || Number(g.reports) > 0) && !confirmed.has(g.id)
+        );
+        if (blocked.length > 0) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            detail: "На игре есть рефлексии. Удалить её можно только с явным подтверждением.",
+            code: "GAMES_HAVE_REFLECTIONS",
+            games: blocked.map((g) => ({
+              id: g.id,
+              time: g.time_label,
+              opponent: g.opponent,
+              reflections: Number(g.reflections),
+              captainReports: Number(g.reports),
+            })),
+          });
         }
         await client.query(`DELETE FROM event_games WHERE event_id = $1 AND NOT (id = ANY($2::uuid[]))`, [
           eventId,
@@ -1124,6 +1165,34 @@ eventsRouter.delete(
       if (role === "TRAINER" && !TRAINER_ALLOWED_EVENT_TYPES.has(event.type)) {
         return res.status(403).json({ detail: "Trainer can manage only training and meeting events" });
       }
+    }
+
+    // Событие с начатым сбором не удаляем: начисления остались бы долгами без
+    // события, а снять их нечем (ревью событий и денег 10.11.2026, №7).
+    // Списывать начисления вместе с событием не стали: к ним привязаны оплаты,
+    // и молча стереть их значит потерять деньги. Сначала разбирают сбор.
+    const withCollection = await query<{ id: string; title: string; start_at: string }>(
+      `SELECT e.id, e.title, e.start_at
+       FROM events e
+       WHERE e.is_cancelled = FALSE
+         AND (
+           ($3::boolean AND e.series_id = $2::uuid AND e.start_at >= (SELECT start_at FROM events WHERE id = $1))
+           OR e.id = $1
+         )
+         AND (
+           e.finance_state <> 'NOT_CALCULATED'
+           OR EXISTS (SELECT 1 FROM event_member_charges c WHERE c.event_id = e.id)
+         )
+       ORDER BY e.start_at
+       LIMIT 20`,
+      [eventId, event.series_id, payload.scope === "future" && Boolean(event.series_id)]
+    );
+    if (withCollection.rowCount) {
+      return res.status(409).json({
+        detail: "По событию начат сбор денег. Удалить его нельзя, пока есть начисления.",
+        code: "EVENT_HAS_COLLECTION",
+        events: withCollection.rows.map((row) => ({ id: row.id, title: row.title, startAt: row.start_at })),
+      });
     }
 
     if (payload.scope === "future" && event.series_id) {

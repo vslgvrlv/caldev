@@ -13,6 +13,7 @@ import { getRequestPublicOrigin } from "../../lib/public-origin.js";
 import { pruneExpiredAuthArtifacts, registerReplayPayload, sha256Hex } from "../../lib/replay-guard.js";
 import { decideOidcCanary, newCanaryBucket, normalizeForceOverride, parseCanaryBucket } from "../../lib/auth-canary.js";
 import { getAuthSloSummary, recordAuthMetric } from "../../lib/auth-slo.js";
+import { safeEqualSecret } from "../../lib/production-guards.js";
 import {
   buildTelegramHandoffAttemptKey,
   buildTelegramHandoffDeepLink,
@@ -445,8 +446,6 @@ authRouter.post(
       platform: parsed.data.platform,
       code: parsed.data.code || null,
       path: parsed.data.path || null,
-      ip: req.ip,
-      ua: req.get("user-agent") || "",
     });
 
     const flow = parsed.data.flow || "UNKNOWN";
@@ -494,7 +493,7 @@ authRouter.get(
 
     if (env.authSlo.token) {
       const provided = String(req.get("x-auth-slo-token") || "");
-      if (provided !== env.authSlo.token) {
+      if (!safeEqualSecret(provided, env.authSlo.token)) {
         return res.status(401).json({ detail: "Invalid SLO token", code: "AUTH_REQUIRED" });
       }
     }
@@ -505,6 +504,12 @@ authRouter.get(
       minAttempts: env.authSlo.minAttempts,
       maxErrorRate: env.authSlo.maxErrorRate,
     });
+    // В production без настроенного токена — только итог (ok / breached /
+    // insufficient_data): его хватает проверке выката, а статистика входов
+    // по способам и платформам наружу не уходит.
+    if (env.isProd && !env.authSlo.token) {
+      return res.json({ status: summary.status });
+    }
     return res.json(summary);
   })
 );
@@ -1073,7 +1078,6 @@ authRouter.get(
       console.warn("[auth] oidc callback token verification failed", {
         code,
         platform: detectRequestPlatform(req),
-        ip: req.ip,
       });
       return res.redirect(
         302,
@@ -1144,7 +1148,6 @@ authRouter.get(
 
     console.info("[auth] telegram oidc login success", {
       userId: req.session.userId,
-      ip: req.ip,
       platform: detectRequestPlatform(req),
     });
     const { origin } = getAuthPublicUrls(req);
@@ -1164,7 +1167,6 @@ authRouter.get(
         redirectTo,
         canaryPercent: env.telegramOidc.canaryPercent,
         stickyBucket,
-        ip: req.ip,
       });
       return res.redirect(
         302,
@@ -1181,7 +1183,6 @@ authRouter.get(
       redirectTo,
       canaryPercent: env.telegramOidc.canaryPercent,
       stickyBucket,
-      ip: req.ip,
     });
     const urls = getAuthPublicUrls(req);
     const callbackUrlWithRedirect = new URL(urls.callbackUrl);
@@ -1208,8 +1209,6 @@ authRouter.get(
         code: "TELEGRAM_MISSING_FIELDS",
       });
       console.warn("[auth] telegram callback missing required fields", {
-        ip: req.ip,
-        ua: req.get("user-agent") || "",
         platform: detectRequestPlatform(req),
       });
       const { callbackUrl, fallbackUrl } = getAuthPublicUrls(req);
@@ -1302,7 +1301,6 @@ authRouter.get(
         code: normalizeErrorCode(verification.reason, "TELEGRAM_VERIFICATION_FAILED"),
       });
       console.warn("[auth] telegram callback verification failed", {
-        ip: req.ip,
         reason: verification.reason || "unknown",
         platform: detectRequestPlatform(req),
       });
@@ -1343,7 +1341,6 @@ authRouter.get(
     });
     console.info("[auth] telegram callback login success", {
       userId: req.session.userId,
-      ip: req.ip,
       platform: detectRequestPlatform(req),
     });
     const { origin } = getAuthPublicUrls(req);
@@ -1387,7 +1384,6 @@ authRouter.post(
         code: normalizeErrorCode(verification.reason, "TELEGRAM_WEBAPP_INVALID"),
       });
       console.warn("[auth] telegram webapp verification failed", {
-        ip: req.ip,
         reason: verification.reason || "unknown",
         platform: detectRequestPlatform(req),
       });
@@ -1430,7 +1426,6 @@ authRouter.post(
     });
     console.info("[auth] telegram webapp login success", {
       userId: req.session.userId,
-      ip: req.ip,
       platform: detectRequestPlatform(req),
     });
     return res.json({ ok: true });

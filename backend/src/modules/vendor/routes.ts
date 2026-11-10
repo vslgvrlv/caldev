@@ -203,8 +203,9 @@ vendorRouter.post(
           {
             replyMarkup: {
               inline_keyboard: [
+                // Кнопку консоли платформы бот всем не предлагает: она нужна
+                // одному владельцу, остальных уводит в тупик «нет доступа».
                 [{ text: "Открыть PBTH", url: buildAbsoluteFrontendUrl("/login") }],
-                [{ text: "Открыть admin", url: buildAbsoluteFrontendUrl("/admin/login") }],
               ],
             },
           }

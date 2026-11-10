@@ -11,6 +11,9 @@ export interface OAuthStateRow {
   redirectTo: string;
   codeVerifier: string | null;
   nonce: string | null;
+  // Отпечатки браузера, начавшего вход или привязку (хэши IP и User-Agent).
+  ipHash: string | null;
+  uaHash: string | null;
   expiresAt: Date;
 }
 
@@ -39,6 +42,8 @@ function mapRow(row: any): OAuthStateRow {
     redirectTo: row.redirect_to,
     codeVerifier: row.code_verifier,
     nonce: row.nonce,
+    ipHash: row.ip_hash ?? null,
+    uaHash: row.ua_hash ?? null,
     expiresAt: row.expires_at,
   };
 }
@@ -78,7 +83,7 @@ export async function consumeState(state: string, provider: string): Promise<OAu
         AND provider = $2
         AND consumed_at IS NULL
         AND expires_at > NOW()
-      RETURNING state, provider, intent, link_user_id, redirect_to, code_verifier, nonce, expires_at`,
+      RETURNING state, provider, intent, link_user_id, redirect_to, code_verifier, nonce, ip_hash, ua_hash, expires_at`,
     [state, provider]
   );
   return rows[0] ? mapRow(rows[0]) : null;
@@ -89,4 +94,19 @@ export async function pruneExpiredStates(): Promise<number> {
     `DELETE FROM auth_oauth_state WHERE expires_at < NOW() - INTERVAL '1 day'`
   );
   return rowCount ?? 0;
+}
+
+/**
+ * Тот же ли браузер завершает поток, что его начал. Привязка Яндекса идёт без
+ * cookie (в браузере Telegram она теряется), поэтому без этой сверки чужой
+ * человек, открывший ссылку на согласие Яндекса, привязывал свой Яндекс к
+ * аккаунту того, кто ссылку выпустил (ревью безопасности 10.11.2026, №7).
+ * IP обязателен: без него отпечаток подделать проще всего.
+ */
+export function sameBrowserAsState(
+  row: Pick<OAuthStateRow, "ipHash" | "uaHash">,
+  current: { ipHash: string | null; uaHash: string | null }
+): boolean {
+  if (!row.ipHash || row.ipHash !== current.ipHash) return false;
+  return (row.uaHash ?? null) === (current.uaHash ?? null);
 }
