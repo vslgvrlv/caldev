@@ -10,6 +10,7 @@ export type ApiErrorCode =
   | "INVITE_NOT_FOUND"
   | "INVITE_EXPIRED"
   | "INVITE_REVOKED"
+  | "INVITE_REQUIRED"
   | "ALREADY_MEMBER"
   | "ROLE_REQUIRED"
   | "EVENT_NOT_FOUND"

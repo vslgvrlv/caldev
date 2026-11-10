@@ -3,16 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { api, type TeamInviteInfoResponse } from '../api';
 import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
-
-type InviteMode = 'TOKEN' | 'TEAM_FALLBACK';
+import { describeInviteProblem } from '../lib/invite-problem';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error';
-}
-
-function isInviteNotFound(err: unknown): boolean {
-  const message = errorMessage(err).toLowerCase();
-  return message.includes('invite not found') || message.includes('invite_not_found');
 }
 
 function isAuthRequired(err: unknown): boolean {
@@ -39,7 +33,9 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
   const authQuery = searchParams.toString();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [mode, setMode] = useState<InviteMode>('TOKEN');
+  // Приглашением воспользоваться нельзя (устарело, истекло, отозвано) —
+  // кнопок нет, только текст, что делать дальше.
+  const [unusable, setUnusable] = useState(false);
   const [inviteInfo, setInviteInfo] = useState<TeamInviteInfoResponse | null>(null);
   const [statusText, setStatusText] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,16 +81,17 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
       try {
         const info = await api.getTeamInvite(inviteId);
         if (cancelled) return;
-        setMode('TOKEN');
         setInviteInfo(info);
       } catch (err) {
         if (cancelled) return;
-        if (isInviteNotFound(err)) {
-          // Backward compatibility for old links where /invite/<teamId> was copied.
-          setMode('TEAM_FALLBACK');
-          setStatusText('Обнаружена ссылка старого формата. Можно вступить напрямую в команду.');
+        // В том числе старые ссылки /invite/<ID команды>: вступить по ID
+        // команды больше нельзя, только по действующему приглашению.
+        const problem = describeInviteProblem(err);
+        if (problem) {
+          setUnusable(true);
+          setStatusText(problem);
         } else {
-          setStatusText(`Инвайт недоступен: ${errorMessage(err)}`);
+          setStatusText(`Приглашение сейчас не открывается: ${errorMessage(err)}`);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -118,25 +115,25 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
     setIsSubmitting(true);
     setStatusText('');
     try {
-      if (mode === 'TOKEN') {
-        try {
-          await api.acceptTeamInvite(inviteId);
-        } catch (err) {
-          // Повторно открытая ссылка: человек уже в команде — это не ошибка,
-          // просто открываем приложение.
-          if (isAlreadyMember(err)) {
-            setAccepted(true);
-            setStatusText('Вы уже в этой команде. Открываем приложение...');
-            if (onJoined) await onJoined();
-            else navigate('/app', { replace: true });
-            return;
-          }
-          if (!isInviteNotFound(err)) throw err;
-          // Backward compatibility fallback.
-          await api.joinTeam(inviteId);
+      try {
+        await api.acceptTeamInvite(inviteId);
+      } catch (err) {
+        // Повторно открытая ссылка: человек уже в команде — это не ошибка,
+        // просто открываем приложение.
+        if (isAlreadyMember(err)) {
+          setAccepted(true);
+          setStatusText('Вы уже в этой команде. Открываем приложение...');
+          if (onJoined) await onJoined();
+          else navigate('/app', { replace: true });
+          return;
         }
-      } else {
-        await api.joinTeam(inviteId);
+        const problem = describeInviteProblem(err);
+        if (problem) {
+          setUnusable(true);
+          setStatusText(problem);
+          return;
+        }
+        throw err;
       }
       setAccepted(true);
       setStatusText('Вы вступили в команду. Открываем приложение...');
@@ -177,7 +174,7 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
     >
       <div className="w-full max-w-sm bg-pb-surface border border-white/10 rounded-2xl p-5">
         <h1 className="text-xl font-bold mb-2">{title}</h1>
-        <p className="text-pb-subtext text-sm mb-2">{roleHint}</p>
+        {!unusable && <p className="text-pb-subtext text-sm mb-2">{roleHint}</p>}
         {inviteInfo?.expiresAt && (
           <p className="text-pb-subtext text-xs mb-4">
             Действует до: {new Date(inviteInfo.expiresAt).toLocaleString('ru-RU')}
@@ -190,7 +187,7 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
           </div>
         )}
 
-        {!isAuthenticated ? (
+        {unusable ? null : !isAuthenticated ? (
           <Link
             to={`/login?next=${encodeURIComponent(`/invite/${inviteId}`)}`}
             className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-pb-primary/90 transition-colors"

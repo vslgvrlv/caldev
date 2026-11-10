@@ -1280,13 +1280,6 @@ export const api = {
     });
   },
 
-  async joinTeam(teamId: string): Promise<{ ok: boolean; membershipId: string }> {
-    return request(`/teams/${teamId}/join`, {
-      method: 'POST',
-      body: {},
-    });
-  },
-
   async updateTeamMembership(
     teamId: string,
     membershipId: string,
