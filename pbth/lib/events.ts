@@ -1,5 +1,7 @@
 import type { Event } from "../types";
-import { RSVPStatus } from "../types";
+import { Role, RSVPStatus } from "../types";
+import { pluralRu } from "./plural";
+import { canAnswerRsvp } from "./rsvp";
 
 export function sortEventsByStart(events: Event[]): Event[] {
   return [...events].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
@@ -33,7 +35,10 @@ export function filterFutureEvents(events: Event[], nowTs: number): Event[] {
   return sortEventsByStart(events).filter((event) => event.startDate.getTime() >= nowTs);
 }
 
+// Ждёт ответа только то, на что человек может ответить: события чужой
+// команды у владельца платформы идут обычным списком.
 function isAwaitingResponse(event: Event): boolean {
+  if (!canAnswerRsvp(event)) return false;
   return event.rsvpStatus === RSVPStatus.PENDING || event.rsvpStatus === RSVPStatus.UNANSWERED;
 }
 
@@ -87,3 +92,38 @@ export function getCountdownParts(targetDate: Date, nowTs: number) {
     mins: String(mins).padStart(2, "0"),
   };
 }
+
+/**
+ * Блок «Ближайшие» под главным событием. Если других событий нет, а главное
+ * уже показано (или ниже стоит «Требуют ответа»), заголовок с «Событий нет»
+ * читался бы как противоречие — блок не показываем. «Событий нет» остаётся,
+ * только когда событий нет совсем.
+ */
+export function showUpcomingSection(sections: DashboardEventSections): boolean {
+  if (sections.upcomingEvents.length > 0) return true;
+  return !sections.heroEvent && sections.pendingEvents.length === 0;
+}
+
+/** Подписи таймера ближайшего события: «1 день», «2 дня», «11 дней»; «1 час», «5 часов». */
+export function countdownLabels(parts: { days: string; hours: string; mins: string }) {
+  return {
+    days: pluralRu(Number(parts.days), "день", "дня", "дней"),
+    hours: pluralRu(Number(parts.hours), "час", "часа", "часов"),
+    mins: "мин",
+  };
+}
+
+/**
+ * Подсказки на главной капитану новой команды: пока он в команде один —
+ * «Позови команду», пока нет ни одного события — «Создай первое событие».
+ * Только капитану (и владельцу платформы в режиме капитана).
+ */
+export function captainHomeHints(params: { role: Role | null | undefined; membersCount: number; teamEventsCount: number }) {
+  const isCaptain = params.role === Role.CAPTAIN || params.role === Role.ADMIN;
+  return {
+    inviteTeam: isCaptain && params.membersCount <= 1,
+    createFirstEvent: isCaptain && params.teamEventsCount === 0,
+  };
+}
+
+export type CaptainHomeHints = ReturnType<typeof captainHomeHints>;

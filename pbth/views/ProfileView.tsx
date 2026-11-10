@@ -21,6 +21,8 @@ interface ProfileViewProps {
   canEnterAdmin?: boolean;
   /** Called when the admin-entry card is tapped. */
   onEnterAdmin?: () => void;
+  /** Карточки «Ты записан гостем» (слоты чужих команд). */
+  guestBookings?: React.ReactNode;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -33,6 +35,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   role,
   canEnterAdmin = false,
   onEnterAdmin,
+  guestBookings,
 }) => {
   return (
     <div
@@ -54,6 +57,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <p className="text-pb-primary font-mono text-lg">@{user.nickname}</p>
         <p className="mt-2 text-xs text-pb-subtext">Имя и ник берутся из Telegram.</p>
       </div>
+
+      {guestBookings}
 
       <div className="bg-[#24A1DE]/10 border border-[#24A1DE]/30 rounded-2xl p-4 flex items-center justify-between">
          <div className="flex items-center space-x-3">

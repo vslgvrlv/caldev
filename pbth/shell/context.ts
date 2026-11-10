@@ -33,7 +33,8 @@ export type GamePatch = {
 };
 
 export type ShellActions = {
-  rsvp: (eventId: string, status: RSVPStatus) => Promise<void>;
+  /** true — ответ принят сервером (или ушёл в очередь без сети); false — отказ, он уже показан. */
+  rsvp: (eventId: string, status: RSVPStatus) => Promise<boolean>;
   commitSeries: (seriesId: string) => Promise<void>;
   deleteEvent: (eventId: string, scope: 'single' | 'future') => Promise<void>;
   editEventTime: (eventId: string, startISO: string, endISO: string) => Promise<void>;

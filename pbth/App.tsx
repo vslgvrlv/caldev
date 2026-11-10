@@ -7,6 +7,9 @@ import { ScreenLoader } from './components/shell/ScreenLoader';
 import { api, setRequestTeam, type NotificationDeliveryResponse } from './api';
 import { isOfflineError } from './lib/offline';
 import { subscribeOutbox } from './lib/outbox';
+import { isExpectedInitState } from './lib/init-state';
+import { runOptimistic } from './lib/optimistic';
+import { applyRsvpToEvent, canAnswerRsvp } from './lib/rsvp';
 import { confirmAction, errorText, notify } from './lib/notify';
 import { clearDeviceData } from './lib/local-data';
 import { resolvePostLoginAction } from './lib/post-login';
@@ -341,7 +344,8 @@ const App: React.FC = () => {
       return result;
     } catch (e) {
       if (seq !== loadSeqRef.current) return 'stale';
-      console.error('Error loading data', e);
+      // «Нет команды» — штатное состояние (экран «Вступить или создать»), не ошибка.
+      if (!isExpectedInitState(e)) console.error('Error loading data', e);
       const message = e instanceof Error ? e.message : '';
       // Сети нет и снимка тоже нет — показывать «проверьте авторизацию»
       // вредно: человек пойдёт перелогиниваться, а логин без сети тем более
@@ -830,50 +834,71 @@ const App: React.FC = () => {
   // --- FINANCE HANDLER ---
   const handleAddTransaction = async (t: Omit<Transaction, 'id' | 'date'>) => {
     if (!activeTeam) return;
+    const teamId = activeTeam.id;
     const newTx: Transaction = {
       id: `tx${Date.now()}`,
       date: new Date(),
       ...t,
     };
+    const budgetDelta = t.type === TransactionType.EXPENSE ? -t.amount : t.type === TransactionType.DEPOSIT ? t.amount : 0;
+    const shiftBudget = (delta: number) => {
+      if (delta) setActiveTeam((prev) => (prev ? { ...prev, budget: prev.budget + delta } : null));
+    };
 
-    // Optimistic Update
-    setTransactions((prev) => [newTx, ...prev]);
-    if (t.type === TransactionType.EXPENSE) {
-      setActiveTeam((prev) => (prev ? { ...prev, budget: prev.budget - t.amount } : null));
-    } else if (t.type === TransactionType.DEPOSIT) {
-      setActiveTeam((prev) => (prev ? { ...prev, budget: prev.budget + t.amount } : null));
-    }
-
-    // Server Call
-    if (t.type === TransactionType.DEPOSIT) {
-      await api.createFinancePayment({
-        teamId: activeTeam.id,
-        amount: t.amount,
-        title: t.title,
-        payerUserId: t.userId,
-        status: t.status,
-      });
-      return;
-    }
-    await api.addTransaction(newTx);
+    // Запись видна сразу; сервер отказал — убираем её, возвращаем бюджет и
+    // показываем причину. Ошибка уходит и наверх: окно траты остаётся открытым
+    // с введёнными данными.
+    const result = await runOptimistic({
+      apply: () => {
+        setTransactions((prev) => [newTx, ...prev]);
+        shiftBudget(budgetDelta);
+      },
+      send: () =>
+        t.type === TransactionType.DEPOSIT
+          ? api.createFinancePayment({
+              teamId,
+              amount: t.amount,
+              title: t.title,
+              payerUserId: t.userId,
+              status: t.status,
+            })
+          : api.addTransaction(newTx),
+      rollback: () => {
+        setTransactions((prev) => prev.filter((item) => item.id !== newTx.id));
+        shiftBudget(-budgetDelta);
+      },
+      onError: (err) => {
+        console.error('Failed to add transaction', err);
+        notify.error(`Не удалось сохранить запись. ${errorText(err, '')}`.trim());
+      },
+    });
+    if (!result.ok) throw result.error;
   };
 
   // --- APP HANDLERS ---
-  const handleRsvp = async (id: string, status: RSVPStatus) => {
-    if (!user) return;
-
-    // Optimistic Update
-    setEvents((prev) =>
-      prev.map((e) => {
-        if (e.id === id) {
-          const diff = status === RSVPStatus.CONFIRMED ? 1 : e.rsvpStatus === RSVPStatus.CONFIRMED ? -1 : 0;
-          return { ...e, rsvpStatus: status, attendeesCount: e.attendeesCount + diff };
-        }
-        return e;
-      })
-    );
-
-    await api.rsvp(id, user.id, status);
+  // Свой ответ на явку: сразу на экране, сервер отказал — откат и сообщение.
+  // Не в составе команды события (владелец в чужой команде) — ответа нет.
+  const handleRsvp = async (id: string, status: RSVPStatus): Promise<boolean> => {
+    if (!user) return false;
+    const previous = events.find((e) => e.id === id);
+    if (previous && !canAnswerRsvp(previous)) return false;
+    const result = await runOptimistic({
+      apply: () => setEvents((prev) => prev.map((e) => (e.id === id ? applyRsvpToEvent(e, status) : e))),
+      send: () => api.rsvp(id, user.id, status),
+      rollback: () => {
+        if (!previous) return;
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === id ? { ...e, rsvpStatus: previous.rsvpStatus, attendeesCount: previous.attendeesCount } : e
+          )
+        );
+      },
+      onError: (err) => {
+        console.error('Failed to save RSVP', err);
+        notify.error(`Не удалось сохранить ответ. ${errorText(err, '')}`.trim());
+      },
+    });
+    return result.ok;
   };
 
   // #60: «Иду на серию» одним тапом из списка.
@@ -1064,6 +1089,7 @@ const App: React.FC = () => {
   };
 
   const openRsvpModal = (event: Event) => {
+    if (!canAnswerRsvp(event)) return;
     setRsvpModalEvent(event);
     setIsRSVPModalOpen(true);
   };

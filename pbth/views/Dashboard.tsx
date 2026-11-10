@@ -1,8 +1,16 @@
 import React from 'react';
+import { Plus, UserPlus } from 'lucide-react';
 import { Event, RSVPStatus, TeamContext } from '../types';
 import { EventCard } from '../components/EventCard';
 import { EVENT_COLORS, EVENT_LABELS } from '../constants';
-import { buildDashboardEventSections, getCountdownParts, getEventEndTimestamp } from '../lib/events';
+import {
+  buildDashboardEventSections,
+  countdownLabels,
+  getCountdownParts,
+  getEventEndTimestamp,
+  showUpcomingSection,
+  type CaptainHomeHints,
+} from '../lib/events';
 
 interface DashboardProps {
   /** Команды человека: по ним подписываем, чьё событие в общей ленте. */
@@ -12,11 +20,30 @@ interface DashboardProps {
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
   onCommitSeries: (seriesId: string) => void;
+  /** Подсказки капитану новой команды (`captainHomeHints`). */
+  captainHints?: CaptainHomeHints;
+  /** «Позови команду» — открывает лист ссылки команды. */
+  onInviteTeam?: () => void;
+  /** «Создай первое событие» — экран нового события. */
+  onCreateEvent?: () => void;
+  /** Карточки «Ты записан гостем» — вверху главной. */
+  guestBookings?: React.ReactNode;
 }
 
 // Шапка с переключателем команд — в общей оболочке (pbth/components/shell/TeamHeader.tsx).
 // Лента общая по всем командам человека, поэтому у карточек подписана команда.
-export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
+export const Dashboard: React.FC<DashboardProps> = ({
+  teams,
+  events,
+  onRsvp,
+  onEventClick,
+  onEventLongPress,
+  onCommitSeries,
+  captainHints,
+  onInviteTeam,
+  onCreateEvent,
+  guestBookings,
+}) => {
   const [nowTs, setNowTs] = React.useState(() => Date.now());
   const hasMultipleTeams = teams.length > 1;
   const teamLabelOf = (event: Event): string | undefined => {
@@ -41,12 +68,49 @@ export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onE
     const targetDate = heroEventIsOngoing ? new Date(getEventEndTimestamp(heroEvent)) : heroEvent.startDate;
     return getCountdownParts(targetDate, nowTs);
   }, [heroEvent, heroEventIsOngoing, nowTs]);
+  const timeLabels = countdownLabels(timeLeft);
+  const showInvite = Boolean(captainHints?.inviteTeam && onInviteTeam);
+  const showCreateEvent = Boolean(captainHints?.createFirstEvent && onCreateEvent);
 
   return (
     <div
       className="pb-24 px-4 space-y-6 animate-fade-in"
       style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
     >
+      {guestBookings}
+
+      {/* Подсказки капитану новой команды: исчезают, когда условие выполнено. */}
+      {(showInvite || showCreateEvent) && (
+        <section className="space-y-3">
+          {showInvite && (
+            <div className="bg-pb-surface rounded-2xl border border-white/5 p-4">
+              <h2 className="text-lg font-bold text-white mb-1">Позови команду</h2>
+              <p className="text-pb-subtext text-sm mb-3">Пока в команде только ты. Отправь ребятам ссылку команды — заявки придут тебе.</p>
+              <button
+                onClick={onInviteTeam}
+                className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
+              >
+                <UserPlus size={18} />
+                Пригласить
+              </button>
+            </div>
+          )}
+          {showCreateEvent && (
+            <div className="bg-pb-surface rounded-2xl border border-white/5 p-4">
+              <h2 className="text-lg font-bold text-white mb-1">Создай первое событие</h2>
+              <p className="text-pb-subtext text-sm mb-3">Тренировка или игра — команда увидит её здесь и ответит на явку.</p>
+              <button
+                onClick={onCreateEvent}
+                className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={18} />
+                Создать событие
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Next Event Banner */}
       {heroEvent && (
         <section>
@@ -78,17 +142,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onE
               <div className="flex space-x-4 mb-4">
                 <div>
                    <span className="text-2xl font-mono font-bold text-white">{timeLeft.days}</span>
-                   <span className="text-[10px] text-pb-subtext block uppercase">Дня</span>
+                   <span className="text-[10px] text-pb-subtext block uppercase">{timeLabels.days}</span>
                 </div>
                 <div className="text-2xl font-mono font-bold text-white/20">:</div>
                 <div>
                    <span className="text-2xl font-mono font-bold text-white">{timeLeft.hours}</span>
-                   <span className="text-[10px] text-pb-subtext block uppercase">Часов</span>
+                   <span className="text-[10px] text-pb-subtext block uppercase">{timeLabels.hours}</span>
                 </div>
                 <div className="text-2xl font-mono font-bold text-white/20">:</div>
                  <div>
                    <span className="text-2xl font-mono font-bold text-white">{timeLeft.mins}</span>
-                   <span className="text-[10px] text-pb-subtext block uppercase">Мин</span>
+                   <span className="text-[10px] text-pb-subtext block uppercase">{timeLabels.mins}</span>
                 </div>
               </div>
 
@@ -128,7 +192,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onE
         </section>
       )}
 
-      {/* Upcoming */}
+      {/* Upcoming: если других событий нет, а главное уже наверху — блока нет. */}
+      {showUpcomingSection(dashboardSections) && (
       <section>
          <h2 className="text-lg font-bold text-white mb-3">Ближайшие</h2>
          <div className="space-y-3">
@@ -146,6 +211,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onE
             ))}
          </div>
       </section>
+      )}
     </div>
   );
 };

@@ -6,6 +6,10 @@ import { NotFoundScreen } from '../components/shell/StateScreens';
 import { eventCreateAccess, eventCreateViewProps } from '../lib/event-create-access';
 import { resolveEventTeamName } from '../lib/event-team';
 import { eventPath, memberPath, teamCodeOf, teamPath } from '../lib/team-url';
+import { captainHomeHints } from '../lib/events';
+import { teamLinkAccess } from '../lib/team-link-access';
+import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
+import { GuestBookingsBlock } from '../components/track4/GuestBookingCards';
 import { PlayerStatus, Role, type Event, type TeamMember } from '../types';
 
 // Экраны по адресам. Здесь только проводка: данные и действия из оболочки,
@@ -51,16 +55,40 @@ function useOpenEvent() {
 
 export const DashboardScreen: React.FC = () => {
   const shell = useShell();
+  const navigate = useNavigate();
   const openEvent = useOpenEvent();
+  const code = useTeamCode();
+  const [linkOpen, setLinkOpen] = React.useState(false);
+  const team = shell.team;
+  // Подсказки капитану новой команды: «Позови команду», «Создай первое событие».
+  const hints = captainHomeHints({
+    role: team?.role,
+    membersCount: shell.members.length,
+    teamEventsCount: team ? shell.events.filter((event) => event.teamId === team.id).length : 0,
+  });
   return (
-    <Dashboard
-      teams={shell.teams}
-      events={shell.events}
-      onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
-      onEventClick={openEvent}
-      onEventLongPress={shell.actions.openRsvpModal}
-      onCommitSeries={(seriesId) => void shell.actions.commitSeries(seriesId)}
-    />
+    <>
+      <Dashboard
+        teams={shell.teams}
+        events={shell.events}
+        onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
+        onEventClick={openEvent}
+        onEventLongPress={shell.actions.openRsvpModal}
+        onCommitSeries={(seriesId) => void shell.actions.commitSeries(seriesId)}
+        captainHints={hints}
+        onInviteTeam={() => setLinkOpen(true)}
+        onCreateEvent={() => navigate(teamPath(code || shell.teamCode || '', 'new'))}
+        guestBookings={<GuestBookingsBlock />}
+      />
+      {linkOpen && team && (
+        <TeamJoinLinkSheet
+          teamId={team.id}
+          teamName={team.name}
+          canRotate={teamLinkAccess(team.role).canRotate}
+          onClose={() => setLinkOpen(false)}
+        />
+      )}
+    </>
   );
 };
 
@@ -187,7 +215,8 @@ export const EventScreen: React.FC = () => {
       currentUserRole={event.viewerRole || team.role}
       teamName={resolveEventTeamName(event, shell.teams, team)}
       onBack={goBack}
-      onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
+      onRsvp={(id, status) => shell.actions.rsvp(id, status)}
+      currentUserId={shell.user?.id}
       onAddGame={(id, game) => void shell.actions.addGame(id, game)}
       onUpdateGame={shell.actions.updateGame}
       onAttendeeClick={(userId, seed) => navigate(memberPath(code, userId), { state: { seed } })}
@@ -246,6 +275,7 @@ export const ProfileScreen: React.FC = () => {
       role={shell.team.role}
       canEnterAdmin={shell.canEnterAdmin}
       onEnterAdmin={() => navigate('/admin')}
+      guestBookings={<GuestBookingsBlock />}
     />
   );
 };
