@@ -1,3 +1,8 @@
+# Заголовки защиты (HSTS, nosniff, frame-ancestors для Telegram, Referrer-Policy)
+# для страниц фронтенда — фрагмент pbth-security-headers.conf.example, кладётся в
+# /etc/nginx/snippets/pbth-security-headers.conf. Порядок применения и проверка —
+# RELEASE_PROTOCOL.md, раздел «Заголовки защиты».
+
 upstream pbth_prod_frontend {
     server 127.0.0.1:3100;
 }
@@ -62,6 +67,7 @@ server {
     # index.html, sw.js и manifest остаются no-cache — иначе PWA не узнает о выкате.
     location /assets/ {
         proxy_pass http://pbth_prod_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -72,6 +78,7 @@ server {
     # Иконки без хэша в имени — сутки.
     location /icons/ {
         proxy_pass http://pbth_prod_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -81,6 +88,7 @@ server {
 
     location / {
         proxy_pass http://pbth_prod_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -123,6 +131,7 @@ server {
     # index.html, sw.js и manifest остаются no-cache — иначе PWA не узнает о выкате.
     location /assets/ {
         proxy_pass http://pbth_staging_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -133,6 +142,7 @@ server {
     # Иконки без хэша в имени — сутки.
     location /icons/ {
         proxy_pass http://pbth_staging_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -142,6 +152,7 @@ server {
 
     location / {
         proxy_pass http://pbth_staging_frontend;
+        include /etc/nginx/snippets/pbth-security-headers.conf;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

@@ -60,6 +60,16 @@ npm run dev
 Frontend: `http://127.0.0.1:3000`
 Backend: `http://127.0.0.1:8000`
 
+The Vite dev server proxies `/api/` and `/calendar/` to `VITE_BACKEND_TARGET`
+(default `http://127.0.0.1:8000`). For a backend on another port:
+`VITE_BACKEND_TARGET=http://127.0.0.1:8103 npm run dev -- --port 3103`.
+Without Telegram, enable `DEV_AUTH_ENABLED=1` on the backend and open
+`/api/v1/auth/dev/login?telegramId=9000000101&redirectTo=/app` (seeded demo captain).
+
+Web Push is off by default; to try it locally generate keys with
+`cd backend && npx web-push generate-vapid-keys` and set
+`PUSH_NOTIFICATIONS_ENABLED=1`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in `.env`.
+
 ## Docker compose full stack
 
 ```bash
@@ -177,6 +187,11 @@ Templates:
 ./scripts/rollback.sh prod <releaseId> https://pbthub.ru
 ./scripts/rollback.sh staging <releaseId> https://staging.pbthub.ru
 ```
+
+Every deploy takes a database dump before migrations
+(`/opt/pbth/shared/backups/<env>/`) and stops if it fails. Rollback returns
+code only; restoring the database from a dump is described in
+`RELEASE_PROTOCOL.md` («Бэкап базы перед миграциями»).
 
 ## Legacy endpoints (temporary compatibility)
 
