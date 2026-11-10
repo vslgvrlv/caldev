@@ -25,7 +25,10 @@ export type ApiErrorCode =
   | "OAUTH_PROVIDER_DISABLED"
   | "OAUTH_PENDING_LINK_EXPIRED"
   | "TELEGRAM_NOT_LINKED"
-  | "TELEGRAM_SEND_FAILED";
+  | "TELEGRAM_SEND_FAILED"
+  | "TEAM_NOT_FOUND"
+  | "TEAM_ACCESS_DENIED"
+  | "TEAM_CONTEXT_REQUIRED";
 
 export function httpStatusToCode(status: number): ApiErrorCode {
   if (status === 400) return "BAD_REQUEST";

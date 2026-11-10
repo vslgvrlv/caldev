@@ -1,40 +1,21 @@
 import type { Request } from "express";
-import { query } from "../../db/pool.js";
+import { resolveTeamAccess } from "../../lib/team-access.js";
+
+// Совместимость: раньше команда бралась только из сессии. Теперь источник —
+// общий `resolveTeamAccess` (параметр → заголовок → `?team=` → сессия).
+// Новым ручкам звать `resolveTeamAccess` напрямую.
 
 export type ActiveContext = {
-  membershipId: string;
+  membershipId: string | null;
   teamId: string;
   role: "CAPTAIN" | "TRAINER" | "PLAYER";
   userId: string;
+  via: "membership" | "owner";
 };
 
+/** @deprecated используйте `resolveTeamAccess` из `lib/team-access.ts`. */
 export async function getActiveContext(req: Request): Promise<ActiveContext | null> {
-  const userId = req.authUser?.id;
-  if (!userId || !req.session.activeMembershipId || !req.session.activeTeamId) {
-    return null;
-  }
-
-  const result = await query<{
-    id: string;
-    team_id: string;
-    role: "CAPTAIN" | "TRAINER" | "PLAYER";
-    user_id: string;
-  }>(
-    `SELECT id, team_id, role, user_id
-     FROM team_memberships
-     WHERE id = $1 AND team_id = $2 AND user_id = $3`,
-    [req.session.activeMembershipId, req.session.activeTeamId, userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    return null;
-  }
-
-  return {
-    membershipId: row.id,
-    teamId: row.team_id,
-    role: row.role,
-    userId: row.user_id,
-  };
+  const access = await resolveTeamAccess(req);
+  if (!access || !req.authUser) return null;
+  return { membershipId: access.membershipId, teamId: access.teamId, role: access.role, userId: req.authUser.id, via: access.via };
 }

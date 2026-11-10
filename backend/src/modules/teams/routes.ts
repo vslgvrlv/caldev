@@ -1,5 +1,6 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
+import { resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
   assertCaptainChangeAllowed,
   loadMembershipByUserForUpdate,
@@ -39,14 +40,23 @@ const createInviteSchema = z.object({
   expiresInHours: z.number().int().min(1).max(24 * 30).default(72),
 });
 
-async function getTeamRoleForUser(teamId: string, userId: string): Promise<"CAPTAIN" | "TRAINER" | "PLAYER" | null> {
-  const roleResult = await query<{ role: "CAPTAIN" | "TRAINER" | "PLAYER" }>(
-    `SELECT role::text AS role
-     FROM team_memberships
-     WHERE team_id = $1 AND user_id = $2`,
-    [teamId, userId]
-  );
-  return roleResult.rows[0]?.role ?? null;
+// Права в команде из параметра ручки — через общий `resolveTeamAccess`.
+// Владелец платформы без членства получает права капитана (`via: owner`) и
+// при этом считается владельцем для правил про капитанов. Отказ доступа здесь
+// не ошибка: ручки сами отвечают прежним текстом 403.
+async function resolveTeamManager(req: Request, teamId: string) {
+  const isRootAdmin = getEffectiveEntryRole(req, req.authUser!) === "ADMIN";
+  let access: Awaited<ReturnType<typeof resolveTeamAccess>> = null;
+  try {
+    access = await resolveTeamAccess(req, { param: teamId });
+  } catch (error) {
+    if (!(error instanceof TeamAccessError)) throw error;
+  }
+  return {
+    isRootAdmin,
+    isCaptain: access?.role === "CAPTAIN",
+    isOwner: isRootAdmin || access?.via === "owner",
+  };
 }
 
 export const teamsRouter = Router();
@@ -153,15 +163,11 @@ teamsRouter.post(
     if (!teamExists.rowCount) {
       return res.status(404).json({ detail: "Team not found" });
     }
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    const teamRole = await getTeamRoleForUser(teamId, req.authUser!.id);
-
-    const isRootAdmin = effectiveRole === "ADMIN";
-    const isCaptain = teamRole === "CAPTAIN";
-    if (!isRootAdmin && !isCaptain) {
+    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
+    if (!isOwner && !isCaptain) {
       return res.status(403).json({ detail: "Only root admin or team captain can create invites" });
     }
-    if (!isRootAdmin && payload.teamRole === "CAPTAIN") {
+    if (!isOwner && payload.teamRole === "CAPTAIN") {
       return res.status(403).json({ detail: "Captain cannot issue captain invites" });
     }
 
@@ -328,10 +334,7 @@ teamsRouter.post(
   asyncHandler(async (req, res) => {
     const teamId = z.string().uuid().parse(req.params.teamId);
     const payload = createMembershipSchema.parse(req.body);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    const teamRole = await getTeamRoleForUser(teamId, req.authUser!.id);
-    const isRootAdmin = effectiveRole === "ADMIN";
-    const isCaptain = teamRole === "CAPTAIN";
+    const { isOwner: isRootAdmin, isCaptain } = await resolveTeamManager(req, teamId);
     if (!isRootAdmin && !isCaptain) {
       return res.status(403).json({ detail: "Only root admin or team captain can manage members" });
     }
@@ -414,10 +417,7 @@ teamsRouter.patch(
     const teamId = z.string().uuid().parse(req.params.teamId);
     const membershipId = z.string().uuid().parse(req.params.membershipId);
     const payload = updateMembershipSchema.parse(req.body);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    const teamRole = await getTeamRoleForUser(teamId, req.authUser!.id);
-    const isRootAdmin = effectiveRole === "ADMIN";
-    const isCaptain = teamRole === "CAPTAIN";
+    const { isOwner: isRootAdmin, isCaptain } = await resolveTeamManager(req, teamId);
     if (!isRootAdmin && !isCaptain) {
       return res.status(403).json({ detail: "Only root admin or team captain can manage members" });
     }
@@ -469,10 +469,7 @@ teamsRouter.delete(
   asyncHandler(async (req, res) => {
     const teamId = z.string().uuid().parse(req.params.teamId);
     const membershipId = z.string().uuid().parse(req.params.membershipId);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    const teamRole = await getTeamRoleForUser(teamId, req.authUser!.id);
-    const isRootAdmin = effectiveRole === "ADMIN";
-    const isCaptain = teamRole === "CAPTAIN";
+    const { isOwner: isRootAdmin, isCaptain } = await resolveTeamManager(req, teamId);
     if (!isRootAdmin && !isCaptain) {
       return res.status(403).json({ detail: "Only root admin or team captain can manage members" });
     }
