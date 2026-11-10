@@ -17,6 +17,7 @@ import {
   toOfflineError,
 } from './lib/offline';
 import { enqueue, flushOutbox, type OutboxEntry } from './lib/outbox';
+import { teamCodeOf } from './lib/team-url';
 
 const baseFromEnv = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 const API_URL = baseFromEnv ? `${baseFromEnv}/api/v1` : '/api/v1';
@@ -455,7 +456,7 @@ export type FinanceTransferConfirmationsResponse = {
   items?: TransferConfirmation[];
 };
 
-type RequestOptions = {
+export type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
@@ -532,13 +533,30 @@ async function fetchWithDeadline(input: string, init: RequestInit): Promise<Resp
   }
 }
 
-async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+// Команда из адреса экрана (`/t/:team/*`). Уходит заголовком `X-PBTH-Team` во
+// всех запросах, чтобы сервер работал с командой экрана, а не с той, что
+// запомнена в сессии (спека ревизии, «Команда в запросе»). Ставит оболочка,
+// когда данные команды загружены; на экранах вне команды — null.
+const TEAM_HEADER = 'X-PBTH-Team';
+let requestTeamId: string | null = null;
+
+export function setRequestTeam(teamId: string | null): void {
+  requestTeamId = teamId ? String(teamId) : null;
+}
+
+export function getRequestTeam(): string | null {
+  return requestTeamId;
+}
+
+// Общий запрос к API. Треки пишут свои функции в `pbth/api/<трек>.ts` поверх него.
+export async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   let res: Response;
   try {
     res = await fetchWithDeadline(`${API_URL}${path}`, {
       method: options?.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...(requestTeamId ? { [TEAM_HEADER]: requestTeamId } : {}),
         ...(options?.headers || {}),
       },
       credentials: 'include',
@@ -698,7 +716,10 @@ export const api = {
     window.location.assign(`/api/v1/auth/telegram/direct?redirectTo=${encodeURIComponent(redirectTo)}`);
   },
 
-  async getInitData(): Promise<{
+  // `team` — код команды из адреса (или её id). Новый сервер отдаёт эту команду;
+  // старый игнорирует параметр и отдаёт команду из сессии — оболочка это
+  // проверяет и переключает сессию прежней ручкой /auth/context.
+  async getInitData(team?: string | null): Promise<{
     user?: User;
     team?: Team;
     teams?: TeamContext[];
@@ -716,16 +737,23 @@ export const api = {
       return localData;
     }
 
+    const teamCode = String(team || '').trim().toLowerCase();
+    const query = teamCode ? `?team=${encodeURIComponent(teamCode)}` : '';
     let res: Response;
     try {
-      res = await fetchWithDeadline(`${API_URL}/init`, {
+      // Без заголовка X-PBTH-Team: у сервера он главнее `?team=`, а здесь
+      // команда как раз меняется.
+      res = await fetchWithDeadline(`${API_URL}/init${query}`, {
         credentials: 'include',
       });
     } catch (networkError) {
       // Снимок хранится сырым, до нормализации: в нём нет объектов Date, он
       // переживает structured clone и не зависит от того, как мы сегодня
       // раскладываем события. Нормализация — одна на оба пути, ниже.
-      const cached = await loadSnapshot<Record<string, any>>(SNAPSHOT_INIT);
+      // Сначала снимок команды из адреса, потом последний общий.
+      const cached =
+        (teamCode ? await loadSnapshot<Record<string, any>>(`${SNAPSHOT_INIT}:${teamCode}`) : null) ??
+        (await loadSnapshot<Record<string, any>>(SNAPSHOT_INIT));
       if (!cached) throw toOfflineError(networkError);
       return { ...normalizeInitPayload(cached.value), offlineSnapshotAt: cached.savedAt };
     }
@@ -755,6 +783,8 @@ export const api = {
     // который заведомо не пустит его в приложение.
     if (data?.user && data?.team && !data?.noTeamYet && !data?.admin) {
       void saveSnapshot(SNAPSHOT_INIT, data);
+      const code = teamCodeOf({ teamId: String(data.team.id), shortCode: data.team.shortCode });
+      void saveSnapshot(`${SNAPSHOT_INIT}:${code}`, data);
     }
 
     return normalizeInitPayload(data);

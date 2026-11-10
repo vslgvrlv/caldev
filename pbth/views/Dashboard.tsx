@@ -1,15 +1,12 @@
 import React from 'react';
-import { User, Event, Team, RSVPStatus, TeamContext } from '../types';
+import { Event, RSVPStatus, TeamContext } from '../types';
 import { EventCard } from '../components/EventCard';
-import { ChevronDown, Check } from 'lucide-react';
 import { EVENT_COLORS, EVENT_LABELS } from '../constants';
 import { buildDashboardEventSections, getCountdownParts, getEventEndTimestamp } from '../lib/events';
 
 interface DashboardProps {
-  user: User;
-  activeTeam: Team;
+  /** Команды человека: по ним подписываем, чьё событие в общей ленте. */
   teams: TeamContext[];
-  onSwitchTeam: (membershipId: string) => void;
   events: Event[];
   onRsvp: (id: string, status: RSVPStatus) => void;
   onEventClick: (event: Event) => void;
@@ -17,10 +14,15 @@ interface DashboardProps {
   onCommitSeries: (seriesId: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, onSwitchTeam, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
+// Шапка с переключателем команд — в общей оболочке (pbth/components/shell/TeamHeader.tsx).
+// Лента общая по всем командам человека, поэтому у карточек подписана команда.
+export const Dashboard: React.FC<DashboardProps> = ({ teams, events, onRsvp, onEventClick, onEventLongPress, onCommitSeries }) => {
   const [nowTs, setNowTs] = React.useState(() => Date.now());
-  const [teamMenuOpen, setTeamMenuOpen] = React.useState(false);
   const hasMultipleTeams = teams.length > 1;
+  const teamLabelOf = (event: Event): string | undefined => {
+    if (!hasMultipleTeams) return undefined;
+    return event.teamName || teams.find((t) => t.teamId === event.teamId)?.teamName || undefined;
+  };
 
   React.useEffect(() => {
     const id = window.setInterval(() => setNowTs(Date.now()), 1000);
@@ -45,71 +47,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
       className="pb-24 px-4 space-y-6 animate-fade-in"
       style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
     >
-      {/* Header */}
-      <header className="flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pb-primary to-blue-500 p-[2px]">
-             <img 
-               src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=0F0F0F&color=fff`} 
-               alt="avatar" 
-               className="w-full h-full rounded-full object-cover border-2 border-pb-background"
-             />
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => hasMultipleTeams && setTeamMenuOpen((v) => !v)}
-              className="text-left"
-              aria-haspopup={hasMultipleTeams}
-              aria-expanded={teamMenuOpen}
-            >
-              <div className="flex items-center space-x-1 text-pb-subtext text-xs uppercase tracking-wide">
-                <span>{activeTeam.shortCode}</span>
-                <span className="w-1 h-1 bg-pb-primary rounded-full"></span>
-                <span>{activeTeam.role}</span>
-              </div>
-              <div className="flex items-center text-white font-bold text-lg">
-                {activeTeam.name}
-                {hasMultipleTeams && (
-                  <ChevronDown
-                    size={16}
-                    className={`ml-1 text-pb-subtext transition-transform ${teamMenuOpen ? 'rotate-180' : ''}`}
-                  />
-                )}
-              </div>
-            </button>
-
-            {teamMenuOpen && hasMultipleTeams && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setTeamMenuOpen(false)} />
-                <div className="absolute left-0 top-full mt-2 z-40 w-60 rounded-xl bg-pb-surface border border-white/10 shadow-xl overflow-hidden">
-                  {teams.map((t) => {
-                    const isActive = t.teamId === activeTeam.id;
-                    return (
-                      <button
-                        key={t.membershipId}
-                        type="button"
-                        onClick={() => {
-                          setTeamMenuOpen(false);
-                          if (!isActive) onSwitchTeam(t.membershipId);
-                        }}
-                        className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition-colors ${isActive ? 'bg-white/5' : ''}`}
-                      >
-                        <div>
-                          <div className="text-white font-semibold text-sm">{t.teamName}</div>
-                          <div className="text-pb-subtext text-[11px] uppercase tracking-wide">{t.role}</div>
-                        </div>
-                        {isActive && <Check size={16} className="text-pb-primary" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
-
       {/* Next Event Banner */}
       {heroEvent && (
         <section>
@@ -121,6 +58,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
               
               <span className="text-pb-primary text-xs font-bold uppercase tracking-wider mb-2 block">
                 {heroEventIsOngoing ? 'Текущее событие' : 'Ближайшее событие'}
+                {teamLabelOf(heroEvent) ? ` · ${teamLabelOf(heroEvent)}` : ''}
               </span>
               <span
                 className="inline-flex mb-2 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide bg-black/30 border border-white/10"
@@ -183,6 +121,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
                 onClick={onEventClick}
                 onLongPress={onEventLongPress}
                 onCommitSeries={onCommitSeries}
+                teamLabel={teamLabelOf(event)}
               />
             ))}
           </div>
@@ -202,6 +141,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, activeTeam, teams, o
                 onClick={onEventClick}
                 onLongPress={onEventLongPress}
                 onCommitSeries={onCommitSeries}
+                teamLabel={teamLabelOf(event)}
               />
             ))}
          </div>

@@ -20,6 +20,20 @@ describe('resolvePostLoginAction', () => {
     expect(resolvePostLoginAction('')).toEqual({ kind: 'app', path: '/app' });
   });
 
+  // Ссылка на событие открывает событие после входа (ревизия 11.11.2026).
+  it('экран приложения → туда же после входа', () => {
+    expect(resolvePostLoginAction('/t/dta/event/e-1')).toEqual({ kind: 'app', path: '/t/dta/event/e-1' });
+    expect(resolvePostLoginAction('/t/dta/calendar')).toEqual({ kind: 'app', path: '/t/dta/calendar' });
+    expect(resolvePostLoginAction('/me')).toEqual({ kind: 'app', path: '/me' });
+    expect(resolvePostLoginAction('/join/ABC123')).toEqual({ kind: 'app', path: '/join/ABC123' });
+  });
+
+  it('служебные и публичные страницы → вход /app', () => {
+    expect(resolvePostLoginAction('/login')).toEqual({ kind: 'app', path: '/app' });
+    expect(resolvePostLoginAction('/support')).toEqual({ kind: 'app', path: '/app' });
+    expect(resolvePostLoginAction('//evil.example/t/dta')).toEqual({ kind: 'app', path: '/app' });
+  });
+
   it('админка остаётся за консолью владельца', () => {
     expect(resolvePostLoginAction('/admin')).toEqual({ kind: 'admin' });
     expect(resolvePostLoginAction('/admin/teams')).toEqual({ kind: 'admin' });

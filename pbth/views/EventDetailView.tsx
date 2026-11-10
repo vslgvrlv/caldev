@@ -13,6 +13,7 @@ import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
 import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { AttendanceMap } from '../components/AttendanceMap';
+import { EventExtBlocks } from '../shell/EventExtBlocks';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 import { GamePointsModal } from '../components/GamePointsModal';
 import { GameScoreLine } from '../components/GameScoreLine';
@@ -1265,6 +1266,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
             )}
           </div>
+          <EventExtBlocks event={event} viewerRole={currentUserRole} />
 
           {/* Сбор по событию — финансы вторичны, поэтому ниже явки (#UI-иерархия). */}
           {canReadEventFinance && (

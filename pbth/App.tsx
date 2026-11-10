@@ -1,45 +1,45 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { LandingView } from './views/LandingView';
-import { ViewState, Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, UserRoleOption, Transaction, TransactionType, PlayerStatus, Game, TeamContext } from './types';
-import { BottomNav } from './components/BottomNav';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Role, User, Team, Event, RSVPStatus, TeamMember, AuthStep, Transaction, TransactionType, PlayerStatus, Game, TeamContext } from './types';
 import { RSVPModal } from './components/RSVPModal';
-
-// Экраны грузятся отдельными кусками (personal-os#1431): главная страница не
-// должна ждать код админки, финансов и карточки события. Лендинг остаётся в
-// основном файле — это первый экран. Офлайн не страдает: service worker
-// кладёт в кэш все куски при установке.
-const Dashboard = lazy(() => import('./views/Dashboard').then((m) => ({ default: m.Dashboard })));
-const CalendarView = lazy(() => import('./views/CalendarView').then((m) => ({ default: m.CalendarView })));
-const TeamView = lazy(() => import('./views/TeamView').then((m) => ({ default: m.TeamView })));
-const EventDetailView = lazy(() => import('./views/EventDetailView').then((m) => ({ default: m.EventDetailView })));
-const CreateEventView = lazy(() => import('./views/CreateEventView').then((m) => ({ default: m.CreateEventView })));
-const LoginView = lazy(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
-const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })));
-const FinanceView = lazy(() => import('./views/FinanceView').then((m) => ({ default: m.FinanceView })));
-const PrivacyView = lazy(() => import('./views/PrivacyView').then((m) => ({ default: m.PrivacyView })));
-const TermsView = lazy(() => import('./views/TermsView').then((m) => ({ default: m.TermsView })));
-const SupportView = lazy(() => import('./views/SupportView').then((m) => ({ default: m.SupportView })));
-const PlayerProfileView = lazy(() => import('./views/PlayerProfileView').then((m) => ({ default: m.PlayerProfileView })));
-const InviteView = lazy(() => import('./views/InviteView').then((m) => ({ default: m.InviteView })));
-const AdminConsoleView = lazy(() => import('./views/admin/AdminConsoleView').then((m) => ({ default: m.AdminConsoleView })));
-
-const ScreenLoader: React.FC = () => (
-  <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
-    <Loader2 className="animate-spin text-pb-primary" size={48} />
-  </div>
-);
-import { Plus, Loader2 } from 'lucide-react';
-import { api, type NotificationDeliveryResponse } from './api'; // Import API
+import { NotifyHost } from './components/shell/NotifyHost';
+import { ScreenLoader } from './components/shell/ScreenLoader';
+import { api, setRequestTeam, type NotificationDeliveryResponse } from './api';
 import { isOfflineError } from './lib/offline';
 import { subscribeOutbox } from './lib/outbox';
-import { OfflineBanner } from './components/OfflineBanner';
-import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
-import { reconcileSelectedEvent } from './lib/event-refresh';
+import { confirmAction, errorText, notify } from './lib/notify';
+import { clearDeviceData } from './lib/local-data';
 import { resolvePostLoginAction } from './lib/post-login';
-import { resolveEventTeamName } from './lib/event-team';
+import { parseTeamPath, readLastTeam, rememberLastTeam, switchTeamPath, teamCodeOf, teamPath } from './lib/team-url';
+import { ShellContext, type ShellState, type TeamLoadState, type EventReminderPayload, type EventEditPatch, type GamePatch } from './shell/context';
+import { ErrorBoundary } from './shell/ErrorBoundary';
+import { decideInitTeam } from './shell/team-switch';
+import { readMiniAppInitData } from './shell/telegram';
+import { AppRoutes } from './routes';
 
-type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
+// Корень приложения: вход, загрузка данных команды и действия. Экраны и адреса —
+// в pbth/routes.tsx, оболочка — в pbth/shell/. Команда живёт в адресе
+// (`/t/:team/*`), а не в состоянии: «Назад», перезагрузка и ссылка на экран
+// работают как у обычного сайта.
+
+type InitLoadResult =
+  | 'ok'
+  | 'no_team'
+  | 'admin_mode'
+  | 'role_selection_required'
+  | 'invalid_shape'
+  | 'forbidden'
+  | 'offline_other_team'
+  | 'stale'
+  | 'error';
+
+type LoadOptions = {
+  /** Команда из адреса. undefined — та, что нужна оболочке сейчас; '' / null — какую отдаст сервер. */
+  team?: string | null;
+  silent?: boolean;
+  background?: boolean;
+  skipAncillary?: boolean;
+};
 
 type ScheduleItemPayload = {
   id?: string;
@@ -64,10 +64,20 @@ const toScheduleItemPayload = (game: Game): ScheduleItemPayload => ({
   gamePair: game.gamePair,
 });
 
+const RESUME_FRESH_MS = 10_000;
+const LOGOUT_REQUEST_MS = 3_000;
+
+const loadResultIsEntered = (result: InitLoadResult) =>
+  result === 'ok' || result === 'no_team' || result === 'forbidden' || result === 'offline_other_team';
+
 const App: React.FC = () => {
   const logoutGuardKey = 'pbth:skip-auto-auth-after-logout';
   const logoutGuardCookie = 'pbth_logout_guard';
   const navigate = useNavigate();
+  // navigate меняется при каждой смене адреса; эффекты держат ссылку, а не зависимость.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
   const [authStep, setAuthStep] = useState<AuthStep>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -79,31 +89,36 @@ const App: React.FC = () => {
   // сегодняшний, и это хуже, чем отсутствие данных.
   const [offlineSnapshotAt, setOfflineSnapshotAt] = useState<number | null>(null);
   const [outboxState, setOutboxState] = useState<{ pending: number; blocked: number }>({ pending: 0, blocked: 0 });
-  // Tracks whether the current session's user is allowlisted to enter the
-  // Platform Admin Console. Drives the "Платформа админа" entry-point in
-  // ProfileView so owners have a 1-tap path into /admin from /app.
+  // Владелец из списка допуска: плитка «Платформа админа» в профиле.
   const [canEnterAdmin, setCanEnterAdmin] = useState(false);
-  
+
   // Data State
   const [user, setUser] = useState<User | null>(null);
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+  const [teamCode, setTeamCode] = useState<string | null>(null);
+  const [teamLoad, setTeamLoad] = useState<TeamLoadState>('idle');
   const [teams, setTeams] = useState<TeamContext[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [calendarLink, setCalendarLink] = useState<string>('');
-  
-  const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
 
-  // Interaction State
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [isRSVPModalOpen, setIsRSVPModalOpen] = useState(false);
   const [rsvpModalEvent, setRsvpModalEvent] = useState<Event | null>(null);
   const resumeRefreshRef = useRef({ inFlight: false, lastStartedAt: 0 });
+  // Когда данные последний раз пришли с сервера: возврат в приложение сразу
+  // после загрузки (браузер присылает focus/pageshow при открытии) не должен
+  // грузить всё второй раз.
+  const lastLoadedAtRef = useRef(0);
 
-  const isTelegramMiniApp = () =>
-    typeof window !== 'undefined' && Boolean((window as any).Telegram?.WebApp);
+  // Какую команду хочет видеть оболочка (из адреса) и какая загружена.
+  const desiredTeamRef = useRef<string>('');
+  const loadedCodeRef = useRef<string | null>(null);
+  const inflightCodeRef = useRef<string | null>(null);
+  // Загрузки идут по одной: переключение сессии на старом сервере — побочный
+  // эффект, и две загрузки вперемешку перебивали бы друг другу команду.
+  const loadChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const loadSeqRef = useRef(0);
 
   const hasLogoutGuard = () => {
     try {
@@ -154,158 +169,187 @@ const App: React.FC = () => {
     }
   };
 
-  // Initial Fetch
-  // background — обновление поверх уже показанного экрана. Такое обновление не
-  // имеет права поднимать загрузочный спиннер: на турнире связь то есть, то
-  // нет, и приложение мигало бы пустым экраном поверх живых данных.
-  const loadData = async (options?: { silent?: boolean; background?: boolean; skipAncillary?: boolean }): Promise<InitLoadResult> => {
-    if (!options?.background) setIsLoading(true);
+  const applyInit = (data: Record<string, any>) => {
+    const code = teamCodeOf({ teamId: String(data.team.id), shortCode: data.team.shortCode });
+    loadedCodeRef.current = code;
+    setUser(data.user);
+    setActiveTeam(data.team);
+    setTeamCode(code);
+    setTeams(data.teams || []);
+    setEvents(data.events || []);
+    setMembers(data.members || []);
+    setTransactions(data.transactions || []);
+    setOfflineSnapshotAt(typeof data.offlineSnapshotAt === 'number' ? data.offlineSnapshotAt : null);
+    setRequestTeam(String(data.team.id));
+    rememberLastTeam(code);
+    if (typeof data.offlineSnapshotAt !== 'number') lastLoadedAtRef.current = Date.now();
+    return code;
+  };
+
+  // Финансы и календарь — второй слой: не нужны для входа и без сети не
+  // поднимаются. Игроку финансы закрыты — не спрашиваем, чтобы не получать
+  // два отказа на каждом запуске.
+  const loadAncillary = async (team: Team, code: string) => {
+    if (team.role !== Role.PLAYER) {
+      try {
+        const [financeOverview, financeMembers] = await Promise.all([
+          api.getFinanceOverview(team.id),
+          api.getFinanceMembers(team.id),
+        ]);
+        if (loadedCodeRef.current !== code) return;
+
+        const financeBalance = financeOverview?.summary?.balance;
+        if (financeBalance !== undefined) {
+          setActiveTeam((prev) => (prev && prev.id === team.id ? { ...prev, budget: Number(financeBalance) } : prev));
+        }
+
+        if (Array.isArray(financeMembers?.items)) {
+          const financeByUserId = new Map<string, { outstanding: number; overpaid: number }>();
+          for (const item of financeMembers.items) {
+            financeByUserId.set(String(item.userId), {
+              outstanding: Number(item.outstanding || 0),
+              overpaid: Number(item.overpaid || 0),
+            });
+          }
+          setMembers((prev) =>
+            prev.map((m) => {
+              const s = financeByUserId.get(m.id);
+              if (!s) return m;
+              return { ...m, balance: s.overpaid - s.outstanding };
+            })
+          );
+        }
+
+        if (Array.isArray(financeOverview?.recentTransactions) && financeOverview.recentTransactions.length > 0) {
+          setTransactions(
+            financeOverview.recentTransactions.map((t: any) => ({
+              id: String(t.id),
+              type: t.type as TransactionType,
+              amount: Number(t.amount),
+              title: String(t.title),
+              date: new Date(t.date),
+              userId: t.userId || undefined,
+              userName: t.userName || undefined,
+              status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
+            }))
+          );
+        }
+      } catch (financeErr) {
+        console.warn('Finance bootstrap fallback to init payload', financeErr);
+      }
+    }
+
     try {
-        const data = await api.getInitData();
-
-        if (data?.noTeamYet) {
-          throw new Error('INIT_NO_TEAM');
-        }
-        if (data?.admin) {
-          throw new Error('INIT_ADMIN_MODE');
-        }
-        if (!data?.user || !data?.team) {
-          throw new Error('INIT_INVALID_SHAPE');
-        }
-
-        setUser(data.user);
-        setActiveTeam(data.team);
-        setTeams(data.teams || []);
-        const nextEvents = data.events || [];
-        setEvents(nextEvents);
-        setSelectedEvent((current) => reconcileSelectedEvent(current, nextEvents));
-        setMembers(data.members || []);
-        setTransactions(data.transactions || []);
-        setOfflineSnapshotAt(typeof data.offlineSnapshotAt === 'number' ? data.offlineSnapshotAt : null);
-
-        // Финансы и календарь без сети не поднять, и они не нужны для входа —
-        // приложение обязано открыться и на турнире, где есть только снимок.
-        if (typeof data.offlineSnapshotAt === 'number') {
-          setAppGate('READY');
-          return 'ok';
-        }
-
-        // Возврат в приложение и открытие карточки должны быстро подтянуть
-        // расписание. Финансы и ICS к этому обновлению не относятся, поэтому
-        // не дёргаем ещё два тяжёлых запроса поверх /init.
-        if (options?.skipAncillary) {
-          setAppGate('READY');
-          return 'ok';
-        }
-
-        try {
-          const [financeOverview, financeMembers] = await Promise.all([
-            api.getFinanceOverview(data.team.id),
-            api.getFinanceMembers(data.team.id),
-          ]);
-
-          const financeBalance = financeOverview?.summary?.balance;
-          if (financeBalance !== undefined) {
-            setActiveTeam((prev) =>
-              prev ? { ...prev, budget: Number(financeBalance) } : prev
-            );
-          }
-
-          if (Array.isArray(financeMembers?.items)) {
-            const financeByUserId = new Map<string, { outstanding: number; overpaid: number }>();
-            for (const item of financeMembers.items) {
-              financeByUserId.set(String(item.userId), {
-                outstanding: Number(item.outstanding || 0),
-                overpaid: Number(item.overpaid || 0),
-              });
-            }
-            setMembers((prev) =>
-              prev.map((m) => {
-                const s = financeByUserId.get(m.id);
-                if (!s) return m;
-                return { ...m, balance: s.overpaid - s.outstanding };
-              })
-            );
-          }
-
-          if (Array.isArray(financeOverview?.recentTransactions) && financeOverview.recentTransactions.length > 0) {
-            setTransactions(
-              financeOverview.recentTransactions.map((t: any) => ({
-                id: String(t.id),
-                type: t.type as TransactionType,
-                amount: Number(t.amount),
-                title: String(t.title),
-                date: new Date(t.date),
-                userId: t.userId || undefined,
-                userName: t.userName || undefined,
-                status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
-              }))
-            );
-          }
-        } catch (financeErr) {
-          console.warn('Finance bootstrap fallback to init payload', financeErr);
-        }
-
-        try {
-          const ics = await api.getIcs(data.team.id);
-          setCalendarLink(ics.subscriptionUrl || ics.url);
-        } catch (icsErr) {
-          console.warn('ICS bootstrap failed', icsErr);
-          setCalendarLink('');
-        }
-        setAppGate('READY');
-        return 'ok';
-    } catch (e) {
-        console.error("Error loading data", e);
-        // Сети нет и снимка тоже нет — показывать «проверьте авторизацию»
-        // вредно: человек пойдёт перелогиниваться, а логин без сети тем более
-        // не работает.
-        if (isOfflineError(e)) {
-          if (!options?.silent) {
-            alert('Нет сети, а сохранённых данных на этом устройстве ещё нет. Открой приложение один раз при интернете — дальше оно будет работать и без него.');
-          }
-          return 'error';
-        }
-        if (!options?.silent) {
-          const message = e instanceof Error ? e.message : '';
-          if (message.includes('INIT_NO_TEAM')) {
-            alert('Вход выполнен, но вы пока не состоите ни в одной команде. Попросите капитана прислать инвайт.');
-            setAppGate('NO_TEAM');
-            return 'no_team';
-          } else if (message.includes('INIT_ADMIN_MODE')) {
-            alert('Вход выполнен в админ-режиме. Этот экран пока не поддерживается в мобильном приложении.');
-            setAppGate('ADMIN_MODE');
-            return 'admin_mode';
-          } else if (message.includes('ROLE_SELECTION_REQUIRED')) {
-            return 'role_selection_required';
-          } else {
-            alert("Не удалось открыть приложение после входа. Проверьте авторизацию и попробуйте еще раз.");
-          }
-        } else {
-          const message = e instanceof Error ? e.message : '';
-          if (message.includes('INIT_NO_TEAM')) {
-            setAppGate('NO_TEAM');
-            return 'no_team';
-          }
-          if (message.includes('INIT_ADMIN_MODE')) {
-            setAppGate('ADMIN_MODE');
-            return 'admin_mode';
-          }
-          if (message.includes('ROLE_SELECTION_REQUIRED')) {
-            return 'role_selection_required';
-          }
-        }
-        return e instanceof Error && e.message.includes('INIT_INVALID_SHAPE')
-          ? 'invalid_shape'
-          : 'error';
-    } finally {
-        if (!options?.background) setIsLoading(false);
+      const ics = await api.getIcs(team.id);
+      if (loadedCodeRef.current !== code) return;
+      setCalendarLink(ics.subscriptionUrl || ics.url);
+    } catch (icsErr) {
+      console.warn('ICS bootstrap failed', icsErr);
+      if (loadedCodeRef.current === code) setCalendarLink('');
     }
   };
 
-  const tryEnterUserApp = async (options?: { silent?: boolean }) => {
+  // background — обновление поверх уже показанного экрана. Такое обновление не
+  // имеет права поднимать загрузочный спиннер: на турнире связь то есть, то
+  // нет, и приложение мигало бы пустым экраном поверх живых данных.
+  const loadDataInner = async (options: LoadOptions, seq: number): Promise<InitLoadResult> => {
+    if (seq !== loadSeqRef.current) return 'stale';
+    const requested = (options.team === undefined ? desiredTeamRef.current : options.team) || '';
+    if (!options.background) setIsLoading(true);
+    try {
+      let data = await api.getInitData(requested || null);
+
+      if (data?.noTeamYet) throw new Error('INIT_NO_TEAM');
+      if (data?.admin) throw new Error('INIT_ADMIN_MODE');
+      if (!data?.user || !data?.team) throw new Error('INIT_INVALID_SHAPE');
+
+      const isSnapshot = typeof data.offlineSnapshotAt === 'number';
+      let result: InitLoadResult = 'ok';
+      if (requested) {
+        const decision = decideInitTeam(requested, data as any);
+        if (decision.kind === 'switch' && !isSnapshot) {
+          // Старый сервер не знает `?team=`: переключаем сессию и читаем заново.
+          await api.switchTeamContext(decision.membershipId);
+          data = await api.getInitData(requested);
+          if (!data?.user || !data?.team || decideInitTeam(requested, data as any).kind !== 'match') {
+            throw new Error('INIT_TEAM_MISMATCH');
+          }
+        } else if (decision.kind === 'switch' && isSnapshot) {
+          result = 'offline_other_team';
+        } else if (decision.kind === 'forbidden') {
+          result = 'forbidden';
+        }
+      }
+
+      if (seq !== loadSeqRef.current) return 'stale';
+
+      // Чужая команда в адресе: данные своей команды нужны, только если ещё
+      // ничего не загружено — для кнопки «Открыть мою команду».
+      if (result === 'forbidden' && loadedCodeRef.current) {
+        setTeamLoad('forbidden');
+        return result;
+      }
+
+      const code = applyInit(data);
+      setAppGate('READY');
+      setTeamLoad(result === 'forbidden' ? 'forbidden' : 'ready');
+
+      // Финансы и календарь без сети не поднять, и они не нужны для входа —
+      // приложение обязано открыться и на турнире, где есть только снимок.
+      // Возврат в приложение тоже их не трогает: обновляем только расписание.
+      if (!isSnapshot && !options.skipAncillary) {
+        await loadAncillary(data.team as Team, code);
+      }
+      return result;
+    } catch (e) {
+      if (seq !== loadSeqRef.current) return 'stale';
+      console.error('Error loading data', e);
+      const message = e instanceof Error ? e.message : '';
+      // Сети нет и снимка тоже нет — показывать «проверьте авторизацию»
+      // вредно: человек пойдёт перелогиниваться, а логин без сети тем более
+      // не работает.
+      if (isOfflineError(e)) {
+        if (!options.silent) {
+          notify.error('Нет сети, а сохранённых данных на этом устройстве ещё нет. Открой приложение один раз при интернете — дальше оно будет работать и без него.');
+        }
+        setTeamLoad('error');
+        return 'error';
+      }
+      if (message.includes('INIT_NO_TEAM')) {
+        setAppGate('NO_TEAM');
+        setTeamLoad('ready');
+        return 'no_team';
+      }
+      if (message.includes('INIT_ADMIN_MODE')) {
+        setAppGate('ADMIN_MODE');
+        setTeamLoad('ready');
+        return 'admin_mode';
+      }
+      if (message.includes('ROLE_SELECTION_REQUIRED')) {
+        return 'role_selection_required';
+      }
+      if (!options.silent) {
+        notify.error('Не удалось открыть приложение после входа. Попробуй войти ещё раз.');
+      }
+      setTeamLoad('error');
+      return message.includes('INIT_INVALID_SHAPE') ? 'invalid_shape' : 'error';
+    } finally {
+      if (!options.background) setIsLoading(false);
+    }
+  };
+
+  const loadData = (options: LoadOptions = {}): Promise<InitLoadResult> => {
+    const seq = ++loadSeqRef.current;
+    const run = loadChainRef.current.then(() => loadDataInner(options, seq));
+    loadChainRef.current = run.catch(() => undefined);
+    return run;
+  };
+  const loadDataRef = useRef(loadData);
+  loadDataRef.current = loadData;
+
+  const tryEnterUserApp = async (options?: LoadOptions) => {
     const result = await loadData(options);
-    if (result === 'ok' || result === 'no_team') return true;
+    if (loadResultIsEntered(result)) return true;
 
     try {
       const me = await api.getAuthMe();
@@ -316,15 +360,9 @@ const App: React.FC = () => {
         (result === 'admin_mode' && me.canChooseAdminRole && me.accountRole === 'ADMIN');
 
       if (shouldSwitchToUser) {
-        const selectRes = await fetch('/api/v1/auth/select-role', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ accountRole: 'USER' }),
-        });
-        if (!selectRes.ok) return false;
+        await api.selectAccountRole('USER');
         const retry = await loadData(options);
-        return retry === 'ok' || retry === 'no_team';
+        return loadResultIsEntered(retry);
       }
     } catch (error) {
       console.error('Failed to switch account role to USER', error);
@@ -333,11 +371,40 @@ const App: React.FC = () => {
     return false;
   };
 
+  /** Загрузить команду из адреса. Вызывает оболочка при смене `:team`. */
+  const ensureTeam = useCallback((code: string) => {
+    const wanted = String(code || '').toLowerCase();
+    if (!wanted) {
+      // «Любая команда» (вход /app, профиль): что-то уже загружено — хватит.
+      if (loadedCodeRef.current || inflightCodeRef.current !== null) return;
+    } else {
+      desiredTeamRef.current = wanted;
+      if (loadedCodeRef.current === wanted || inflightCodeRef.current === wanted) return;
+    }
+    if (!wanted) desiredTeamRef.current = readLastTeam() || '';
+    const target = wanted || desiredTeamRef.current;
+    inflightCodeRef.current = target;
+    setTeamLoad('loading');
+    void loadDataRef.current({ team: target, background: true, silent: true }).then((result) => {
+      if (inflightCodeRef.current === target) inflightCodeRef.current = null;
+      if (result === 'offline_other_team' && loadedCodeRef.current) {
+        // Без сети другую команду не загрузить: открываем ту, что в снимке.
+        notify.info('Нет сети — открыта команда из сохранённых данных.');
+        desiredTeamRef.current = loadedCodeRef.current;
+        navigateRef.current(switchTeamPath(window.location.pathname, loadedCodeRef.current), { replace: true });
+      }
+    });
+  }, []);
+
+  const reload = useCallback(async () => {
+    await loadDataRef.current({ silent: true, background: true });
+  }, []);
+
   const handleSwitchToUserMode = async () => {
     try {
       await api.selectAccountRole('USER');
       setAppGate('READY');
-      const ok = await tryEnterUserApp();
+      const ok = await tryEnterUserApp({ team: readLastTeam() });
       if (ok) {
         setAuthStep('APP');
         navigate('/app', { replace: true });
@@ -350,6 +417,8 @@ const App: React.FC = () => {
     }
   };
 
+  // Восстановление сессии — один раз при запуске. Раньше эффект зависел от
+  // navigate, перезапускался при каждой смене адреса и грузил всё дважды.
   useEffect(() => {
     let cancelled = false;
 
@@ -362,29 +431,22 @@ const App: React.FC = () => {
 
         let payload = await api.getAuthMe();
 
-        if (!payload?.authenticated && isTelegramMiniApp()) {
-          const initData = String((window as any).Telegram?.WebApp?.initData || '').trim();
-          if (initData) {
-            try {
-              await api.authTelegramWebApp(initData);
-              payload = await api.getAuthMe();
-            } catch (err) {
-              console.warn('Telegram Mini App auto-auth failed', err);
-            }
+        // Mini App — по данным запуска, а не по наличию скрипта Telegram.
+        const initData = readMiniAppInitData();
+        if (!payload?.authenticated && initData) {
+          try {
+            await api.authTelegramWebApp(initData);
+            payload = await api.getAuthMe();
+          } catch (err) {
+            console.warn('Telegram Mini App auto-auth failed', err);
           }
         }
 
         if (!payload?.authenticated || cancelled) return;
         clearLogoutGuard();
         setOnboardingRequired(Boolean(payload.onboardingRequired));
-        // canEnterAdmin gates the ProfileView "Платформа админа" tile.
-        // We require both allowlist eligibility AND a non-NONE adminScope —
-        // otherwise the tile would be visible to Mini App (WEBAPP) owners
-        // whose authMethod is untrusted for admin, leading them into a
-        // dead-end /admin → /login → /app loop.
-        setCanEnterAdmin(
-          Boolean(payload.canChooseAdminRole) && payload.adminScope !== 'NONE',
-        );
+        // Плитка «Платформа админа»: и допуск, и доверенный способ входа.
+        setCanEnterAdmin(Boolean(payload.canChooseAdminRole) && payload.adminScope !== 'NONE');
 
         if (payload?.user) {
           setUser((prev) => {
@@ -393,36 +455,25 @@ const App: React.FC = () => {
               id: String(payload.user.id),
               name: String(payload.user.name || ''),
               nickname: String(payload.user.nickname || ''),
-              telegramUsername: payload.user.telegramUsername
-                ? String(payload.user.telegramUsername)
-                : undefined,
+              telegramUsername: payload.user.telegramUsername ? String(payload.user.telegramUsername) : undefined,
               avatar: payload.user.avatar ? String(payload.user.avatar) : undefined,
             };
           });
         }
 
         const currentPath = window.location.pathname;
-        const wantsAdminPath = currentPath.startsWith('/admin');
-        const wantsInvitePath = currentPath.startsWith('/invite/');
-
-        // PATH-RESPECTING BOOTSTRAP.
-        // If the user is already on /admin or /invite (full reload, paste-URL,
-        // back-button), do NOT funnel them through tryEnterUserApp. That helper
-        // forces a selectAccountRole('USER') on allowlist owners with
-        // accountRole==='ADMIN' (App.tsx:227-255), which silently demotes the
-        // session and bounces them to /app. AdminConsoleView / InviteView own
-        // the further flow; we just mark auth-bootstrap done and let them
-        // render.
-        if (wantsAdminPath || wantsInvitePath) {
+        // /admin и /invite ведут свой вход сами: загрузка приложения команды
+        // переключила бы владельца в режим USER (см. tryEnterUserApp).
+        if (currentPath.startsWith('/admin') || currentPath.startsWith('/invite/')) {
           setAuthStep('APP');
-          // Bootstrap-time post-auth flag is irrelevant for explicit /admin
-          // and /invite entries — clear it so the next full reload doesn't
-          // surprise-redirect to /app.
           sessionStorage.removeItem('pbth:post-auth-app');
           return;
         }
 
-        const ok = await tryEnterUserApp({ silent: true });
+        // Одна загрузка сразу нужной команды: из адреса или последней на устройстве.
+        const team = parseTeamPath(currentPath)?.team ?? readLastTeam() ?? '';
+        desiredTeamRef.current = team;
+        const ok = await tryEnterUserApp({ silent: true, team });
         if (cancelled) return;
         if (!ok) {
           setAuthStep('LOGIN');
@@ -430,18 +481,11 @@ const App: React.FC = () => {
         }
 
         setAuthStep('APP');
-
-        const postAuthRequested = sessionStorage.getItem('pbth:post-auth-app') === '1';
-        const isPublicEntryPath = currentPath === '/' || currentPath === '/login';
-        const shouldOpenApp =
-          postAuthRequested || isTelegramMiniApp() || isPublicEntryPath;
-
-        if (postAuthRequested) {
-          sessionStorage.removeItem('pbth:post-auth-app');
-        }
-
-        if (shouldOpenApp) {
-          navigate('/app', { replace: true });
+        sessionStorage.removeItem('pbth:post-auth-app');
+        // С главной страницы вошедшего ведём в приложение. Остальные адреса
+        // (экран команды, /support, /privacy, /terms) открываются как есть.
+        if (currentPath === '/') {
+          navigateRef.current('/app', { replace: true });
         }
       } catch (error) {
         console.error('Failed to restore auth session', error);
@@ -456,7 +500,8 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Отложенное уходит при возврате связи и на старте: телефон в поле чаще
   // ловит сеть в кармане, чем в руках у владельца, поэтому ждать открытия
@@ -480,21 +525,22 @@ const App: React.FC = () => {
   }, [offlineSnapshotAt]);
 
   // Турнирное расписание публикуют и правят, пока приложение уже открыто у
-  // игроков. На возврате из Telegram/другого приложения обновляем /init и
-  // заменяем открытую карточку свежим объектом. Throttle склеивает пачку
-  // focus + pageshow + visibilitychange, которую мобильные браузеры присылают
-  // почти одновременно.
+  // игроков. На возврате из Telegram/другого приложения обновляем /init.
+  // Throttle склеивает пачку focus + pageshow + visibilitychange, которую
+  // мобильные браузеры присылают почти одновременно.
   useEffect(() => {
     if (authStep !== 'APP') return;
 
     const refresh = async () => {
       if (document.visibilityState === 'hidden' || navigator.onLine === false) return;
+      if (!loadedCodeRef.current || inflightCodeRef.current !== null) return;
+      if (Date.now() - lastLoadedAtRef.current < RESUME_FRESH_MS) return;
       const state = resumeRefreshRef.current;
       if (state.inFlight || Date.now() - state.lastStartedAt < 2_000) return;
       state.inFlight = true;
       state.lastStartedAt = Date.now();
       try {
-        await loadData({ silent: true, background: true, skipAncillary: true });
+        await loadDataRef.current({ silent: true, background: true, skipAncillary: true });
       } finally {
         state.inFlight = false;
       }
@@ -513,9 +559,6 @@ const App: React.FC = () => {
       window.removeEventListener('focus', onResume);
       window.removeEventListener('pageshow', onResume);
     };
-    // loadData only closes over React setters; rebinding listeners on every
-    // render would defeat the resume-event throttle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStep]);
 
   // --- AUTH HANDLERS ---
@@ -526,69 +569,88 @@ const App: React.FC = () => {
     const action = resolvePostLoginAction(target);
     if (action.kind === 'invite') {
       // Новичок по приглашению ещё не в команде. Грузить приложение сейчас
-      // нельзя: /init ответит «нет команды», и вместо экрана приглашения
-      // человек получал системное окно и тупик на /app с одной кнопкой
-      // «Выйти». Ведём на приглашение — уже вошедшим; приложение команды
-      // загрузит handleJoinedTeam после «Принять приглашение».
+      // нельзя: /init ответит «нет команды». Ведём на приглашение — уже
+      // вошедшим; приложение команды загрузит joinedTeam после «Принять».
       sessionStorage.removeItem('pbth:post-auth-app');
       navigate(action.path, { replace: true });
       return;
     }
-    const ok = await tryEnterUserApp();
+    const path = action.kind === 'app' ? action.path : '/app';
+    const team = parseTeamPath(path)?.team ?? readLastTeam() ?? '';
+    desiredTeamRef.current = team;
+    const ok = await tryEnterUserApp({ team });
     if (ok) {
       sessionStorage.removeItem('pbth:post-auth-app');
       setAuthStep('APP');
-      navigate('/app');
+      setAuthBootstrapDone(true);
+      navigate(path, { replace: true });
     }
   };
 
   // Человек только что вступил в команду по приглашению: сервер уже сделал её
-  // активной в сессии, так что /init вернёт именно её — открываем её главную.
+  // активной в сессии, так что /init без команды вернёт именно её.
   const handleJoinedTeam = async () => {
     clearLogoutGuard();
     sessionStorage.removeItem('pbth:post-auth-app');
     setAppGate('READY');
-    setCurrentView('DASHBOARD');
-    setSelectedEvent(null);
-    setSelectedMember(null);
-    const ok = await tryEnterUserApp();
+    desiredTeamRef.current = '';
+    loadedCodeRef.current = null;
+    const ok = await tryEnterUserApp({ team: null });
     if (ok) {
       setAuthStep('APP');
-      navigate('/app', { replace: true });
+      setAuthBootstrapDone(true);
+      const code = loadedCodeRef.current;
+      if (code) desiredTeamRef.current = code;
+      navigate(code ? teamPath(code) : '/app', { replace: true });
     }
   };
 
-  const handleRoleSelect = (_option: UserRoleOption) => {
-    // In real app, this would fetch context for that specific team
-    handleLogin();
+  const resetSessionState = () => {
+    setAuthStep('LOGIN');
+    setAppGate('READY');
+    setAuthBootstrapDone(true);
+    setUser(null);
+    setActiveTeam(null);
+    setTeamCode(null);
+    setTeamLoad('idle');
+    setTeams([]);
+    setEvents([]);
+    setMembers([]);
+    setTransactions([]);
+    setCalendarLink('');
+    setOnboardingRequired(false);
+    setOfflineSnapshotAt(null);
+    setCanEnterAdmin(false);
+    desiredTeamRef.current = '';
+    loadedCodeRef.current = null;
+    inflightCodeRef.current = null;
+    loadSeqRef.current += 1;
+    setRequestTeam(null);
   };
 
   const handleLogout = async () => {
+    if (outboxState.pending + outboxState.blocked > 0) {
+      const total = outboxState.pending + outboxState.blocked;
+      const ok = await confirmAction(
+        `На этом устройстве есть неотправленные записи: ${total}. После выхода они пропадут. Выйти?`,
+        { confirmLabel: 'Выйти', danger: true },
+      );
+      if (!ok) return;
+    }
     setIsLoggingOut(true);
-    const redirectTo = '/login';
 
     // Apply local guard first to prevent immediate auto re-login after app reopen.
     sessionStorage.removeItem('pbth:post-auth-app');
     sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
     enableLogoutGuard();
 
-    setAuthStep('LOGIN');
-    setAppGate('READY');
-    setAuthBootstrapDone(true);
-    setCurrentView('DASHBOARD');
-    setUser(null);
-    setActiveTeam(null);
-    setTeams([]);
-    setEvents([]);
-    setMembers([]);
-    setTransactions([]);
-    setSelectedMember(null);
-    setSelectedEvent(null);
-    setCalendarLink('');
-    setOnboardingRequired(false);
-    navigate(redirectTo, { replace: true });
+    resetSessionState();
 
-    void fetch('/api/v1/auth/logout', {
+    // Сначала закрываем сессию на сервере (не дольше пары секунд — без сети
+    // выход всё равно должен случиться), потом чистим устройство: иначе экран
+    // входа успевал спросить сервер «кто я», получить ещё живую сессию и
+    // снова сохранить её снимок.
+    const logoutRequest = fetch('/api/v1/auth/logout', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -597,35 +659,44 @@ const App: React.FC = () => {
     }).catch((error) => {
       console.error('Failed to terminate server session', error);
     });
+    await Promise.race([logoutRequest, new Promise((resolve) => setTimeout(resolve, LOGOUT_REQUEST_MS))]);
 
+    // Снимки и очередь отправки принадлежат вышедшему человеку: следующий
+    // вошедший на этом телефоне не должен их видеть и отправлять.
+    try {
+      await clearDeviceData();
+    } catch (error) {
+      console.error('Failed to clear device data', error);
+    }
+    navigate('/login', { replace: true });
     setIsLoggingOut(false);
   };
 
   const handleCopyIcsLink = async () => {
     if (!calendarLink) {
-      alert('Ссылка календаря недоступна. Обновите профиль.');
+      notify.error('Ссылка календаря недоступна. Обнови страницу.');
       return;
     }
     try {
       await navigator.clipboard.writeText(calendarLink);
-      alert('Ссылка скопирована');
+      notify.success('Ссылка скопирована');
     } catch (err) {
       console.error('Failed to copy ICS link', err);
-      alert('Не удалось скопировать ссылку');
+      notify.error('Не удалось скопировать ссылку');
     }
   };
 
   const handleShareIcsLink = async () => {
     if (!calendarLink) {
-      alert('Ссылка календаря недоступна. Обновите профиль.');
+      notify.error('Ссылка календаря недоступна. Обнови страницу.');
       return;
     }
     try {
       if ((navigator as any).share) {
-        await (navigator as any).share({ url: calendarLink, title: 'PBTH calendar' });
+        await (navigator as any).share({ url: calendarLink, title: 'Календарь команды' });
       } else {
         await navigator.clipboard.writeText(calendarLink);
-        alert('Ссылка скопирована');
+        notify.success('Ссылка скопирована');
       }
     } catch (err) {
       console.error('Failed to share ICS link', err);
@@ -639,7 +710,7 @@ const App: React.FC = () => {
       window.location.assign(ics.downloadUrl);
     } catch (err) {
       console.error('Failed to download ICS', err);
-      alert('Не удалось скачать ICS');
+      notify.error('Не удалось скачать файл календаря');
     }
   };
 
@@ -653,30 +724,28 @@ const App: React.FC = () => {
     };
   };
 
-  const handleSendEventReminder = async (payload: {
-    eventId: string;
-    audience: 'ALL' | 'RESPONDED' | 'UNANSWERED' | 'CONFIRMED' | 'PENDING' | 'DECLINED';
-    template: 'EVENT_REMINDER' | 'WARMUP_REMINDER' | 'ROLE_REMINDER' | 'GAME_GATHERING' | 'GAME_WARMUP';
-    gameId?: string;
-  }) => {
+  const deliverySummary = (summary: ReturnType<typeof parseReminderResult>) =>
+    [
+      `Отправлено: ${summary.sent}`,
+      summary.queued ? `В очереди: ${summary.queued}` : '',
+      summary.skippedNoTelegram ? `Без Telegram: ${summary.skippedNoTelegram}` : '',
+      summary.failed ? `Не дошло: ${summary.failed}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+  const handleSendEventReminder = async (payload: EventReminderPayload) => {
     try {
       const result = await api.sendEventReminder(payload);
       const summary = parseReminderResult(result);
       if (summary.attempted === 0) {
-        alert('Нет получателей для выбранного фильтра напоминания.');
+        notify.info('Некому напоминать: под выбранный фильтр никто не попал.');
         return;
       }
-      alert(
-        `Напоминания отправлены.\n` +
-          `К отправке: ${summary.attempted}\n` +
-          `Отправлено: ${summary.sent}\n` +
-          `В очереди: ${summary.queued}\n` +
-          `Без Telegram: ${summary.skippedNoTelegram}\n` +
-          `Ошибок: ${summary.failed}`
-      );
+      notify.success(`Напоминания отправлены.\n${deliverySummary(summary)}`);
     } catch (err) {
       console.error('Failed to remind unanswered attendees', err);
-      alert(`Не удалось отправить напоминания: ${err instanceof Error ? err.message : 'unknown error'}`);
+      notify.error(`Не удалось отправить напоминания. ${errorText(err, '')}`.trim());
     }
   };
 
@@ -685,21 +754,17 @@ const App: React.FC = () => {
       const result = await api.remindFinanceMemberDebt({ userId });
       const summary = parseReminderResult(result);
       if (summary.sent + summary.queued > 0) {
-        alert(
-          `Напоминание для ${userName} отправлено.\n` +
-            `Отправлено: ${summary.sent}\n` +
-            `В очереди: ${summary.queued}`
-        );
+        notify.success(`Напоминание для ${userName} отправлено.`);
         return;
       }
       if (summary.skippedNoTelegram > 0) {
-        alert(`Не удалось отправить ${userName}: у пользователя не привязан Telegram.`);
+        notify.error(`Не удалось отправить ${userName}: не привязан Telegram.`);
         return;
       }
-      alert(`Не удалось отправить напоминание ${userName}. Проверьте логи уведомлений.`);
+      notify.error(`Не удалось отправить напоминание ${userName}.`);
     } catch (err) {
       console.error('Failed to remind debtor', err);
-      alert(`Не удалось отправить напоминание: ${err instanceof Error ? err.message : 'unknown error'}`);
+      notify.error(`Не удалось отправить напоминание. ${errorText(err, '')}`.trim());
     }
   };
 
@@ -708,20 +773,13 @@ const App: React.FC = () => {
       const result = await api.remindFinanceDebtors();
       const summary = parseReminderResult(result);
       if (summary.attempted === 0) {
-        alert('В команде нет должников для напоминания.');
+        notify.info('В команде нет должников.');
         return;
       }
-      alert(
-        `Массовое напоминание отправлено.\n` +
-          `К отправке: ${summary.attempted}\n` +
-          `Отправлено: ${summary.sent}\n` +
-          `В очереди: ${summary.queued}\n` +
-          `Без Telegram: ${summary.skippedNoTelegram}\n` +
-          `Ошибок: ${summary.failed}`
-      );
+      notify.success(`Напоминания должникам отправлены.\n${deliverySummary(summary)}`);
     } catch (err) {
       console.error('Failed to remind all debtors', err);
-      alert(`Не удалось отправить напоминания должникам: ${err instanceof Error ? err.message : 'unknown error'}`);
+      notify.error(`Не удалось отправить напоминания должникам. ${errorText(err, '')}`.trim());
     }
   };
 
@@ -729,17 +787,17 @@ const App: React.FC = () => {
   const handleAddTransaction = async (t: Omit<Transaction, 'id' | 'date'>) => {
     if (!activeTeam) return;
     const newTx: Transaction = {
-        id: `tx${Date.now()}`,
-        date: new Date(),
-        ...t
+      id: `tx${Date.now()}`,
+      date: new Date(),
+      ...t,
     };
-    
+
     // Optimistic Update
-    setTransactions(prev => [newTx, ...prev]);
-    if (t.type === TransactionType.EXPENSE && activeTeam) {
-        setActiveTeam(prev => prev ? ({ ...prev, budget: prev.budget - t.amount }) : null);
-    } else if (t.type === TransactionType.DEPOSIT && activeTeam) {
-        setActiveTeam(prev => prev ? ({ ...prev, budget: prev.budget + t.amount }) : null);
+    setTransactions((prev) => [newTx, ...prev]);
+    if (t.type === TransactionType.EXPENSE) {
+      setActiveTeam((prev) => (prev ? { ...prev, budget: prev.budget - t.amount } : null));
+    } else if (t.type === TransactionType.DEPOSIT) {
+      setActiveTeam((prev) => (prev ? { ...prev, budget: prev.budget + t.amount } : null));
     }
 
     // Server Call
@@ -759,37 +817,31 @@ const App: React.FC = () => {
   // --- APP HANDLERS ---
   const handleRsvp = async (id: string, status: RSVPStatus) => {
     if (!user) return;
-    
+
     // Optimistic Update
-    setEvents(prev => prev.map(e => {
+    setEvents((prev) =>
+      prev.map((e) => {
         if (e.id === id) {
-            // Update counts loosely
-            const diff = status === RSVPStatus.CONFIRMED ? 1 : (e.rsvpStatus === RSVPStatus.CONFIRMED ? -1 : 0);
-            return { ...e, rsvpStatus: status, attendeesCount: e.attendeesCount + diff };
+          const diff = status === RSVPStatus.CONFIRMED ? 1 : e.rsvpStatus === RSVPStatus.CONFIRMED ? -1 : 0;
+          return { ...e, rsvpStatus: status, attendeesCount: e.attendeesCount + diff };
         }
         return e;
-    }));
-    
-    if (selectedEvent && selectedEvent.id === id) {
-        setSelectedEvent(prev => prev ? ({...prev, rsvpStatus: status}) : null);
-    }
+      })
+    );
 
-    // Server Call
     await api.rsvp(id, user.id, status);
   };
 
-  // #60: «Иду на серию» одним тапом из списка. После согласия фид перестаёт
-  // показывать каждое занятие серии как «требует ответа».
+  // #60: «Иду на серию» одним тапом из списка.
   const handleCommitSeries = async (seriesId: string) => {
     await api.commitSeries(seriesId);
-    await loadData({ silent: true });
+    await loadData({ silent: true, background: true });
   };
 
   // #61: удалить событие (scope single — серия сохраняется). Капитан/штаб.
   const handleDeleteEvent = async (eventId: string, scope: 'single' | 'future') => {
     await api.deleteEvent(eventId, scope);
     setEvents((prev) => prev.filter((e) => e.id !== eventId));
-    setSelectedEvent((prev) => (prev && prev.id === eventId ? null : prev));
   };
 
   // Изменить дату/время события (scope single). Капитан/штаб/админ — гейт на бэкенде.
@@ -799,23 +851,10 @@ const App: React.FC = () => {
     const end = new Date(endISO);
     const apply = (ev: Event): Event => ({ ...ev, startAt: startISO, endAt: endISO, startDate: start, endDate: end });
     setEvents((prev) => prev.map((e) => (e.id === eventId ? apply(e) : e)));
-    setSelectedEvent((prev) => (prev && prev.id === eventId ? apply(prev) : prev));
-    await loadData({ silent: true });
+    await loadData({ silent: true, background: true });
   };
 
-  const handleEditEvent = async (
-    eventId: string,
-    patch: {
-      title: string;
-      location?: string;
-      locationUrl?: string;
-      locationAddress?: string;
-      startISO: string;
-      endISO: string;
-      cost?: number;
-      description?: string;
-    }
-  ) => {
+  const handleEditEvent = async (eventId: string, patch: EventEditPatch) => {
     await api.updateEvent(eventId, {
       title: patch.title,
       location: patch.location ?? null,
@@ -841,23 +880,22 @@ const App: React.FC = () => {
       description: patch.description || undefined,
     });
     setEvents((prev) => prev.map((e) => (e.id === eventId ? apply(e) : e)));
-    setSelectedEvent((prev) => (prev && prev.id === eventId ? apply(prev) : prev));
-    await loadData({ silent: true });
+    await loadData({ silent: true, background: true });
   };
 
-  const handleCreateEvent = async (eventData: any) => {
-    if (!activeTeam) return;
+  const handleCreateEvent = async (eventData: any): Promise<boolean> => {
+    if (!activeTeam) return false;
 
     const startDate = eventData?.startDate instanceof Date ? eventData.startDate : new Date(eventData?.startDate);
     if (Number.isNaN(startDate.getTime())) {
-      alert('Некорректная дата события');
-      return;
+      notify.error('Проверь дату события');
+      return false;
     }
 
     const normalizedTitle = String(eventData?.title || '').trim();
     if (!normalizedTitle) {
-      alert('Введите название события');
-      return;
+      notify.error('Введи название события');
+      return false;
     }
 
     const normalizedDescription = String(eventData?.description || '').trim();
@@ -890,6 +928,8 @@ const App: React.FC = () => {
         const createdEvent: Event = {
           id: String(dto.id),
           teamId: String(dto.teamId || activeTeam.id),
+          teamName: dto.teamName || activeTeam.name,
+          teamShortCode: dto.teamShortCode || activeTeam.shortCode,
           teamTimezone: dto.teamTimezone || activeTeam.timezone,
           financeState: dto.financeState,
           type: dto.type,
@@ -913,35 +953,15 @@ const App: React.FC = () => {
           )
         );
       } else {
-        await loadData({ silent: true });
+        await loadData({ silent: true, background: true });
       }
-
-      setCurrentView('DASHBOARD');
+      notify.success('Событие создано');
+      return true;
     } catch (error) {
       console.error('Failed to create event', error);
-      alert(`Не удалось создать событие: ${error instanceof Error ? error.message : 'unknown error'}`);
+      notify.error(`Не удалось создать событие. ${errorText(error, '')}`.trim());
+      return false;
     }
-  };
-
-  const handleSwitchTeam = async (membershipId: string) => {
-    const target = teams.find((t) => t.membershipId === membershipId);
-    if (!target || target.teamId === activeTeam?.id) return;
-    try {
-      await api.switchTeamContext(membershipId);
-      await loadData();
-    } catch (err) {
-      console.error('Failed to switch team', err);
-      alert('Не удалось переключить команду. Попробуйте еще раз.');
-    }
-  };
-
-  const handleEventClick = (event: Event) => {
-    setSelectedEvent(event);
-    void loadData({ silent: true, background: true, skipAncillary: true });
-  };
-  const handleEventLongPress = (event: Event) => {
-    setRsvpModalEvent(event);
-    setIsRSVPModalOpen(true);
   };
 
   const handleAddGame = async (eventId: string, game: Omit<Game, 'id'>) => {
@@ -956,429 +976,112 @@ const App: React.FC = () => {
       gamePair: game.gamePair,
     };
 
-    let nextScheduleForApi: ScheduleItemPayload[] = [];
-
-    const applyAddGame = (sourceEvent: Event): Event => {
-      const nextSchedule = [...(sourceEvent.schedule || []), createdGame].sort((a, b) =>
-        a.time.localeCompare(b.time)
-      );
-      nextScheduleForApi = nextSchedule.map(toScheduleItemPayload);
-      return { ...sourceEvent, schedule: nextSchedule };
-    };
-
-    setEvents((prev) =>
-      prev.map((event) => (event.id === eventId ? applyAddGame(event) : event))
-    );
-
-    setSelectedEvent((prev) => {
-      if (!prev || prev.id !== eventId) return prev;
-      return applyAddGame(prev);
-    });
-
-    await api.updateEventSchedule(eventId, nextScheduleForApi);
+    const source = events.find((event) => event.id === eventId);
+    const nextSchedule = [...(source?.schedule || []), createdGame].sort((a, b) => a.time.localeCompare(b.time));
+    setEvents((prev) => prev.map((event) => (event.id === eventId ? { ...event, schedule: nextSchedule } : event)));
+    await api.updateEventSchedule(eventId, nextSchedule.map(toScheduleItemPayload));
   };
 
-  const handleUpdateGame = async (
-    eventId: string,
-    gameId: string,
-    patch: { time: string; opponent: string; score?: string; pitZone?: 'NEAR' | 'FAR'; gamePair?: 'FIRST' | 'SECOND' }
-  ) => {
-    let nextScheduleForApi: ScheduleItemPayload[] = [];
-
-    const applyGamePatch = (sourceEvent: Event): Event => {
-      const nextSchedule = (sourceEvent.schedule || []).map((game) =>
-        game.id === gameId
-          ? { ...game, time: patch.time, opponent: patch.opponent, score: patch.score, pitZone: patch.pitZone, gamePair: patch.gamePair }
-          : game
-      );
-      nextScheduleForApi = nextSchedule.map(toScheduleItemPayload);
-      return { ...sourceEvent, schedule: nextSchedule };
-    };
-
-    setEvents((prev) =>
-      prev.map((event) => (event.id === eventId ? applyGamePatch(event) : event))
+  const handleUpdateGame = async (eventId: string, gameId: string, patch: GamePatch) => {
+    const source = events.find((event) => event.id === eventId);
+    const nextSchedule = (source?.schedule || []).map((game) =>
+      game.id === gameId
+        ? { ...game, time: patch.time, opponent: patch.opponent, score: patch.score, pitZone: patch.pitZone, gamePair: patch.gamePair }
+        : game
     );
-
-    setSelectedEvent((prev) => {
-      if (!prev || prev.id !== eventId) return prev;
-      return applyGamePatch(prev);
-    });
-
-    await api.updateEventSchedule(eventId, nextScheduleForApi);
-  };
-
-  const handleMemberClick = (member: TeamMember) => {
-    setSelectedMember(member);
+    setEvents((prev) => prev.map((event) => (event.id === eventId ? { ...event, schedule: nextSchedule } : event)));
+    await api.updateEventSchedule(eventId, nextSchedule.map(toScheduleItemPayload));
   };
 
   const handleUpdateMemberStatus = async (member: TeamMember, status: PlayerStatus) => {
     if (!activeTeam) return;
     if (!member.membershipId) {
-      alert('Не удалось определить membershipId участника');
+      notify.error('Не удалось определить участника. Обнови страницу.');
       return;
     }
 
     await api.updateTeamMembership(activeTeam.id, member.membershipId, { status });
-    setMembers((prev) =>
-      prev.map((item) => (item.id === member.id ? { ...item, status } : item))
-    );
-    setSelectedMember((prev) => (prev && prev.id === member.id ? { ...prev, status } : prev));
+    setMembers((prev) => prev.map((item) => (item.id === member.id ? { ...item, status } : item)));
   };
 
   const handleRemoveMember = async (member: TeamMember) => {
     if (!activeTeam || !user) return;
     if (!member.membershipId) {
-      alert('Не удалось определить membershipId участника');
+      notify.error('Не удалось определить участника. Обнови страницу.');
       return;
     }
     if (member.id === user.id) {
-      alert('Нельзя исключить самого себя из команды через этот экран.');
+      notify.error('Себя исключить из команды на этом экране нельзя.');
       return;
     }
 
     await api.removeTeamMembership(activeTeam.id, member.membershipId);
     setMembers((prev) => prev.filter((item) => item.id !== member.id));
-    setSelectedMember((prev) => (prev && prev.id === member.id ? null : prev));
   };
 
-  const handleAttendeeClick = (
-    userId: string,
-    seed?: { name: string; nickname: string; avatar?: string; role?: 'CAPTAIN' | 'TRAINER' | 'PLAYER' }
-  ) => {
-    const fullMember = members.find((member) => member.id === userId);
-    if (fullMember) {
-      setSelectedMember(fullMember);
-      return;
-    }
-
-    const preview = selectedEvent?.attendeePreview?.find((item) => item.userId === userId);
-    const fallback = seed || (preview ? { name: preview.name, nickname: preview.nickname, avatar: preview.avatar } : undefined);
-    if (!fallback) return;
-
-    setSelectedMember({
-      id: userId,
-      name: fallback.name,
-      nickname: fallback.nickname,
-      avatar: fallback.avatar,
-      role:
-        fallback.role === 'CAPTAIN'
-          ? Role.CAPTAIN
-          : fallback.role === 'TRAINER'
-            ? Role.TRAINER
-            : Role.PLAYER,
-      status: PlayerStatus.ACTIVE,
-      balance: 0,
-    });
+  const openRsvpModal = (event: Event) => {
+    setRsvpModalEvent(event);
+    setIsRSVPModalOpen(true);
   };
 
-  const renderContent = () => {
-    if (selectedMember) {
-      const canManageMembers = activeTeam!.role === Role.ADMIN || activeTeam!.role === Role.CAPTAIN;
-      return (
-        <PlayerProfileView
-          member={selectedMember}
-          teamName={activeTeam!.name}
-          onBack={() => setSelectedMember(null)}
-          canManage={canManageMembers}
-          onUpdateMemberStatus={handleUpdateMemberStatus}
-          onRemoveMember={handleRemoveMember}
-        />
-      );
-    }
-
-    if (selectedEvent) {
-      return (
-        <EventDetailView
-          event={selectedEvent}
-          currentUserRole={selectedEvent.viewerRole || activeTeam!.role}
-          teamName={resolveEventTeamName(selectedEvent, teams, activeTeam)}
-          onBack={() => setSelectedEvent(null)}
-          onRsvp={handleRsvp}
-          onAddGame={handleAddGame}
-          onUpdateGame={handleUpdateGame}
-          onAttendeeClick={handleAttendeeClick}
-          onSendEventReminder={handleSendEventReminder}
-          onEditTime={handleEditEventTime}
-          onEditEvent={handleEditEvent}
-          onDeleteEvent={handleDeleteEvent}
-        />
-      );
-    }
-
-    switch (currentView) {
-      case 'DASHBOARD':
-        return (
-          <Dashboard
-            user={user!}
-            activeTeam={activeTeam!}
-            teams={teams}
-            onSwitchTeam={handleSwitchTeam}
-            events={events}
-            onRsvp={handleRsvp}
-            onEventClick={handleEventClick}
-            onEventLongPress={handleEventLongPress}
-            onCommitSeries={handleCommitSeries}
-          />
-        );
-      case 'CALENDAR':
-        return (
-          <CalendarView
-            events={events}
-            onEventClick={handleEventClick}
-            onEventLongPress={handleEventLongPress}
-            onCommitSeries={handleCommitSeries}
-          />
-        );
-      case 'FINANCE':
-        return (
-          <FinanceView 
-            team={activeTeam!}
-            transactions={transactions}
-            members={members}
-            currentUserRole={activeTeam!.role}
-            onAddTransaction={handleAddTransaction}
-            onRemindDebtor={handleRemindDebtor}
-            onRemindAllDebtors={handleRemindAllDebtors}
-          />
-        );
-      case 'TEAM':
-        return (
-          <TeamView 
-            team={activeTeam!}
-            members={members}
-            currentUserRole={activeTeam!.role}
-            onMemberClick={handleMemberClick}
-            onUpdateMemberStatus={handleUpdateMemberStatus}
-            onRemoveMember={handleRemoveMember}
-          />
-        );
-      case 'PROFILE':
-        return (
-          <ProfileView
-            user={user!}
-            onLogout={handleLogout}
-            calendarLink={calendarLink || 'Ссылка пока недоступна'}
-            onCopyLink={handleCopyIcsLink}
-            onShareLink={handleShareIcsLink}
-            onDownloadICS={handleDownloadIcs}
-            role={activeTeam!.role}
-            canEnterAdmin={canEnterAdmin}
-            onEnterAdmin={() => navigate('/admin')}
-          />
-        );
-      case 'CREATE':
-        const creationAccess = eventCreateAccess(activeTeam!.role);
-        const createProps = eventCreateViewProps(creationAccess);
-        if (createProps === null) return null;
-        return (
-            <CreateEventView 
-              onBack={() => setCurrentView('DASHBOARD')}
-              onCreate={handleCreateEvent}
-              {...createProps}
-            />
-        );
-      default:
-        return <div>View not found</div>;
-    }
+  const shell: ShellState = {
+    authStep,
+    authBootstrapDone,
+    appGate,
+    onboardingRequired,
+    canEnterAdmin,
+    offlineSnapshotAt,
+    outboxState,
+    user,
+    team: activeTeam,
+    teamCode,
+    teamLoad,
+    teams,
+    events,
+    members,
+    transactions,
+    calendarLink,
+    ensureTeam,
+    reload,
+    actions: {
+      rsvp: handleRsvp,
+      commitSeries: handleCommitSeries,
+      deleteEvent: handleDeleteEvent,
+      editEventTime: handleEditEventTime,
+      editEvent: handleEditEvent,
+      createEvent: handleCreateEvent,
+      addGame: handleAddGame,
+      updateGame: handleUpdateGame,
+      sendEventReminder: handleSendEventReminder,
+      updateMemberStatus: handleUpdateMemberStatus,
+      removeMember: handleRemoveMember,
+      addTransaction: handleAddTransaction,
+      remindDebtor: handleRemindDebtor,
+      remindAllDebtors: handleRemindAllDebtors,
+      copyIcsLink: handleCopyIcsLink,
+      shareIcsLink: handleShareIcsLink,
+      downloadIcs: handleDownloadIcs,
+      logout: handleLogout,
+      login: handleLogin,
+      joinedTeam: handleJoinedTeam,
+      switchToUserMode: handleSwitchToUserMode,
+      openRsvpModal,
+    },
   };
-
-  const renderAppLayout = () => {
-    if (appGate === 'NO_TEAM') {
-      return (
-        <div className="min-h-screen bg-pb-background flex items-center justify-center text-white px-6">
-          <div className="text-center max-w-sm">
-            <div className="text-2xl font-bold mb-3">Вы авторизованы</div>
-            {onboardingRequired && (
-              <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left text-sm text-amber-100">
-                Профиль создан автоматически по Telegram. Следующий шаг: вступить в команду по invite-ссылке.
-              </div>
-            )}
-            <p className="text-pb-subtext mb-3">
-              {user?.name ? `${user.name},` : 'Пользователь,'} вы пока не состоите ни в одной команде.
-            </p>
-            <p className="text-pb-subtext mb-6">
-              Попросите капитана прислать инвайт-ссылку и откройте её в Telegram.
-            </p>
-            <button
-              onClick={() => {
-                void handleLogout();
-              }}
-              className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
-            >
-              Выйти
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (appGate === 'ADMIN_MODE') {
-      return (
-        <div className="min-h-screen bg-pb-background flex items-center justify-center text-white px-6">
-          <div className="text-center max-w-sm">
-            <div className="text-xl font-bold mb-3">Активен админ-режим</div>
-            <p className="text-pb-subtext mb-6">
-              Мобильный интерфейс для Product Admin пока не реализован.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => navigate('/admin', { replace: true })}
-                className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
-              >
-                Перейти в админку
-              </button>
-              <button
-                onClick={() => {
-                  void handleSwitchToUserMode();
-                }}
-                className="bg-white/10 text-white px-5 py-3 rounded-xl font-bold"
-              >
-                Переключиться в режим USER
-              </button>
-              <button
-                onClick={() => {
-                  void handleLogout();
-                }}
-                className="bg-white/10 text-white px-5 py-3 rounded-xl font-bold"
-              >
-                Выйти
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (!user || !activeTeam) {
-      return (
-        <div className="min-h-screen bg-pb-background flex items-center justify-center text-white px-6">
-          <div className="text-center max-w-sm">
-            <div className="text-xl font-bold mb-3">Данные команды недоступны</div>
-            <p className="text-pb-subtext mb-6">
-              Сессия активна, но профиль команды не загрузился. Попробуйте войти еще раз.
-            </p>
-            <button
-              onClick={() => navigate('/login', { replace: true })}
-              className="bg-pb-primary text-pb-background px-5 py-3 rounded-xl font-bold"
-            >
-              Перейти ко входу
-            </button>
-          </div>
-        </div>
-      );
-    }
-    
-    const creationAccess = eventCreateAccess(activeTeam.role);
-
-    return (
-      <div className="min-h-screen bg-pb-background bg-splatter bg-fixed bg-no-repeat bg-center bg-cover text-white font-sans selection:bg-pb-primary selection:text-pb-background">
-        <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>
-
-        <main className="max-w-md mx-auto min-h-screen relative shadow-2xl shadow-black overflow-hidden flex flex-col">
-          <OfflineBanner
-            snapshotAt={offlineSnapshotAt}
-            pending={outboxState.pending}
-            blocked={outboxState.blocked}
-          />
-          {onboardingRequired && (
-            <div
-              className="mx-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
-              style={{ marginTop: 'calc(var(--pb-safe-top) + 1rem)' }}
-            >
-              Аккаунт создан автоматически из Telegram. Базовый onboarding пока мягкий: данные уже доступны, дальше можно просто работать в приложении.
-            </div>
-          )}
-          <div className="flex-1">
-               <Suspense fallback={<ScreenLoader />}>
-                 {renderContent()}
-               </Suspense>
-          </div>
-          
-          {creationAccess.canCreate && !selectedEvent && !selectedMember && currentView !== 'CREATE' && (
-              // Fixed над нижней навигацией (85px) и в пределах колонки
-              // приложения: раньше кнопка стояла absolute внутри
-              // прокручиваемого блока и на «Главной» уезжала ниже экрана.
-              <div
-                className="fixed inset-x-0 z-50 pointer-events-none"
-                style={{ bottom: 'calc(85px + 1rem)' }}
-              >
-                <div className="max-w-md mx-auto px-4 flex justify-end">
-                  <button
-                    aria-label="Создать событие"
-                    onClick={() => setCurrentView('CREATE')}
-                    className="pointer-events-auto w-14 h-14 bg-pb-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,230,118,0.5)] active:scale-95 transition-transform hover:bg-white text-pb-background"
-                  >
-                      <Plus size={32} strokeWidth={3} />
-                  </button>
-                </div>
-              </div>
-          )}
-        </main>
-
-        <RSVPModal 
-          event={rsvpModalEvent}
-          isOpen={isRSVPModalOpen}
-          onClose={() => setIsRSVPModalOpen(false)}
-          onRsvp={handleRsvp}
-        />
-
-        {!selectedEvent && !selectedMember && currentView !== 'CREATE' && (
-          <BottomNav 
-            currentView={currentView}
-            onChangeView={setCurrentView}
-          />
-        )}
-      </div>
-    );
-  };
-
-  if (isLoading || isLoggingOut) {
-      return (
-          <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
-              <Loader2 className="animate-spin text-pb-primary" size={48} />
-          </div>
-      )
-  }
 
   return (
-    <Suspense fallback={<ScreenLoader />}>
-    <Routes>
-      <Route path="/" element={<LandingView />} />
-      <Route path="/privacy" element={<PrivacyView />} />
-      <Route path="/terms" element={<TermsView />} />
-      <Route path="/support" element={<SupportView />} />
-      <Route path="/invite/:inviteId" element={<InviteView onJoined={handleJoinedTeam} />} />
-      {/* /admin/login сведён в /login?next=/admin — единый вход для всех ролей */}
-      <Route path="/admin/login" element={<Navigate to="/login?next=/admin" replace />} />
-      <Route path="/admin/*" element={<AdminConsoleView />} />
-      <Route path="/login" element={
-        authStep === 'APP'
-          ? <Navigate to="/app" replace />
-          : (
-            <LoginView 
-              onLogin={handleLogin}
-              onSelectRole={handleRoleSelect}
-              availableRoles={[]}
-            />
-          )
-      } />
-      <Route
-        path="/app/*"
-        element={
-          authStep === 'APP'
-            ? renderAppLayout()
-            : authBootstrapDone
-              ? <Navigate to="/login" replace />
-              : (
-                <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
-                  <Loader2 className="animate-spin text-pb-primary" size={48} />
-                </div>
-              )
-        }
+    <ShellContext.Provider value={shell}>
+      <ErrorBoundary>
+        {isLoading || isLoggingOut ? <ScreenLoader /> : <AppRoutes />}
+      </ErrorBoundary>
+      <RSVPModal
+        event={rsvpModalEvent}
+        isOpen={isRSVPModalOpen}
+        onClose={() => setIsRSVPModalOpen(false)}
+        onRsvp={(id, status) => void handleRsvp(id, status)}
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-    </Suspense>
+      <NotifyHost />
+    </ShellContext.Provider>
   );
 };
 
