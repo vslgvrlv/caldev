@@ -349,6 +349,12 @@ describe("гость события", () => {
 
     expect(await hasGuestEventAccess(f.users.guest, f.event)).toBe(true);
     expect(await hasGuestEventAccess(f.users.guest, f.plainEvent)).toBe(false);
+    // Через `resolveEventAccess` трека 3: только чтение этого события.
+    expect((await guest.get(`/api/v1/events/${f.event}/attendees`)).status).toBe(200);
+    expect((await guest.get(`/api/v1/events/${f.plainEvent}/attendees`)).status).toBe(403);
+    expect((await guest.patch(`/api/v1/events/${f.event}`).send({ title: "Гость" })).status).toBe(403);
+    expect((await guest.get(`/api/v1/events/${f.event}/attendance`)).status).toBe(403);
+    expect((await guest.get(`/api/v1/finance/events/${f.event}`)).status).toBe(403);
     expect((await guest.get(`/api/v1/slots/events/${f.plainEvent}`)).status).toBe(404);
     expect((await guest.get(`/api/v1/init?team=${f.team}`)).status).toBe(403);
 
@@ -384,6 +390,7 @@ describe("гость события", () => {
     expect(edit?.body.text).toContain("Гость снят, место снова свободно.");
     expect(await hasGuestEventAccess(f.users.guest, f.event)).toBe(false);
     expect((await (await login("guest")).get(`/api/v1/slots/events/${f.event}`)).body.viewer).toBe("FOLLOWER");
+    expect((await (await login("guest")).get(`/api/v1/events/${f.event}/attendees`)).status).toBe(403);
 
     // Освободилось место — третьему (подписан, не записан) уходит новое
     // уведомление; снятому гостю и записанному второму — нет.
@@ -408,6 +415,7 @@ describe("гость события", () => {
       [f.event]
     );
     expect(await hasGuestEventAccess(f.users.second, f.event)).toBe(false);
+    expect((await second.get(`/api/v1/events/${f.event}/attendees`)).status).toBe(403);
     expect((await second.get(`/api/v1/slots/events/${f.event}`)).status).toBe(404);
     const feed = await second.get("/api/v1/slots/feed");
     expect(feed.body.bookings.map((b: any) => b.eventId)).not.toContain(f.event);

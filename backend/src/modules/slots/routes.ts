@@ -28,6 +28,8 @@ import {
   unfollow,
   type BookResult,
 } from "./service.js";
+// Регистрирует «гостя события» в `resolveEventAccess` (трек 3).
+import "./guest-access.js";
 
 // Модуль трека 4 «Открытые слоты» (ревизия PBTH, 11.11.2026; решения Василия
 // 10.11.2026, п. 23–28). Подключён в `app.ts` основой заранее.
@@ -54,8 +56,8 @@ import {
 
 export const slotsRouter = Router();
 
-slotsRouter.use(requireAuth);
-
+// Вход проверяется в каждой ручке, а не на весь модуль: незнакомый адрес под
+// `/slots` отвечает 404, как у остальных модулей.
 const uuid = z.string().uuid();
 
 function sendSlotError(res: Response, error: unknown): boolean {
@@ -114,6 +116,7 @@ const BOOK_ERRORS: Record<Exclude<BookResult, { ok: true }>["outcome"], { status
 
 slotsRouter.get(
   "/teams",
+  requireAuth,
   asyncHandler(async (req, res) => {
     return res.json({ teams: await listOpenTeams(req.authUser!.id) });
   })
@@ -121,6 +124,7 @@ slotsRouter.get(
 
 slotsRouter.get(
   "/teams/:teamId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const team = await findTeam(String(req.params.teamId));
     if (!team) return res.status(404).json({ detail: "Команда не найдена", code: "SLOTS_TEAM_NOT_FOUND" });
@@ -147,6 +151,7 @@ slotsRouter.get(
 
 slotsRouter.put(
   "/teams/:teamId/open-schedule",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const teamId = uuid.parse(req.params.teamId);
     const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body ?? {});
@@ -168,6 +173,7 @@ slotsRouter.put(
 
 slotsRouter.post(
   "/teams/:teamId/follow",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const team = await findTeam(String(req.params.teamId));
     if (!team) return res.status(404).json({ detail: "Команда не найдена", code: "SLOTS_TEAM_NOT_FOUND" });
@@ -183,6 +189,7 @@ slotsRouter.post(
 
 slotsRouter.delete(
   "/teams/:teamId/follow",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const teamId = uuid.parse(req.params.teamId);
     await unfollow(req.authUser!.id, teamId);
@@ -192,6 +199,7 @@ slotsRouter.delete(
 
 slotsRouter.get(
   "/feed",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const userId = req.authUser!.id;
     const [following, feed] = await Promise.all([listFollowing(userId), listFeed(userId)]);
@@ -201,6 +209,7 @@ slotsRouter.get(
 
 slotsRouter.get(
   "/summary",
+  requireAuth,
   asyncHandler(async (req, res) => {
     return res.json(await slotSummary(req.authUser!.id));
   })
@@ -210,6 +219,7 @@ slotsRouter.get(
 
 slotsRouter.get(
   "/events/:eventId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = uuid.safeParse(req.params.eventId);
     const view = eventId.success ? await eventForViewer(req.authUser!.id, eventId.data, null) : null;
@@ -220,6 +230,7 @@ slotsRouter.get(
 
 slotsRouter.get(
   "/events/:eventId/manage",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const managed = await managedEvent(req, res);
     if (!managed) return;
@@ -234,6 +245,7 @@ const openSchema = z.object({
 
 slotsRouter.put(
   "/events/:eventId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const managed = await managedEvent(req, res);
     if (!managed) return;
@@ -263,6 +275,7 @@ slotsRouter.put(
 
 slotsRouter.delete(
   "/events/:eventId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const managed = await managedEvent(req, res);
     if (!managed) return;
@@ -274,6 +287,7 @@ slotsRouter.delete(
 
 slotsRouter.post(
   "/events/:eventId/book",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = uuid.safeParse(req.params.eventId);
     if (!eventId.success) return res.status(404).json({ detail: "Событие не найдено", code: "SLOTS_EVENT_NOT_FOUND" });
@@ -289,6 +303,7 @@ slotsRouter.post(
 
 slotsRouter.delete(
   "/events/:eventId/book",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = uuid.safeParse(req.params.eventId);
     if (!eventId.success) return res.status(404).json({ detail: "Событие не найдено", code: "SLOTS_EVENT_NOT_FOUND" });
@@ -307,6 +322,7 @@ slotsRouter.delete(
 
 slotsRouter.delete(
   "/events/:eventId/guests/:userId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const managed = await managedEvent(req, res);
     if (!managed) return;
@@ -331,6 +347,7 @@ slotsRouter.delete(
 
 slotsRouter.patch(
   "/events/:eventId/guests/:userId",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const managed = await managedEvent(req, res);
     if (!managed) return;
