@@ -119,7 +119,9 @@ export const TeamJoinLinkSheet: React.FC<{
         <div className="flex items-start justify-between mb-1">
           <div>
             <div className="font-bold text-lg">Ссылка команды</div>
-            <div className="text-xs text-pb-subtext">По ней подают заявку, принимаешь ты или тренер.</div>
+            <div className="text-xs text-pb-subtext">
+              По ней подают заявку, принимаешь ты или {canRotate ? 'тренер' : 'капитан'}.
+            </div>
           </div>
           <button onClick={onClose} className="p-2 -mr-2 -mt-1 text-pb-subtext" aria-label="Закрыть">
             <X size={20} />

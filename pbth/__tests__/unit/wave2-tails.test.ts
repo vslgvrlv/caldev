@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { SlotOffer } from '../../api/track4';
 import { EventCard } from '../../components/EventCard';
+import { TeamJoinLinkSheet } from '../../components/track1/TeamJoinLinkSheet';
 import { GuestBookingCards } from '../../components/track4/GuestBookingCards';
 import { upcomingGuestBookings } from '../../components/track4/slot-format';
 import { buildDashboardEventSections, captainHomeHints, countdownLabels, showUpcomingSection } from '../../lib/events';
@@ -181,6 +182,15 @@ describe('7. ссылка команды у тренера', () => {
     expect(renderTeam(Role.TRAINER)).toContain('Пригласить');
     expect(renderTeam(Role.PLAYER)).not.toContain('Пригласить');
   });
+
+  it('подпись листа — от лица того, кто его открыл', () => {
+    const sheet = (canRotate: boolean) =>
+      renderToStaticMarkup(
+        React.createElement(TeamJoinLinkSheet, { teamId: 't1', teamName: 'Дозор', canRotate, onClose: () => {} }),
+      );
+    expect(sheet(false)).toContain('принимаешь ты или капитан');
+    expect(sheet(true)).toContain('принимаешь ты или тренер');
+  });
 });
 
 describe('9. человек без команды — штатное состояние, не ошибка', () => {
@@ -281,6 +291,8 @@ describe('12. главная капитана новой команды', () => 
     const html = renderHome({ captainHints: { inviteTeam: true, createFirstEvent: true }, onInviteTeam: () => {}, onCreateEvent: () => {} });
     expect(html).toContain('Позови команду');
     expect(html).toContain('Создай первое событие');
+    // Подсказка «Создай первое событие» заменяет пустое «Ближайшие — Событий нет».
+    expect(html).not.toContain('Событий нет');
     const none = renderHome({ captainHints: { inviteTeam: false, createFirstEvent: false } });
     expect(none).not.toContain('Позови команду');
     expect(none).not.toContain('Создай первое событие');

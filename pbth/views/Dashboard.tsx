@@ -193,7 +193,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Upcoming: если других событий нет, а главное уже наверху — блока нет. */}
-      {showUpcomingSection(dashboardSections) && (
+      {showUpcomingSection(dashboardSections) && !(showCreateEvent && upcomingEvents.length === 0) && (
       <section>
          <h2 className="text-lg font-bold text-white mb-3">Ближайшие</h2>
          <div className="space-y-3">
