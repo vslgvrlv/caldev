@@ -183,7 +183,8 @@ export function auditContextMiddleware(_req: Request, _res: Response, next: Next
   auditStorage.run({ ownerTeamIds: new Set() }, () => next());
 }
 
-function markOwnerAccess(teamId: string) {
+/** Отметить, что владелец в этом запросе действует в чужой команде (для `lib/event-access.ts`). */
+export function markOwnerAccess(teamId: string) {
   auditStorage.getStore()?.ownerTeamIds.add(teamId);
 }
 

@@ -4,6 +4,7 @@ import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { resolveTeamAccess } from "../../lib/team-access.js";
+import { resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { financeScopeForRole } from "../../lib/finance-visibility.js";
@@ -127,6 +128,30 @@ async function resolveFinanceAccess(req: Parameters<typeof requireAuth>[0], expl
     actorRole: ctx.role,
     canWrite: ctx.role === "CAPTAIN",
   };
+}
+
+// Деньги события. Участникам — как раньше (`resolveFinanceAccess`). Тому, кто
+// в команде события не состоит, но признан `resolveEventAccess` (владелец
+// платформы — права капитана, решение 11), — его роль в событии. Гость
+// события (только чтение) денег не видит.
+async function resolveEventFinanceAccess(
+  req: Parameters<typeof requireAuth>[0],
+  eventId: string,
+  teamId: string
+): Promise<FinanceAccess> {
+  if (getEffectiveEntryRole(req as any, (req as any).authUser) !== "ADMIN") {
+    const access = await resolveEventAccess(req as any, eventId);
+    if (access && access.via !== "membership") {
+      const role = teamRoleOf(access);
+      if (!role) {
+        const err = new Error("Finance access is not allowed for this role");
+        (err as any).status = 403;
+        throw err;
+      }
+      return { userId: (req as any).authUser.id, teamId: access.teamId, actorRole: role, canWrite: role === "CAPTAIN" };
+    }
+  }
+  return resolveFinanceAccess(req, teamId);
 }
 
 function assertCanReadFinance(access: FinanceAccess) {
@@ -494,7 +519,7 @@ financeRouter.get(
       const event = eventResult.rows[0];
       if (!event) return res.status(404).json({ detail: "Event not found" });
 
-      const access = await resolveFinanceAccess(req as any, event.team_id);
+      const access = await resolveEventFinanceAccess(req as any, eventId, event.team_id);
       assertCanReadFinance(access);
 
       const participantsResult = await query<{
@@ -667,7 +692,7 @@ financeRouter.post(
       const event = eventResult.rows[0];
       if (!event) return res.status(404).json({ detail: "Event not found" });
 
-      const access = await resolveFinanceAccess(req as any, event.team_id);
+      const access = await resolveEventFinanceAccess(req as any, eventId, event.team_id);
       assertCanWriteFinance(access);
       if (event.finance_state === EVENT_FINANCE_STATE_CLOSED) {
         return res.status(409).json({ detail: "Event finance is CLOSED. Use correction transaction instead." });

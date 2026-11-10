@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
@@ -16,6 +16,7 @@ import {
   reflectionScopeForRole,
 } from "../../lib/reflection-visibility.js";
 import { sendTelegramBotDocument } from "../../lib/telegram-bot.js";
+import { resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 
 // Рефлексия (#89). Единица — ПОЙНТ, а не игра: игра со счётом 4:3 состоит из
 // семи пойнтов, и форма заполняется за каждый (исправление модели 2026-07-31,
@@ -88,46 +89,56 @@ const pointResultsSchema = z.object({
 });
 
 type Role = "CAPTAIN" | "TRAINER" | "PLAYER";
-type GameAccess = { gameId: string; eventId: string; teamId: string; role: Role; score: string | null };
+type GameAccess = { gameId: string; eventId: string; teamId: string; role: Role; via: string; score: string | null };
 type PointAccess = GameAccess & { pointId: string; ordinal: number; result: "WIN" | "LOSS" | null };
 
 const canEditTeamData = (role: Role) => role === "CAPTAIN" || role === "TRAINER";
 
-// Доступ = членство в команде, которой принадлежит событие. Роль возвращаем
-// здесь же: от неё зависит право размечать пойнты и вести капитанский разбор.
-async function loadGameAccess(gameId: string, userId: string): Promise<GameAccess | null> {
-  const result = await query<{ event_id: string; team_id: string; role: Role; score: string | null }>(
-    `SELECT e.id AS event_id, e.team_id, tm.role, g.score
-     FROM event_games g
-     JOIN events e ON e.id = g.event_id
-     JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
-     WHERE g.id = $1 AND e.is_cancelled = FALSE`,
-    [gameId, userId]
-  );
-  const row = result.rows[0];
-  return row ? { gameId, eventId: row.event_id, teamId: row.team_id, role: row.role, score: row.score } : null;
+// Доступ = членство в команде, которой принадлежит событие, или владелец
+// платформы с правами капитана (`lib/event-access.ts`, решение 11). Роль
+// возвращаем здесь же: от неё зависит право размечать пойнты и вести
+// капитанский разбор. Гость события (только чтение) разбора не видит.
+async function roleForEvent(req: Request, eventId: string): Promise<{ role: Role; via: string } | null> {
+  const access = await resolveEventAccess(req, eventId);
+  const role = teamRoleOf(access);
+  return role && access ? { role, via: access.via } : null;
 }
 
-async function loadPointAccess(pointId: string, userId: string): Promise<PointAccess | null> {
+async function loadGameAccess(req: Request, gameId: string): Promise<GameAccess | null> {
+  const result = await query<{ event_id: string; team_id: string; score: string | null }>(
+    `SELECT e.id AS event_id, e.team_id, g.score
+     FROM event_games g
+     JOIN events e ON e.id = g.event_id
+     WHERE g.id = $1 AND e.is_cancelled = FALSE`,
+    [gameId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const access = await roleForEvent(req, row.event_id);
+  if (!access) return null;
+  return { gameId, eventId: row.event_id, teamId: row.team_id, role: access.role, via: access.via, score: row.score };
+}
+
+async function loadPointAccess(req: Request, pointId: string): Promise<PointAccess | null> {
   const result = await query<{
     game_id: string;
     ordinal: number;
     result: "WIN" | "LOSS" | null;
     event_id: string;
     team_id: string;
-    role: Role;
     score: string | null;
   }>(
-    `SELECT p.game_id, p.ordinal, p.result, e.id AS event_id, e.team_id, tm.role, g.score
+    `SELECT p.game_id, p.ordinal, p.result, e.id AS event_id, e.team_id, g.score
      FROM game_points p
      JOIN event_games g ON g.id = p.game_id
      JOIN events e ON e.id = g.event_id
-     JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
      WHERE p.id = $1 AND e.is_cancelled = FALSE`,
-    [pointId, userId]
+    [pointId]
   );
   const row = result.rows[0];
   if (!row) return null;
+  const access = await roleForEvent(req, row.event_id);
+  if (!access) return null;
   return {
     pointId,
     ordinal: row.ordinal,
@@ -135,7 +146,8 @@ async function loadPointAccess(pointId: string, userId: string): Promise<PointAc
     gameId: row.game_id,
     eventId: row.event_id,
     teamId: row.team_id,
-    role: row.role,
+    role: access.role,
+    via: access.via,
     score: row.score,
   };
 }
@@ -209,7 +221,7 @@ reflectionsRouter.get(
     const gameId = z.string().uuid().parse(req.params.gameId);
     const userId = req.authUser!.id;
 
-    const access = await loadGameAccess(gameId, userId);
+    const access = await loadGameAccess(req, gameId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
     }
@@ -296,7 +308,7 @@ reflectionsRouter.put(
     const payload = rosterSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadPointAccess(pointId, userId);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
@@ -358,7 +370,7 @@ reflectionsRouter.put(
     const payload = pointResultsSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadGameAccess(gameId, userId);
+    const access = await loadGameAccess(req, gameId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Game not found or not available for this user");
     }
@@ -448,7 +460,7 @@ reflectionsRouter.get(
     const pointId = z.string().uuid().parse(req.params.pointId);
     const userId = req.authUser!.id;
 
-    const access = await loadPointAccess(pointId, userId);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
@@ -479,9 +491,14 @@ reflectionsRouter.put(
     const payload = reflectionSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadPointAccess(pointId, userId);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
+    }
+    // Форма игрока — только от игроков команды. Владелец платформы в составе
+    // не числится, его ответ исказил бы разбор.
+    if (access.via !== "membership") {
+      return sendError(req, res, 403, "NOT_TEAM_MEMBER", "Only team members fill in their own reflection");
     }
 
     // Записанный состав закрывает форму тем, кто на пойнт не выходил (#102).
@@ -564,7 +581,7 @@ reflectionsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const pointId = z.string().uuid().parse(req.params.pointId);
-    const access = await loadPointAccess(pointId, req.authUser!.id);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
@@ -586,7 +603,7 @@ reflectionsRouter.put(
     const payload = captainReportSchema.parse(req.body);
     const userId = req.authUser!.id;
 
-    const access = await loadPointAccess(pointId, userId);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
@@ -680,7 +697,7 @@ reflectionsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const pointId = z.string().uuid().parse(req.params.pointId);
-    const access = await loadPointAccess(pointId, req.authUser!.id);
+    const access = await loadPointAccess(req, pointId);
     if (!access) {
       return sendError(req, res, 404, "GAME_NOT_FOUND", "Point not found or not available for this user");
     }
@@ -736,14 +753,12 @@ reflectionsRouter.get(
     const eventId = z.string().uuid().parse(req.params.eventId);
     const userId = req.authUser!.id;
 
+    const role = teamRoleOf(await resolveEventAccess(req, eventId));
     const membership = await query<{ role: Role; title: string }>(
-      `SELECT tm.role, e.title
-       FROM events e
-       JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
-       WHERE e.id = $1`,
-      [eventId, userId]
+      `SELECT $2::text AS role, e.title FROM events e WHERE e.id = $1`,
+      [eventId, role]
     );
-    if (!membership.rows.length) {
+    if (!role || !membership.rows.length) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
     }
 
@@ -863,14 +878,15 @@ function csvFileName(prefix: string, eventTitle: string): string {
 
 // Выгрузка — все строки с именами, поэтому только капитану и тренеру
 // (решение 10). Игроку — 403, а не пустой файл: так понятнее, что не так.
-async function loadTableForUser(eventId: string, userId: string) {
+async function loadTableForUser(req: Request, eventId: string, userId: string) {
+  const role = teamRoleOf(await resolveEventAccess(req, eventId));
+  if (!role) return null;
   const membership = await query<{ title: string; telegram_id: string | null; role: Role }>(
-    `SELECT e.title, u.telegram_id, tm.role
+    `SELECT e.title, u.telegram_id, $3::text AS role
      FROM events e
-     JOIN team_memberships tm ON tm.team_id = e.team_id AND tm.user_id = $2
      JOIN users u ON u.id = $2
      WHERE e.id = $1`,
-    [eventId, userId]
+    [eventId, userId, role]
   );
   if (!membership.rows.length) return null;
   if (reflectionScopeForRole(membership.rows[0].role) !== "TEAM") return "FORBIDDEN" as const;
@@ -893,7 +909,7 @@ reflectionsRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const eventId = z.string().uuid().parse(req.params.eventId);
-    const loaded = await loadTableForUser(eventId, req.authUser!.id);
+    const loaded = await loadTableForUser(req, eventId, req.authUser!.id);
     if (!loaded) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
     }
@@ -921,7 +937,7 @@ reflectionsRouter.post(
     const eventId = z.string().uuid().parse(req.params.eventId);
     const userId = req.authUser!.id;
 
-    const loaded = await loadTableForUser(eventId, userId);
+    const loaded = await loadTableForUser(req, eventId, userId);
     if (!loaded) {
       return sendError(req, res, 404, "EVENT_NOT_FOUND", "Event not found or not available for this user");
     }
