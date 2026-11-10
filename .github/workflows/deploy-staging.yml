@@ -79,6 +79,23 @@ jobs:
           scp -P "${PORT}" -i ~/.ssh/id_ed25519 "dist/releases/${ARTIFACT}" "${USER_NAME}@${DEPLOY_HOST}:${ROOT_PATH}/dist/releases/${ARTIFACT}"
           scp -P "${PORT}" -i ~/.ssh/id_ed25519 "dist/releases/${CHECKSUM}" "${USER_NAME}@${DEPLOY_HOST}:${ROOT_PATH}/dist/releases/${CHECKSUM}"
 
+      - name: Backup database before deploy
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          USER_NAME="${DEPLOY_USER:-root}"
+          PORT="${DEPLOY_PORT:-22}"
+          # Копия базы до миграций. Скрипт берётся из этого коммита и идёт на
+          # сервер через stdin, поэтому копия снимается, даже если чекаут
+          # /root/caldev на сервере старый. Не снялась — шаг падает, выкат
+          # не начинается. deploy.sh увидит свежую копию с той же меткой и
+          # второй раз снимать не станет.
+          ssh -p "${PORT}" -i ~/.ssh/id_ed25519 "${USER_NAME}@${DEPLOY_HOST}" \
+            "bash -s -- --env staging --label 'pre-${RELEASE_ID}'" < scripts/release/db-backup.sh
+
       - name: Deploy release to staging
         env:
           RELEASE_ID: ${{ inputs.release_id }}

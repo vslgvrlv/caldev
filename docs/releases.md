@@ -34,3 +34,30 @@ Working architecture:
 - The Caddy block lives in `/etc/caddy/Caddyfile` on `78.17.11.162` under the `pos.pbthub.ru` site.
 
 If the relay path or 78.17 host changes, both sides must be updated together: `setWebhook` on Telegram, and `TELEGRAM_BOT_API_BASE_URL` in `/opt/pbth/shared/env/prod.env` followed by `docker compose -p pbth-prod -f docker-compose.release.yml -f docker-compose.prod.yml --env-file /opt/pbth/shared/env/prod.env up -d --force-recreate backend`.
+
+## Database backups (since 2026-11-11)
+
+Every deploy takes a `pg_dump` before migrations into
+`/opt/pbth/shared/backups/<env>/` (last 20 kept) and stops if the dump fails.
+Restore and details: `RELEASE_PROTOCOL.md`, section «Бэкап базы перед миграциями».
+
+## Web Push (VAPID)
+
+Push reminders are off unless `PUSH_NOTIFICATIONS_ENABLED=1` is set in
+`/opt/pbth/shared/env/<env>.env`. The release compose file already passes
+`PUSH_NOTIFICATIONS_ENABLED`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`VAPID_SUBJECT` to the backend (`backend/src/config/env.ts`).
+
+1. Generate one key pair per environment (staging and prod separately) and keep it:
+   a new pair invalidates every existing browser subscription.
+   ```bash
+   docker compose -p pbth-staging -f docker-compose.release.yml -f docker-compose.staging.yml \
+     --env-file /opt/pbth/shared/env/staging.env run --rm --no-deps backend npx web-push generate-vapid-keys
+   ```
+2. Put both keys and `PUSH_NOTIFICATIONS_ENABLED=1` into the env file.
+   With the flag on and a key missing the backend refuses to start.
+3. Recreate the backend (`... up -d --force-recreate backend`) and check
+   `GET /api/v1/push/vapid-key` returns the public key.
+
+With push off, `/api/v1/push/vapid-key` answers `204` (no key) and
+reminders go through the Telegram bot.

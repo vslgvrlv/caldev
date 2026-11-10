@@ -1,5 +1,10 @@
 # PBTH Execution Status
 
+> **Архив.** Файл не ведётся с марта 2026 (последняя запись — Auth v2 и вход
+> через бота). Пути `/Users/pk/Documents/CalDEV/...` ниже устарели. Текущее
+> состояние: задачи в `vslgvrlv/caldev`, выкаты — `docs/releases.md`, порядок
+> выката и бэкапы — `RELEASE_PROTOCOL.md`.
+
 Date: 2026-03-17
 Branch: `codex/telegram-bot-handoff-auth`
 
