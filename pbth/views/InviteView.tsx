@@ -4,6 +4,16 @@ import { CheckCircle2, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { api, type TeamInviteInfoResponse } from '../api';
 import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
 import { describeInviteProblem } from '../lib/invite-problem';
+import { roleLabel } from '../lib/labels';
+
+// Одноразовое приглашение (капитана) уже сработало — трек 1. Общий разбор
+// ошибок приглашения этот код не знает.
+function describeTrackInviteProblem(err: unknown): string | null {
+  if ((err as { code?: string } | null)?.code === 'INVITE_USED') {
+    return 'По этому приглашению уже вступили. Оно одноразовое — попроси новое.';
+  }
+  return describeInviteProblem(err);
+}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error';
@@ -63,7 +73,7 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
     let cancelled = false;
     const load = async () => {
       if (!inviteId) {
-        setStatusText('Некорректная ссылка инвайта.');
+        setStatusText('Ссылка приглашения неполная. Попроси капитана прислать её ещё раз.');
         setIsLoading(false);
         return;
       }
@@ -86,12 +96,12 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
         if (cancelled) return;
         // В том числе старые ссылки /invite/<ID команды>: вступить по ID
         // команды больше нельзя, только по действующему приглашению.
-        const problem = describeInviteProblem(err);
+        const problem = describeTrackInviteProblem(err);
         if (problem) {
           setUnusable(true);
           setStatusText(problem);
         } else {
-          setStatusText(`Приглашение сейчас не открывается: ${errorMessage(err)}`);
+          setStatusText('Приглашение сейчас не открывается. Проверь связь и обнови страницу.');
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -122,12 +132,12 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
         // просто открываем приложение.
         if (isAlreadyMember(err)) {
           setAccepted(true);
-          setStatusText('Вы уже в этой команде. Открываем приложение...');
+          setStatusText('Ты уже в этой команде. Открываем приложение…');
           if (onJoined) await onJoined();
           else navigate('/app', { replace: true });
           return;
         }
-        const problem = describeInviteProblem(err);
+        const problem = describeTrackInviteProblem(err);
         if (problem) {
           setUnusable(true);
           setStatusText(problem);
@@ -136,14 +146,14 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
         throw err;
       }
       setAccepted(true);
-      setStatusText('Вы вступили в команду. Открываем приложение...');
+      setStatusText('Ты в команде. Открываем приложение…');
       if (onJoined) await onJoined();
       else navigate('/app', { replace: true });
     } catch (err) {
       if (isAuthRequired(err)) {
         setStatusText('Сначала нужно войти через Telegram.');
       } else {
-        setStatusText(`Не удалось принять инвайт: ${errorMessage(err)}`);
+        setStatusText('Приглашение не принялось. Попробуй ещё раз.');
       }
     } finally {
       setIsSubmitting(false);
@@ -158,8 +168,10 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
     );
   }
 
-  const title = inviteInfo?.teamName ? `Инвайт в команду ${inviteInfo.teamName}` : 'Приглашение в команду';
-  const roleHint = inviteInfo?.role ? `Роль по инвайту: ${inviteInfo.role}` : 'Роль по умолчанию: PLAYER';
+  const title = inviteInfo?.teamName ? `Приглашение в команду «${inviteInfo.teamName}»` : 'Приглашение в команду';
+  // Поля одноразового приглашения (трек 1) — тип общего клиента их ещё не знает.
+  const inviteExtra = inviteInfo as (TeamInviteInfoResponse & { singleUse?: boolean; note?: string | null }) | null;
+  const roleHint = `Роль в команде: ${roleLabel(inviteInfo?.role || 'PLAYER').toLowerCase()}`;
   const safeAreaCardViewportStyle = {
     paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
     paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
@@ -175,6 +187,10 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
       <div className="w-full max-w-sm bg-pb-surface border border-white/10 rounded-2xl p-5">
         <h1 className="text-xl font-bold mb-2">{title}</h1>
         {!unusable && <p className="text-pb-subtext text-sm mb-2">{roleHint}</p>}
+        {!unusable && inviteExtra?.note && <p className="text-white text-sm mb-2">{inviteExtra.note}</p>}
+        {!unusable && inviteExtra?.singleUse && (
+          <p className="text-pb-subtext text-xs mb-2">Приглашение одноразовое: сработает только у одного человека.</p>
+        )}
         {inviteInfo?.expiresAt && (
           <p className="text-pb-subtext text-xs mb-4">
             Действует до: {new Date(inviteInfo.expiresAt).toLocaleString('ru-RU')}

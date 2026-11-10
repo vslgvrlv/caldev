@@ -2,6 +2,8 @@ import React from 'react';
 import { TeamMember, PlayerStatus } from '../types';
 import { ROLE_LABELS, STATUS_LABELS } from '../constants';
 import { ChevronLeft, Phone, Shield, Activity, Coins } from 'lucide-react';
+import { confirmAction } from '../lib/notify';
+import { MemberRoleControl } from '../components/track1/MemberRoleControl';
 
 interface PlayerProfileViewProps {
   member: TeamMember;
@@ -105,6 +107,8 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
           Источник данных: состав команды и подтвержденные RSVP.
         </div>
 
+        {canManage && <MemberRoleControl member={member} />}
+
         {canManage && (
           <div className="bg-pb-surface rounded-2xl p-4 border border-white/5">
             <div className="text-white font-semibold mb-3">Управление игроком</div>
@@ -144,9 +148,11 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
             </div>
             <button
               onClick={() => {
-                const confirmed = window.confirm(`Исключить ${member.name} из команды?`);
-                if (!confirmed) return;
-                void onRemoveMember?.(member);
+                void confirmAction(`Исключить ${member.name} из команды?`, { confirmLabel: 'Исключить', danger: true }).then(
+                  (confirmed) => {
+                    if (confirmed) void onRemoveMember?.(member);
+                  },
+                );
               }}
               className="mt-3 w-full py-2 rounded-xl bg-red-500/10 text-red-300 hover:bg-red-500/20 text-sm"
             >

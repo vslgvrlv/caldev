@@ -202,7 +202,8 @@ describe("владелец платформы", () => {
 
 describe("места для треков", () => {
   it("модули треков подключены и пока пусты", async () => {
-    for (const path of ["/join-requests", "/team-requests", "/reminders", "/platform", "/slots"]) {
+    // `/join-requests` и `/team-requests` наполнил трек 1 — их держит track1-join-flow.test.ts.
+    for (const path of ["/reminders", "/platform", "/slots"]) {
       const res = await request(app).get(`/api/v1${path}`);
       expect(res.status).toBe(404);
       expect(res.body.code).toBe("NOT_FOUND");

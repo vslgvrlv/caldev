@@ -2,7 +2,8 @@ import React from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useShell } from './context';
 import { ScreenLoader } from '../components/shell/ScreenLoader';
-import { DataUnavailableScreen, NoTeamScreen } from '../components/shell/StateScreens';
+import { DataUnavailableScreen } from '../components/shell/StateScreens';
+import { NoTeamScreen } from '../components/track1/NoTeamView';
 import { readLastTeam, resolveEntryTeam, teamPath } from '../lib/team-url';
 
 /**

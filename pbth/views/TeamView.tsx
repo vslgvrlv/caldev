@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { TeamMemberCard } from '../components/TeamMemberCard';
-import { UserPlus, Search, Shield, Users, Check, BarChart2, Star } from 'lucide-react';
-import { api } from '../api';
-import { buildInviteLink } from '../lib/team-invite-link';
+import { UserPlus, Search, Shield, Users, BarChart2, Star } from 'lucide-react';
+import { confirmAction, errorText, notify } from '../lib/notify';
+import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
 
 interface TeamViewProps {
   team: Team;
@@ -23,7 +23,9 @@ export const TeamView: React.FC<TeamViewProps> = ({
   onRemoveMember,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [showCopied, setShowCopied] = useState(false);
+  // Ссылка команды (трек 1): постоянная, с кодом и QR. Раньше здесь была
+  // иконка без подписи, которая на каждое нажатие создавала новую ссылку на 72 часа.
+  const [linkOpen, setLinkOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ROSTER' | 'STATS'>('ROSTER');
   const [quickMember, setQuickMember] = useState<TeamMember | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
@@ -36,66 +38,6 @@ export const TeamView: React.FC<TeamViewProps> = ({
     m.nickname.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const copyText = async (text: string): Promise<boolean> => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch {
-      // Fallback below.
-    }
-
-    try {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.setAttribute('readonly', '');
-      textArea.style.position = 'fixed';
-      textArea.style.top = '-9999px';
-      textArea.style.left = '-9999px';
-      document.body.appendChild(textArea);
-      textArea.select();
-      const copied = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return copied;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleCopyInvite = async () => {
-    try {
-      const created = await api.createTeamInvite(team.id, { teamRole: 'PLAYER', expiresInHours: 72 });
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const inviteLink = buildInviteLink(origin, created.token);
-
-      const copied = await copyText(inviteLink);
-      if (copied) {
-        setShowCopied(true);
-        setTimeout(() => setShowCopied(false), 2000);
-        return;
-      }
-
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Инвайт в команду',
-            text: 'Ссылка для вступления в команду',
-            url: inviteLink,
-          });
-          return;
-        } catch {
-          // Ignore and show manual fallback.
-        }
-      }
-
-      window.prompt('Ссылка создана. Скопируйте вручную:', inviteLink);
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : 'unknown error';
-      alert(`Не удалось создать инвайт-ссылку: ${detail}`);
-    }
-  };
-
   const runQuickAction = async (fn: () => Promise<void> | void) => {
     if (!quickMember || quickBusy) return;
     setQuickBusy(true);
@@ -103,7 +45,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
       await fn();
       setQuickMember(null);
     } catch (err) {
-      alert(`Не удалось применить действие: ${err instanceof Error ? err.message : 'unknown error'}`);
+      notify.error(errorText(err, 'Не получилось. Попробуй ещё раз.'));
     } finally {
       setQuickBusy(false);
     }
@@ -243,17 +185,6 @@ export const TeamView: React.FC<TeamViewProps> = ({
       className="pb-24 px-4 h-full flex flex-col animate-fade-in relative"
       style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
     >
-      {/* Toast Notification */}
-      {showCopied && (
-          <div
-              className="absolute left-1/2 -translate-x-1/2 bg-pb-surface border border-pb-primary text-white px-4 py-2 rounded-full shadow-lg z-50 flex items-center animate-fade-in"
-              style={{ top: 'calc(var(--pb-safe-top) + 1rem)' }}
-          >
-              <Check size={16} className="text-pb-primary mr-2" />
-              <span className="text-xs font-bold">Ссылка скопирована!</span>
-          </div>
-      )}
-
       {/* Header */}
       <header className="mb-4">
         <h1 className="text-2xl font-bold text-white mb-1">Команда</h1>
@@ -263,11 +194,12 @@ export const TeamView: React.FC<TeamViewProps> = ({
             <p className="text-pb-subtext text-xs">{members.length} участников</p>
           </div>
           {isAdminOrCaptain && activeTab === 'ROSTER' && (
-            <button 
-              onClick={handleCopyInvite}
-              className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition-colors active:scale-95"
+            <button
+              onClick={() => setLinkOpen(true)}
+              className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors active:scale-95 flex items-center gap-2 text-sm font-semibold"
             >
-              <UserPlus size={20} />
+              <UserPlus size={18} />
+              Пригласить
             </button>
           )}
         </div>
@@ -306,8 +238,10 @@ export const TeamView: React.FC<TeamViewProps> = ({
          {activeTab === 'ROSTER' ? renderRoster() : renderStats()}
       </div>
 
+      {linkOpen && <TeamJoinLinkSheet teamId={team.id} teamName={team.name} onClose={() => setLinkOpen(false)} />}
+
       {quickMember && (
-        <div className="fixed inset-0 z-40 bg-black/60 flex items-end" onClick={() => setQuickMember(null)}>
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end" onClick={() => setQuickMember(null)}>
           <div
             className="w-full bg-pb-surface border-t border-white/10 rounded-t-2xl p-4 space-y-2"
             onClick={(e) => e.stopPropagation()}
@@ -354,9 +288,12 @@ export const TeamView: React.FC<TeamViewProps> = ({
             <button
               disabled={quickBusy}
               onClick={() => {
-                const confirmed = window.confirm(`Исключить ${quickMember.name} из команды?`);
-                if (!confirmed) return;
-                void runQuickAction(async () => onRemoveMember(quickMember));
+                const target = quickMember;
+                void confirmAction(`Исключить ${target.name} из команды?`, { confirmLabel: 'Исключить', danger: true }).then(
+                  (confirmed) => {
+                    if (confirmed) void runQuickAction(async () => onRemoveMember(target));
+                  },
+                );
               }}
               className="w-full text-left px-3 py-3 rounded-xl bg-red-500/10 text-red-300 hover:bg-red-500/20"
             >

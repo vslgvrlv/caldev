@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
-import { resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
+import { isPlatformOwner, resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
   assertCaptainChangeAllowed,
   loadMembershipByUserForUpdate,
@@ -11,10 +11,11 @@ import {
 import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { getEffectiveEntryRole } from "../../lib/entry-role.js";
 import { canChooseAdminRole } from "../../lib/entry-role.js";
 import { writeAudit } from "../../lib/audit.js";
 import { sendError } from "../../lib/http-error.js";
+import { appUrl, sendTrackError } from "../join-requests/delivery.js";
+import { ensureActiveJoinLink, joinLinkUrl, rotateJoinLink } from "./join-link.js";
 
 const createTeamSchema = z.object({
   name: z.string().min(2).max(120),
@@ -38,6 +39,10 @@ const updateMembershipSchema = z.object({
 const createInviteSchema = z.object({
   teamRole: z.enum(["CAPTAIN", "TRAINER", "PLAYER"]).default("PLAYER"),
   expiresInHours: z.number().int().min(1).max(24 * 30).default(72),
+  // Именное одноразовое приглашение (трек 1): срабатывает один раз, `note` —
+  // кому оно («Для Ивана, капитан Дозора»), видно на экране приглашения.
+  singleUse: z.boolean().default(false),
+  note: z.string().trim().max(200).optional(),
 });
 
 // Права в команде из параметра ручки — через общий `resolveTeamAccess`.
@@ -45,7 +50,10 @@ const createInviteSchema = z.object({
 // при этом считается владельцем для правил про капитанов. Отказ доступа здесь
 // не ошибка: ручки сами отвечают прежним текстом 403.
 async function resolveTeamManager(req: Request, teamId: string) {
-  const isRootAdmin = getEffectiveEntryRole(req, req.authUser!) === "ADMIN";
+  // Владелец платформы — по `isPlatformOwner` (режима «админ или игрок» больше
+  // нет, трек 3). Так владелец, который сам капитан команды, тоже может
+  // назначить второго капитана и выдать приглашение капитана.
+  const isRootAdmin = isPlatformOwner(req);
   let access: Awaited<ReturnType<typeof resolveTeamAccess>> = null;
   try {
     access = await resolveTeamAccess(req, { param: teamId });
@@ -65,9 +73,8 @@ teamsRouter.get(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
     const ownTeams =
-      effectiveRole === "ADMIN"
+      isPlatformOwner(req)
         ? await query<{ id: string; name: string; short_code: string; logo: string | null; budget: string; role: string; timezone: string }>(
             `SELECT t.id, t.name, t.short_code, t.logo, t.budget::text, t.timezone, 'CAPTAIN'::text AS role
              FROM teams t
@@ -99,9 +106,8 @@ teamsRouter.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    if (effectiveRole !== "ADMIN") {
-      return res.status(403).json({ detail: "Only account admin can create teams" });
+    if (!isPlatformOwner(req)) {
+      return res.status(403).json({ detail: "Only the platform owner can create teams" });
     }
 
     const payload = createTeamSchema.parse(req.body);
@@ -172,11 +178,12 @@ teamsRouter.post(
     }
 
     const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000);
-    const created = await query<{ token: string; expires_at: string; role: "CAPTAIN" | "TRAINER" | "PLAYER" }>(
-      `INSERT INTO team_invites (team_id, role, created_by, expires_at)
-       VALUES ($1, $2::membership_role, $3, $4)
-       RETURNING token::text, expires_at, role::text`,
-      [teamId, payload.teamRole, req.authUser!.id, expiresAt.toISOString()]
+    const note = payload.note ? payload.note : null;
+    const created = await query<{ token: string; expires_at: string; role: "CAPTAIN" | "TRAINER" | "PLAYER"; single_use: boolean; note: string | null }>(
+      `INSERT INTO team_invites (team_id, role, created_by, expires_at, single_use, note)
+       VALUES ($1, $2::membership_role, $3, $4, $5, $6)
+       RETURNING token::text, expires_at, role::text, single_use, note`,
+      [teamId, payload.teamRole, req.authUser!.id, expiresAt.toISOString(), payload.singleUse, note]
     );
 
     await writeAudit(req.authUser!.id, "teams.invite.create", {
@@ -184,12 +191,16 @@ teamsRouter.post(
       token: created.rows[0].token,
       role: payload.teamRole,
       expiresAt: created.rows[0].expires_at,
+      singleUse: payload.singleUse,
     });
 
     return res.status(201).json({
       token: created.rows[0].token,
       role: created.rows[0].role,
       expiresAt: created.rows[0].expires_at,
+      singleUse: created.rows[0].single_use,
+      note: created.rows[0].note,
+      url: appUrl(`/invite/${created.rows[0].token}`),
     });
   })
 );
@@ -205,8 +216,10 @@ teamsRouter.get(
       expires_at: string;
       is_revoked: boolean;
       used_at: string | null;
+      single_use: boolean;
+      note: string | null;
     }>(
-      `SELECT i.team_id, t.name AS team_name, i.role::text, i.expires_at, i.is_revoked, i.used_at
+      `SELECT i.team_id, t.name AS team_name, i.role::text, i.expires_at, i.is_revoked, i.used_at, i.single_use, i.note
        FROM team_invites i
        JOIN teams t ON t.id = i.team_id
        WHERE i.token = $1`,
@@ -224,6 +237,9 @@ teamsRouter.get(
     if (isExpired) {
       return sendError(req, res, 409, "INVITE_EXPIRED", "Invite expired");
     }
+    if (invite.single_use && isUsed) {
+      return sendTrackError(req, res, 409, "INVITE_USED", "Invite has already been used");
+    }
     return res.json({
       teamId: invite.team_id,
       teamName: invite.team_name,
@@ -233,98 +249,156 @@ teamsRouter.get(
       isExpired,
       isUsed,
       isRevoked: invite.is_revoked,
+      singleUse: invite.single_use,
+      note: invite.note,
     });
   })
 );
+
+type InviteRow = {
+  id: string;
+  team_id: string;
+  role: "CAPTAIN" | "TRAINER" | "PLAYER";
+  expires_at: string;
+  is_revoked: boolean;
+  used_at: string | null;
+  single_use: boolean;
+};
+
+class InviteAcceptError extends Error {
+  constructor(public status: number, public code: string, message: string, public extra?: Record<string, unknown>) {
+    super(message);
+  }
+}
 
 teamsRouter.post(
   "/invites/:token/accept",
   requireAuth,
   asyncHandler(async (req, res) => {
     const token = z.string().uuid().parse(req.params.token);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    console.info("[teams] invite.accept attempt", {
-      userId: req.authUser!.id,
-      accountRole: req.authUser!.account_role,
-      entryRole: effectiveRole,
-    });
-    if (effectiveRole !== "USER") {
-      console.warn("[teams] invite.accept denied: non-user entry role", {
-        userId: req.authUser!.id,
-        entryRole: effectiveRole,
+    // Режима «админ или игрок» больше нет (трек 3): приглашение принимает
+    // любой вошедший, в том числе владелец платформы.
+    console.info("[teams] invite.accept attempt", { userId: req.authUser!.id });
+
+    // Проверка и расход приглашения — в одной транзакции под блокировкой
+    // строки: одноразовое приглашение (капитана) не сработает дважды, даже
+    // если два человека откроют ссылку одновременно.
+    let outcome: { membershipId: string; teamId: string; inviteId: string; role: InviteRow["role"]; upgraded: boolean };
+    try {
+      outcome = await withTransaction(async (client) => {
+        const inviteResult = await client.query<InviteRow>(
+          `SELECT id, team_id, role::text, expires_at, is_revoked, used_at, single_use
+           FROM team_invites
+           WHERE token = $1
+           FOR UPDATE`,
+          [token]
+        );
+        const invite = inviteResult.rows[0];
+        if (!invite) throw new InviteAcceptError(404, "INVITE_NOT_FOUND", "Invite not found");
+        if (invite.is_revoked) throw new InviteAcceptError(409, "INVITE_REVOKED", "Invite is revoked");
+        if (new Date(invite.expires_at).getTime() < Date.now()) {
+          throw new InviteAcceptError(409, "INVITE_EXPIRED", "Invite expired");
+        }
+        if (invite.single_use && invite.used_at !== null) {
+          throw new InviteAcceptError(409, "INVITE_USED", "Invite has already been used");
+        }
+
+        const existing = await loadMembershipByUserForUpdate(client, invite.team_id, req.authUser!.id);
+        let membershipId: string;
+        let upgraded = false;
+        if (existing) {
+          // Приглашение капитана человеку, который уже в составе, делает его
+          // капитаном. Остальные приглашения участнику не нужны.
+          if (invite.role !== "CAPTAIN" || existing.role === "CAPTAIN") {
+            throw new InviteAcceptError(409, "ALREADY_MEMBER", "User is already a team member", {
+              membershipId: existing.id,
+              teamId: invite.team_id,
+            });
+          }
+          await client.query(`UPDATE team_memberships SET role = 'CAPTAIN', updated_at = NOW() WHERE id = $1`, [existing.id]);
+          membershipId = existing.id;
+          upgraded = true;
+        } else {
+          const membership = await client.query<{ id: string }>(
+            `INSERT INTO team_memberships (user_id, team_id, role, status, balance)
+             VALUES ($1, $2, $3::membership_role, 'ACTIVE', 0)
+             RETURNING id`,
+            [req.authUser!.id, invite.team_id, invite.role]
+          );
+          membershipId = membership.rows[0].id;
+        }
+
+        await client.query(
+          `UPDATE team_invites
+           SET used_by = COALESCE(used_by, $2), used_at = COALESCE(used_at, NOW()), updated_at = NOW()
+           WHERE id = $1`,
+          [invite.id, req.authUser!.id]
+        );
+        return { membershipId, teamId: invite.team_id, inviteId: invite.id, role: invite.role, upgraded };
       });
-      return sendError(req, res, 403, "ROLE_REQUIRED", "Only user entry-role can accept invite");
+    } catch (error) {
+      if (error instanceof InviteAcceptError) {
+        console.warn("[teams] invite.accept failed", { userId: req.authUser!.id, code: error.code });
+        return sendTrackError(req, res, error.status, error.code, error.message, error.extra);
+      }
+      throw error;
     }
 
-    const inviteResult = await query<{
-      id: string;
-      team_id: string;
-      role: "CAPTAIN" | "TRAINER" | "PLAYER";
-      expires_at: string;
-      is_revoked: boolean;
-      used_at: string | null;
-    }>(
-      `SELECT id, team_id, role::text, expires_at, is_revoked, used_at
-       FROM team_invites
-       WHERE token = $1`,
-      [token]
-    );
-    const invite = inviteResult.rows[0];
-    if (!invite) {
-      console.warn("[teams] invite.accept failed: invite not found", { userId: req.authUser!.id });
-      return sendError(req, res, 404, "INVITE_NOT_FOUND", "Invite not found");
-    }
-    if (invite.is_revoked) {
-      console.warn("[teams] invite.accept failed: revoked", { userId: req.authUser!.id });
-      return sendError(req, res, 409, "INVITE_REVOKED", "Invite is revoked");
-    }
-    if (new Date(invite.expires_at).getTime() < Date.now()) {
-      console.warn("[teams] invite.accept failed: expired", { userId: req.authUser!.id, expiresAt: invite.expires_at });
-      return sendError(req, res, 409, "INVITE_EXPIRED", "Invite expired");
-    }
-
-    const existingMembership = await query<{ id: string }>(
-      `SELECT id FROM team_memberships WHERE user_id = $1 AND team_id = $2`,
-      [req.authUser!.id, invite.team_id]
-    );
-    if (existingMembership.rowCount) {
-      return sendError(req, res, 409, "ALREADY_MEMBER", "User is already a team member", {
-        membershipId: existingMembership.rows[0].id,
-        teamId: invite.team_id,
-      });
-    }
-
-    const membership = await query<{ id: string }>(
-      `INSERT INTO team_memberships (user_id, team_id, role, status, balance)
-       VALUES ($1, $2, $3::membership_role, 'ACTIVE', 0)
-       RETURNING id`,
-      [req.authUser!.id, invite.team_id, invite.role]
-    );
-
-    await query(
-      `UPDATE team_invites
-       SET used_by = COALESCE(used_by, $2), used_at = COALESCE(used_at, NOW()), updated_at = NOW()
-       WHERE id = $1`,
-      [invite.id, req.authUser!.id]
-    );
-
-    req.session.activeMembershipId = membership.rows[0].id;
-    req.session.activeTeamId = invite.team_id;
+    req.session.activeMembershipId = outcome.membershipId;
+    req.session.activeTeamId = outcome.teamId;
 
     await writeAudit(req.authUser!.id, "teams.invite.accept", {
-      teamId: invite.team_id,
-      membershipId: membership.rows[0].id,
-      inviteId: invite.id,
+      teamId: outcome.teamId,
+      membershipId: outcome.membershipId,
+      inviteId: outcome.inviteId,
+      role: outcome.role,
+      upgraded: outcome.upgraded,
     });
 
     console.info("[teams] invite.accept success", {
       userId: req.authUser!.id,
-      membershipId: membership.rows[0].id,
-      teamId: invite.team_id,
-      role: invite.role,
+      membershipId: outcome.membershipId,
+      teamId: outcome.teamId,
+      role: outcome.role,
     });
 
-    return res.json({ ok: true, membershipId: membership.rows[0].id, teamId: invite.team_id });
+    return res.json({ ok: true, membershipId: outcome.membershipId, teamId: outcome.teamId });
+  })
+);
+
+// Ссылка команды `/join/<код>` (трек 1). Видит, выпускает и отзывает капитан
+// (владелец платформы — как капитан). Ссылка не впускает сразу: она создаёт
+// заявку, которую одобряет капитан или тренер.
+teamsRouter.get(
+  "/:teamId/join-link",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const teamId = z.string().uuid().parse(req.params.teamId);
+    const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
+    if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
+    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
+    if (!isOwner && !isCaptain) {
+      return res.status(403).json({ detail: "Only the team captain can see the team link" });
+    }
+    const link = await ensureActiveJoinLink(teamId, req.authUser!.id);
+    return res.json({ code: link.code, url: joinLinkUrl(link.code), createdAt: link.createdAt });
+  })
+);
+
+teamsRouter.post(
+  "/:teamId/join-link/rotate",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const teamId = z.string().uuid().parse(req.params.teamId);
+    const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
+    if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
+    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
+    if (!isOwner && !isCaptain) {
+      return res.status(403).json({ detail: "Only the team captain can replace the team link" });
+    }
+    const link = await rotateJoinLink(teamId, req.authUser!.id);
+    await writeAudit(req.authUser!.id, "teams.join_link.rotate", { teamId, linkId: link.id });
+    return res.json({ code: link.code, url: joinLinkUrl(link.code), createdAt: link.createdAt });
   })
 );
 
@@ -455,6 +529,7 @@ teamsRouter.patch(
     }
 
     await writeAudit(req.authUser!.id, "teams.membership.update", {
+      teamId,
       membershipId,
       role: payload.teamRole ?? null,
       status: payload.status ?? null,
@@ -500,7 +575,8 @@ teamsRouter.delete(
       return res.status(404).json({ detail: "Membership not found" });
     }
 
-    await writeAudit(req.authUser!.id, "teams.membership.delete", { membershipId });
+    // teamId — чтобы запись попала в журнал команды (трек 3).
+    await writeAudit(req.authUser!.id, "teams.membership.delete", { teamId, membershipId });
     return res.json({ ok: true });
   })
 );
