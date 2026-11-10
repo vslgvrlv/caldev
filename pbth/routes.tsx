@@ -31,7 +31,7 @@ const TermsView = lazy(() => import('./views/TermsView').then((m) => ({ default:
 const SupportView = lazy(() => import('./views/SupportView').then((m) => ({ default: m.SupportView })));
 const InviteView = lazy(() => import('./views/InviteView').then((m) => ({ default: m.InviteView })));
 const LoginView = lazy(() => import('./views/LoginView').then((m) => ({ default: m.LoginView })));
-const AdminConsoleView = lazy(() => import('./views/admin/AdminConsoleView').then((m) => ({ default: m.AdminConsoleView })));
+const OwnerConsoleView = lazy(() => import('./views/track3/OwnerConsoleView').then((m) => ({ default: m.OwnerConsoleView })));
 
 // Оболочка приложения — отдельным куском: главная страница (лендинг) её не ждёт.
 const shellChunk = () => import('./shell/app-chunk');
@@ -50,6 +50,7 @@ const ProfileScreen = lazy(() => shellChunk().then((m) => ({ default: m.ProfileS
 // Заглушки треков второй волны.
 const JoinRequestsView = lazy(() => import('./views/track1/JoinRequestsView').then((m) => ({ default: m.JoinRequestsView })));
 const JoinByCodeView = lazy(() => import('./views/track1/JoinByCodeView').then((m) => ({ default: m.JoinByCodeView })));
+const TeamJournalView = lazy(() => import('./views/track3/TeamJournalView').then((m) => ({ default: m.TeamJournalView })));
 const OpenTeamsView = lazy(() => import('./views/track4/OpenTeamsView').then((m) => ({ default: m.OpenTeamsView })));
 
 /** Вошедший на /login уходит туда, куда шёл (`?next=`), а не всегда на /app. */
@@ -58,17 +59,17 @@ const LoginRoute: React.FC = () => {
   const [searchParams] = useSearchParams();
   if (shell.authStep === 'APP') {
     const action = resolvePostLoginAction(searchParams.get('next'));
-    return <Navigate to={action.kind === 'admin' ? '/app' : action.path} replace />;
+    return <Navigate to={action.kind === 'admin' ? '/admin' : action.path} replace />;
   }
   return <LoginView onLogin={(target) => void shell.actions.login(target)} onSelectRole={() => void shell.actions.login()} availableRoles={[]} />;
 };
 
-/** Консоль ходит в API со своими командами — заголовок команды ей не нужен. */
+/** Консоль владельца (трек 3): команды в ней свои — заголовок команды не нужен. */
 const AdminRoute: React.FC = () => {
   React.useEffect(() => {
     setRequestTeam(null);
   }, []);
-  return <AdminConsoleView />;
+  return <OwnerConsoleView />;
 };
 
 const InviteRoute: React.FC = () => {
@@ -100,6 +101,7 @@ export const AppRoutes: React.FC = () => (
         <Route path="event/:eventId" element={<EventScreen />} />
         <Route path="new" element={<NewEventScreen />} />
         <Route path="requests" element={<JoinRequestsView />} />
+        <Route path="journal" element={<TeamJournalView />} />
         <Route path="*" element={<Navigate to=".." replace />} />
       </Route>
 

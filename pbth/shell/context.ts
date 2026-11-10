@@ -54,15 +54,15 @@ export type ShellActions = {
   logout: () => Promise<void>;
   login: (target?: string) => Promise<void>;
   joinedTeam: () => Promise<void>;
-  switchToUserMode: () => Promise<void>;
   openRsvpModal: (event: Event) => void;
 };
 
 export type ShellState = {
   authStep: 'LOGIN' | 'ROLE_SELECT' | 'APP';
   authBootstrapDone: boolean;
-  appGate: 'READY' | 'NO_TEAM' | 'ADMIN_MODE';
+  appGate: 'READY' | 'NO_TEAM';
   onboardingRequired: boolean;
+  /** Владелец платформы: консоль `/admin` и все команды в переключателе. */
   canEnterAdmin: boolean;
   offlineSnapshotAt: number | null;
   outboxState: { pending: number; blocked: number };
