@@ -11,8 +11,21 @@ describe("vite config", () => {
   it("keeps the expected backend proxy entries", () => {
     const proxy = viteConfig.server?.proxy;
     expect(proxy).toBeDefined();
-    expect(proxy && Object.keys(proxy)).toContain("/api");
-    expect(proxy && Object.keys(proxy)).toContain("/calendar");
+    expect(proxy && Object.keys(proxy)).toContain("/api/");
+    expect(proxy && Object.keys(proxy)).toContain("/calendar/");
+  });
+
+  it("does not proxy frontend modules whose names start with api or calendar", () => {
+    // Vite сравнивает ключ прокси с началом адреса. Ключ '/api' забирал
+    // модуль /api.ts, и в режиме разработки страница оставалась пустой.
+    const proxy = viteConfig.server?.proxy ?? {};
+    const keys = Object.keys(proxy);
+    for (const modulePath of ["/api.ts", "/api.ts?t=1", "/calendar-utils.ts"]) {
+      expect(keys.filter((key) => !key.startsWith("^") && modulePath.startsWith(key))).toEqual([]);
+    }
+    for (const backendPath of ["/api/v1/init", "/calendar/abc.ics"]) {
+      expect(keys.some((key) => backendPath.startsWith(key))).toBe(true);
+    }
   });
 
   it("keeps pwa shell assets outside the proxy table", () => {
