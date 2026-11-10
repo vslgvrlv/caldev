@@ -297,6 +297,18 @@ async function handleCode(update: Record<string, any>): Promise<boolean> {
 // Вебхук после этого просто отвечает 200 и ничего не досылает: все сообщения
 // здесь отправлены прямыми вызовами Bot API, потому что нам нужен message_id
 // карточки, а ответ на вебхук его не возвращает.
+// Кнопки карточки входа («Это я» / «Не я») — обработчик `pair` в
+// `bot-callbacks/pair.ts`; сообщение с кодом — здесь.
+export async function handlePairingCallback(update: Record<string, any>): Promise<boolean> {
+  if (!env.authPairing.enabled) return false;
+  return handleCallback(update);
+}
+
+export async function handlePairingCode(update: Record<string, any>): Promise<boolean> {
+  if (!env.authPairing.enabled) return false;
+  return handleCode(update);
+}
+
 export async function handlePairingUpdate(update: Record<string, any>): Promise<boolean> {
   if (!env.authPairing.enabled) return false;
   if (await handleCallback(update)) return true;

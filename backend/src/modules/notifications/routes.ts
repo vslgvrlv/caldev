@@ -6,7 +6,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { classifyDelivery, type DeliveryStatus } from "../../lib/notification-delivery.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
-import { getActiveContext } from "../teams/context.js";
+import { resolveTeamAccess } from "../../lib/team-access.js";
 import { sendTelegramBotMessage } from "../../lib/telegram-bot.js";
 import { enqueueTelegramNotification, isNotificationsQueueEnabled } from "../../lib/notification-queue.js";
 import { isWebPushEnabled, sendWebPush } from "../../lib/web-push.js";
@@ -48,13 +48,13 @@ async function resolveNotificationsAccess(req: Parameters<typeof requireAuth>[0]
   if (effectiveRole === "ADMIN") {
     return { userId: (req as any).authUser.id, actorRole: "ADMIN" };
   }
-  const ctx = await getActiveContext(req as any);
+  const ctx = await resolveTeamAccess(req as any);
   if (!ctx) {
     const err = new Error("Active team context required");
     (err as any).status = 403;
     throw err;
   }
-  return { userId: ctx.userId, actorRole: ctx.role as ActorRole };
+  return { userId: (req as any).authUser.id, actorRole: ctx.role as ActorRole };
 }
 
 async function resolveActorRoleForTeam(access: NotificationsAccess, teamId: string): Promise<ActorRole | null> {
@@ -403,7 +403,7 @@ notificationsRouter.post(
     const access = await resolveNotificationsAccess(req as any);
     assertCanSendDebtReminder(access.actorRole);
 
-    const ctx = await getActiveContext(req as any);
+    const ctx = await resolveTeamAccess(req as any);
     const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
 
@@ -747,7 +747,7 @@ notificationsRouter.post(
     const access = await resolveNotificationsAccess(req as any);
     assertCanSendDebtReminder(access.actorRole);
 
-    const ctx = await getActiveContext(req as any);
+    const ctx = await resolveTeamAccess(req as any);
     const teamId = access.actorRole === "ADMIN" ? ctx?.teamId : ctx?.teamId;
     if (!teamId) return res.status(403).json({ detail: "Active team context required" });
 

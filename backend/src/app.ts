@@ -25,9 +25,15 @@ import { rsvpRouter } from "./modules/rsvp/routes.js";
 import { teamsRouter } from "./modules/teams/routes.js";
 import { adminRouter } from "./modules/admin/routes.js";
 import { vendorRouter } from "./modules/vendor/routes.js";
+import { joinRequestsRouter } from "./modules/join-requests/routes.js";
+import { teamRequestsRouter } from "./modules/team-requests/routes.js";
+import { remindersRouter } from "./modules/reminders/routes.js";
+import { platformRouter } from "./modules/platform/routes.js";
+import { slotsRouter } from "./modules/slots/routes.js";
 import { buildOpenApiSpec } from "./openapi/spec.js";
 import { openApiForRequest } from "./lib/production-guards.js";
 import { checkDatabase } from "./lib/health.js";
+import { auditContextMiddleware, TeamAccessError } from "./lib/team-access.js";
 
 export const app = express();
 app.set("trust proxy", 1);
@@ -51,6 +57,9 @@ app.use(express.urlencoded({ extended: false }));
 app.use(slowRequestLog);
 app.use(attachRequestContext);
 app.use(sessionMiddleware);
+// Контекст запроса для пометки владельца в журнале — после сессии: её
+// загрузка идёт через колбэки хранилища и теряла бы контекст.
+app.use(auditContextMiddleware);
 
 app.use((req, res, next) => {
   const originalJson = res.json.bind(res);
@@ -141,6 +150,12 @@ function mountApiV1(router: express.Router) {
   router.use("/profile", profileRouter);
   router.use("/teams", teamsRouter);
   router.use("/admin", adminRouter);
+  // Модули треков второй волны ревизии — подключены заранее, пока пустые.
+  router.use("/join-requests", writeRateLimiter, joinRequestsRouter);
+  router.use("/team-requests", writeRateLimiter, teamRequestsRouter);
+  router.use("/reminders", writeRateLimiter, remindersRouter);
+  router.use("/platform", platformRouter);
+  router.use("/slots", writeRateLimiter, slotsRouter);
 }
 
 const v1Router = express.Router();
@@ -166,6 +181,9 @@ app.use((req, res) => {
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err && typeof err === "object" && "issues" in err) {
     return sendError(req, res, 400, "VALIDATION_ERROR", "Validation error", { errors: err });
+  }
+  if (err instanceof TeamAccessError) {
+    return sendError(req, res, err.status, err.code, err.message);
   }
   logger.error("http.unhandled_error", {
     correlationId: req.correlationId,

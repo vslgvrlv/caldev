@@ -3,7 +3,7 @@ import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { safeHttpUrl } from "../../lib/http-url.js";
-import { getActiveContext } from "../teams/context.js";
+import { resolveTeamAccess } from "../../lib/team-access.js";
 
 export const placesRouter = Router();
 
@@ -13,7 +13,7 @@ placesRouter.get(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const ctx = await getActiveContext(req as any);
+    const ctx = await resolveTeamAccess(req as any);
     const teamId = ctx?.teamId ?? null;
 
     const rows = await query<{

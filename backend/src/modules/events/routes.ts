@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { writeAudit } from "../../lib/audit.js";
 import { getEffectiveEntryRole } from "../../lib/entry-role.js";
-import { getActiveContext } from "../teams/context.js";
+import { resolveTeamAccess } from "../../lib/team-access.js";
 import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 import { canMarkAttendance } from "../../lib/attendance-permissions.js";
 
@@ -282,7 +282,7 @@ eventsRouter.post(
   asyncHandler(async (req, res) => {
     const payload = createEventSchema.parse(req.body);
     const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    const ctx = await getActiveContext(req);
+    const ctx = await resolveTeamAccess(req);
 
     const parsedPayloadTeamId = parseOptionalUuid(payload.teamId);
     const teamId = effectiveRole === "ADMIN" ? parsedPayloadTeamId : ctx?.teamId;
