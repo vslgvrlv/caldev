@@ -187,56 +187,58 @@ const App: React.FC = () => {
   };
 
   // Финансы и календарь — второй слой: не нужны для входа и без сети не
-  // поднимаются. Игроку финансы закрыты — не спрашиваем, чтобы не получать
-  // два отказа на каждом запуске.
+  // поднимаются. Баланс и история команды — только капитану (решение 9,
+  // caldev#131): остальным их не спрашиваем, чтобы не получать отказ на
+  // каждом запуске. Список должников видят все.
   const loadAncillary = async (team: Team, code: string) => {
-    if (team.role !== Role.PLAYER) {
-      try {
-        const [financeOverview, financeMembers] = await Promise.all([
-          api.getFinanceOverview(team.id),
-          api.getFinanceMembers(team.id),
-        ]);
-        if (loadedCodeRef.current !== code) return;
+    const canReadLedger = team.role === Role.CAPTAIN || team.role === Role.ADMIN;
+    const [overviewResult, membersResult] = await Promise.allSettled([
+      canReadLedger ? api.getFinanceOverview(team.id) : Promise.resolve(null),
+      api.getFinanceMembers(team.id),
+    ]);
+    if (loadedCodeRef.current !== code) return;
 
-        const financeBalance = financeOverview?.summary?.balance;
-        if (financeBalance !== undefined) {
-          setActiveTeam((prev) => (prev && prev.id === team.id ? { ...prev, budget: Number(financeBalance) } : prev));
-        }
-
-        if (Array.isArray(financeMembers?.items)) {
-          const financeByUserId = new Map<string, { outstanding: number; overpaid: number }>();
-          for (const item of financeMembers.items) {
-            financeByUserId.set(String(item.userId), {
-              outstanding: Number(item.outstanding || 0),
-              overpaid: Number(item.overpaid || 0),
-            });
-          }
-          setMembers((prev) =>
-            prev.map((m) => {
-              const s = financeByUserId.get(m.id);
-              if (!s) return m;
-              return { ...m, balance: s.overpaid - s.outstanding };
-            })
-          );
-        }
-
-        if (Array.isArray(financeOverview?.recentTransactions) && financeOverview.recentTransactions.length > 0) {
-          setTransactions(
-            financeOverview.recentTransactions.map((t: any) => ({
-              id: String(t.id),
-              type: t.type as TransactionType,
-              amount: Number(t.amount),
-              title: String(t.title),
-              date: new Date(t.date),
-              userId: t.userId || undefined,
-              userName: t.userName || undefined,
-              status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
-            }))
-          );
-        }
-      } catch (financeErr) {
-        console.warn('Finance bootstrap fallback to init payload', financeErr);
+    if (overviewResult.status === 'fulfilled' && overviewResult.value) {
+      const financeOverview = overviewResult.value;
+      const financeBalance = financeOverview?.summary?.balance;
+      if (financeBalance !== undefined) {
+        setActiveTeam((prev) => (prev && prev.id === team.id ? { ...prev, budget: Number(financeBalance) } : prev));
       }
+      if (Array.isArray(financeOverview?.recentTransactions) && financeOverview.recentTransactions.length > 0) {
+        setTransactions(
+          financeOverview.recentTransactions.map((t: any) => ({
+            id: String(t.id),
+            type: t.type as TransactionType,
+            amount: Number(t.amount),
+            title: String(t.title),
+            date: new Date(t.date),
+            userId: t.userId || undefined,
+            userName: t.userName || undefined,
+            status: (t.status as 'PENDING' | 'COMPLETED') || 'COMPLETED',
+          }))
+        );
+      }
+    } else if (overviewResult.status === 'rejected') {
+      console.warn('Finance overview fallback to init payload', overviewResult.reason);
+    }
+
+    if (membersResult.status === 'fulfilled' && Array.isArray(membersResult.value?.items)) {
+      const financeByUserId = new Map<string, { outstanding: number; overpaid: number }>();
+      for (const item of membersResult.value.items) {
+        financeByUserId.set(String(item.userId), {
+          outstanding: Number(item.outstanding || 0),
+          overpaid: Number(item.overpaid || 0),
+        });
+      }
+      setMembers((prev) =>
+        prev.map((m) => {
+          const s = financeByUserId.get(m.id);
+          if (!s) return m;
+          return { ...m, balance: s.overpaid - s.outstanding };
+        })
+      );
+    } else if (membersResult.status === 'rejected') {
+      console.warn('Finance members fallback to init payload', membersResult.reason);
     }
 
     try {
