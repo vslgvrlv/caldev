@@ -5,6 +5,7 @@
 // на чём держится безопасность флоу, проверялось юнит-тестами без окружения.
 
 import crypto from "node:crypto";
+import { sanitizeRelativeRedirect } from "./safe-redirect.js";
 
 export type PairingScope = "USER" | "ADMIN";
 
@@ -85,11 +86,6 @@ export function buildPairingDeepLink(botUsername: string, code: string): string 
   return `https://t.me/${botUsername}?start=pair_${code}`;
 }
 
-function sanitizeRelativeRedirect(input: unknown): string | null {
-  if (typeof input !== "string" || input.length === 0) return null;
-  if (!input.startsWith("/") || input.startsWith("//")) return null;
-  return input;
-}
 
 export function resolvePairingRedirect(params: {
   scope: PairingScope;

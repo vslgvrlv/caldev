@@ -35,6 +35,7 @@ import {
   type PairingAttemptStatus,
 } from "../../lib/auth-pairing.js";
 import { completeOAuthLogin } from "../../lib/oauth-login.js";
+import { sanitizeRedirectTo } from "../../lib/safe-redirect.js";
 
 const contextSchema = z.object({
   membershipId: z.string().uuid(),
@@ -163,12 +164,6 @@ function hashRequestSide(value: string | undefined): string | null {
   return sha256Hex(value).slice(0, 32);
 }
 
-function sanitizeRedirectTo(input: unknown, fallback = "/app"): string {
-  if (typeof input !== "string" || input.length === 0) return fallback;
-  // Only allow same-origin absolute paths.
-  if (!input.startsWith("/") || input.startsWith("//")) return fallback;
-  return input;
-}
 
 function getAuthPublicUrls(req: any) {
   const origin = getRequestPublicOrigin({
@@ -1555,7 +1550,7 @@ authRouter.get(
       });
     });
 
-    return res.redirect(parsed.redirectTo || "/app");
+    return res.redirect(sanitizeRedirectTo(parsed.redirectTo, "/app"));
   })
 );
 
