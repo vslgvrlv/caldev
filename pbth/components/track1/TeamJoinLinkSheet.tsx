@@ -4,9 +4,10 @@ import { joinUrl, track1Api, type TeamJoinLink } from '../../api/track1';
 import { confirmAction, errorText, notify } from '../../lib/notify';
 import { QrCode } from './QrCode';
 
-// Ссылка команды для капитана (трек 1): ссылка, код, QR, «Поделиться»,
-// «Отозвать и выпустить новую». Ссылка постоянная: по ней не вступают сразу,
-// а подают заявку — её принимает капитан или тренер.
+// Ссылка команды для капитана и тренера (трек 1): ссылка, код, QR,
+// «Поделиться»; капитану ещё «Отозвать и выпустить новую» (`canRotate`).
+// Ссылка постоянная: по ней не вступают сразу, а подают заявку — её
+// принимает капитан или тренер.
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -33,11 +34,13 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export const TeamJoinLinkSheet: React.FC<{ teamId: string; teamName: string; onClose: () => void }> = ({
-  teamId,
-  teamName,
-  onClose,
-}) => {
+export const TeamJoinLinkSheet: React.FC<{
+  teamId: string;
+  teamName: string;
+  /** Отозвать и выпустить новую может только капитан. */
+  canRotate: boolean;
+  onClose: () => void;
+}> = ({ teamId, teamName, canRotate, onClose }) => {
   const [link, setLink] = React.useState<TeamJoinLink | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [rotating, setRotating] = React.useState(false);
@@ -116,7 +119,9 @@ export const TeamJoinLinkSheet: React.FC<{ teamId: string; teamName: string; onC
         <div className="flex items-start justify-between mb-1">
           <div>
             <div className="font-bold text-lg">Ссылка команды</div>
-            <div className="text-xs text-pb-subtext">По ней подают заявку, принимаешь ты или тренер.</div>
+            <div className="text-xs text-pb-subtext">
+              По ней подают заявку, принимаешь ты или {canRotate ? 'тренер' : 'капитан'}.
+            </div>
           </div>
           <button onClick={onClose} className="p-2 -mr-2 -mt-1 text-pb-subtext" aria-label="Закрыть">
             <X size={20} />
@@ -161,14 +166,16 @@ export const TeamJoinLinkSheet: React.FC<{ teamId: string; teamName: string; onC
               <Share2 size={18} />
               Поделиться
             </button>
-            <button
-              onClick={() => void rotate()}
-              disabled={rotating}
-              className="w-full bg-white/5 text-red-300 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {rotating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-              Отозвать и выпустить новую
-            </button>
+            {canRotate && (
+              <button
+                onClick={() => void rotate()}
+                disabled={rotating}
+                className="w-full bg-white/5 text-red-300 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {rotating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                Отозвать и выпустить новую
+              </button>
+            )}
           </div>
         )}
       </div>

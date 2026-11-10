@@ -328,6 +328,20 @@ describe("запись — кто первый", () => {
     await flush();
   });
 
+  it("гость снялся сам — сообщения «тебя сняли» ему нет", async () => {
+    const winner = await pool.query<{ user_id: string }>(
+      `SELECT user_id FROM event_slot_guests WHERE event_id = $1 AND status = 'BOOKED'`,
+      [f.raceEvent]
+    );
+    const who = (Object.keys(f.users) as Who[]).find((key) => f.users[key] === winner.rows[0].user_id)!;
+    const pushedBefore = pushed.length;
+    const left = await (await login(who)).delete(`/api/v1/slots/events/${f.raceEvent}/book`);
+    expect(left.body).toEqual({ cancelled: true });
+    await flush();
+    expect(botMessagesTo(who).filter((m) => String(m.body.text).includes("тебя сняли со слота"))).toHaveLength(0);
+    expect(pushed.slice(pushedBefore).filter((p) => String(p.payload.body).includes("тебя сняли"))).toHaveLength(0);
+  });
+
   it("участник команды записаться не может", async () => {
     const player = await login("player");
     const res = await player.post(`/api/v1/slots/events/${f.event}/book`);
@@ -401,10 +415,22 @@ describe("гость события", () => {
     );
     expect(guestOffers).toHaveLength(1);
 
+    // Снятому гостю — сообщение в бот и пуш с переходом к свободным слотам.
+    const removedNotes = () => botMessagesTo("guest").filter((m) => String(m.body.text).includes("тебя сняли со слота"));
+    expect(removedNotes()).toHaveLength(1);
+    expect(removedNotes()[0].body.text).toMatch(new RegExp(`^Holy Guns ${stamp}: тебя сняли со слота — Тренировка, .+ в \\d\\d:\\d\\d$`));
+    const button = removedNotes()[0].body.reply_markup.inline_keyboard[0][0];
+    expect(button.text).toBe("Свободные слоты");
+    expect(button.url).toMatch(/^https?:\/\/[^/]+\/teams$/);
+    const removedPush = pushed.filter((p) => String(p.payload.body).includes("тебя сняли со слота"));
+    expect(removedPush).toHaveLength(1);
+    expect(removedPush[0]).toMatchObject({ endpoint: `https://push.example/${stamp}`, payload: { url: "/teams" } });
+
     // Повторное нажатие той же кнопки ничего не ломает и ничего не шлёт.
     await webhookPress("captain", rm, message.body.text);
     await flush();
     expect(botMessagesTo("third").length).toBe(before + 1);
+    expect(removedNotes()).toHaveLength(1);
   });
 
   it("после события доступ заканчивается, подписка остаётся", async () => {

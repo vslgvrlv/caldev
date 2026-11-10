@@ -4,6 +4,11 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
 import { registerServiceWorker } from './lib/register-sw';
+import { browserChunkReloadDeps, installChunkReloadHandler } from './lib/chunk-reload';
+
+// После выката часть экрана могла уже уйти с сервера — одна перезагрузка
+// подтянет новую сборку (защита от цикла — в lib/chunk-reload.ts).
+installChunkReloadHandler(window, browserChunkReloadDeps());
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

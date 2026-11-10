@@ -12,7 +12,7 @@
 
 import type { PoolClient } from "pg";
 import { pool, query } from "../../db/pool.js";
-import { runInBackground, notifySlotBooked, notifySlotOffer } from "./notify.js";
+import { runInBackground, notifySlotBooked, notifySlotOffer, notifySlotRemoved } from "./notify.js";
 
 export type SlotStatus = "OPEN" | "CLOSED";
 export type GuestStatus = "BOOKED" | "LEFT" | "REMOVED";
@@ -662,6 +662,11 @@ export async function cancelBooking(params: {
     return { outcome: "CANCELLED" as const, freed };
   });
 
+  if (result.outcome === "CANCELLED" && params.status === "REMOVED") {
+    runInBackground("slots.removed", () =>
+      notifySlotRemoved({ eventId: params.eventId, guestUserId: params.guestUserId })
+    );
+  }
   if (result.freed) {
     const exclude = [params.guestUserId];
     runInBackground("slots.freed", () => notifySlotOffer({ eventId: params.eventId, kind: "FREED", exclude }));

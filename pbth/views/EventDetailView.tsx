@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Event, RSVPStatus, EventType, Role, Game, PlayerStatus, Transaction, TransactionType } from '../types';
 import { EVENT_COLORS, EVENT_LABELS, getEventIcon } from '../constants';
 import { ChevronLeft, MapPin, Clock, Users, Check, X, HelpCircle, Swords, Plus, Repeat, Trash2, Pencil, ClipboardList } from 'lucide-react';
@@ -19,6 +19,8 @@ import { announceRemindersSent, sendEventReminder as sendTrack2Reminder, type Re
 import { summarizeReminderResult } from '../components/track2/reminder-result';
 import { groupAttendance } from '../lib/attendance';
 import { notify } from '../lib/notify';
+import { pluralRu } from '../lib/plural';
+import { answerAndRefresh, applyRsvpToAttendees, canAnswerRsvp, createLatestOnly } from '../lib/rsvp';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 import { GamePointsModal } from '../components/GamePointsModal';
 import { GameScoreLine } from '../components/GameScoreLine';
@@ -40,7 +42,10 @@ interface EventDetailViewProps {
   /** Имя своей команды — в расписании счёт показывается как «мы N:N соперник». */
   teamName: string;
   onBack: () => void;
-  onRsvp: (id: string, status: RSVPStatus) => void;
+  /** Свой ответ на явку. Промис завершается, когда запрос завершился (ошибку показывает оболочка). */
+  onRsvp: (id: string, status: RSVPStatus) => Promise<unknown> | void;
+  /** Кто смотрит: его строка в списке явки меняется сразу после ответа. */
+  currentUserId?: string;
   onAddGame: (eventId: string, game: Omit<Game, 'id'>) => void;
   onUpdateGame: (eventId: string, gameId: string, game: Omit<Game, 'id'>) => Promise<void> | void;
   onSendEventReminder: (payload: {
@@ -89,14 +94,7 @@ const GAME_PAIR_LABELS: Record<'FIRST' | 'SECOND', string> = {
 };
 
 // Русская плюрализация «занятие» для баннера серии (#60): 1 занятие, 2 занятия, 5 занятий.
-const pluralizeOccurrence = (count: number): string => {
-  const mod100 = Math.abs(count) % 100;
-  const mod10 = mod100 % 10;
-  if (mod100 >= 11 && mod100 <= 14) return 'занятий';
-  if (mod10 === 1) return 'занятие';
-  if (mod10 >= 2 && mod10 <= 4) return 'занятия';
-  return 'занятий';
-};
+const pluralizeOccurrence = (count: number): string => pluralRu(count, 'занятие', 'занятия', 'занятий');
 
 export const EventDetailView: React.FC<EventDetailViewProps> = ({
   event,
@@ -104,6 +102,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   teamName,
   onBack,
   onRsvp,
+  currentUserId,
   onAddGame,
   onUpdateGame,
   onAttendeeClick,
@@ -210,11 +209,18 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   // CONFIRMED — иначе капитан не видит молчунов. Confirmed-списки ниже
   // фильтруются отдельно из этого же массива. Вынесено в callback, чтобы
   // перезагружать карту после согласия на серию (#60).
+  //
+  // Своё «Иду / Не иду / Думаю» меняет список сразу, а после запроса список
+  // перечитывается (`answerAndRefresh`). Чтения нумеруются: ответ более
+  // раннего чтения, пришедший позже, не затирает новый ответ.
+  const attendeesGate = useRef(createLatestOnly()).current;
   const refreshAttendees = useCallback(async () => {
+    const token = attendeesGate.next();
     try {
       const response = await api.getEventAttendees(event.id);
-      setAttendees(response.attendees);
+      if (attendeesGate.isLatest(token)) setAttendees(response.attendees);
     } catch (error) {
+      if (!attendeesGate.isLatest(token)) return;
       const fallback = (event.attendeePreview || []).map((item) => ({
         userId: item.userId,
         name: item.name,
@@ -226,7 +232,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       }));
       setAttendees(fallback);
     }
-  }, [event.id, event.attendeePreview]);
+  }, [attendeesGate, event.id, event.attendeePreview]);
 
   useEffect(() => {
     let cancelled = false;
@@ -298,8 +304,18 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const playerAttendees = confirmedAttendees.filter((item) => item.role !== 'TRAINER');
   const attendeesCount = confirmedAttendees.length || event.attendeesCount;
 
+  // Свой ответ на явку есть только у того, кто в составе команды события.
+  const canAnswer = canAnswerRsvp(event);
+
   const handleStatusChange = (status: RSVPStatus) => {
-    onRsvp(event.id, status);
+    if (!canAnswer) return;
+    void answerAndRefresh({
+      latest: attendeesGate,
+      applyLocal: () => setAttendees((prev) => applyRsvpToAttendees(prev, currentUserId, status)),
+      send: () => onRsvp(event.id, status),
+      load: () => api.getEventAttendees(event.id),
+      commit: (response) => setAttendees(response.attendees),
+    });
   };
 
   // #60: «Иду на все» — согласие на серию. После — перезагружаем карту явки,
@@ -899,7 +915,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             )}
           </div>
 
-          {/* RSVP-решение — главное на экране, поэтому сверху и компактно (#UI-иерархия). */}
+          {/* RSVP-решение — главное на экране, поэтому сверху и компактно (#UI-иерархия).
+              Не в составе (владелец в чужой команде) — своего ответа нет. */}
+          {canAnswer && (
           <div className="rounded-2xl border border-white/5 bg-pb-surface p-3">
             <div className="mb-2 text-xs font-bold uppercase tracking-widest text-pb-subtext">
               {isSeriesOccurrence ? 'Только это занятие' : 'Ваше решение'}
@@ -947,8 +965,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
               </div>
             )}
           </div>
+          )}
 
-          {event.seriesId && seriesContext && (
+          {canAnswer && event.seriesId && seriesContext && (
             <div className="rounded-2xl border border-pb-primary/30 bg-pb-primary/5 p-4">
               {seriesContext.committed ? (
                 <div className="flex items-center justify-between gap-3">

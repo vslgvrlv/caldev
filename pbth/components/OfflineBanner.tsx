@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CloudOff, AlertTriangle, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../api';
 import { formatSnapshotAge } from '../lib/offline';
+import { pluralRu } from '../lib/plural';
 import {
   describeOutboxProblem,
   discardOutboxEntry,
@@ -158,7 +159,7 @@ export function OfflineBannerView({
         <div className="flex items-center gap-2">
           <UploadCloud size={14} className="text-amber-400 shrink-0" />
           <span className="text-amber-200 text-xs">
-            {`${pending} ${recordNoun(pending)} ${pending % 10 === 1 && pending % 100 !== 11 ? 'ждёт' : 'ждут'} отправки — уйдут сами при интернете`}
+            {`${pending} ${recordNoun(pending)} ${pluralRu(pending, 'ждёт', 'ждут', 'ждут')} отправки — уйдут сами при интернете`}
           </span>
         </div>
       )}
@@ -167,7 +168,7 @@ export function OfflineBannerView({
           <div className="flex items-center gap-2">
             <AlertTriangle size={14} className="text-red-400 shrink-0" />
             <span className="text-red-200 text-xs flex-1">
-              {`${blocked} ${recordNoun(blocked)} ${isSingular(blocked) ? 'не отправилась' : 'не отправились'}`}
+              {`${blocked} ${recordNoun(blocked)} ${pluralRu(blocked, 'не отправилась', 'не отправились', 'не отправились')}`}
             </span>
             <button
               type="button"
@@ -273,21 +274,6 @@ function StuckEntry({
   );
 }
 
-function isSingular(count: number): boolean {
-  return count % 10 === 1 && count % 100 !== 11;
-}
-
 function recordNoun(count: number): string {
-  const mod100 = count % 100;
-  if (mod100 >= 11 && mod100 <= 14) return 'записей';
-  switch (count % 10) {
-    case 1:
-      return 'запись';
-    case 2:
-    case 3:
-    case 4:
-      return 'записи';
-    default:
-      return 'записей';
-  }
+  return pluralRu(count, 'запись', 'записи', 'записей');
 }

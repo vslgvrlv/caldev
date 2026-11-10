@@ -70,6 +70,11 @@ async function installApiMocks(page: Page, auth: "local" | "anonymous" = "local"
       await route.fulfill({ status: 200, json: { autoEventReminders: true } });
       return;
     }
+    // Профиль и главная: карточки «Ты записан гостем» (трек 4, лента слотов).
+    if (auth === "local" && request.method() === "GET" && url.pathname === "/api/v1/slots/feed") {
+      await route.fulfill({ status: 200, json: { following: [], slots: [], bookings: [] } });
+      return;
+    }
 
     unexpectedRequests.push(`${request.method()} ${url.pathname}${url.search}`);
     await route.abort("failed");
