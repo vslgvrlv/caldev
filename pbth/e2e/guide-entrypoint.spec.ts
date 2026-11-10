@@ -148,7 +148,8 @@ for (const [viewportName, viewport] of viewports) {
       expect(new URL(guide.url()).pathname).toBe(path);
       await expect(guide.locator(".badge")).toHaveText(guideBadge);
       expect(await guide.evaluate(() => window.opener)).toBeNull();
-      await expect(page).toHaveURL(/\/app$/);
+      // Профиль живёт по адресу /me (адреса экранов, caldev#134).
+      await expect(page).toHaveURL(/\/me$/);
       expect(unexpectedRequests).toEqual([]);
       await guide.close();
     });
@@ -171,7 +172,8 @@ for (const missingRole of [null, undefined] as const) {
 
     await expect(page.getByRole("link", { name: GUIDE_ARIA_LABEL, exact: true })).toHaveCount(0);
     await expect(page.getByText("Интеграция календаря", { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/\/app$/);
+    // Профиль живёт по адресу /me (адреса экранов, caldev#134).
+      await expect(page).toHaveURL(/\/me$/);
     expect(unexpectedRequests).toEqual([]);
   });
 }
@@ -211,7 +213,8 @@ test("profile guide card fits 320 px and opens from a visible keyboard focus", a
   await guide.waitForLoadState("domcontentloaded");
   expect(new URL(guide.url()).pathname).toBe("/guide/trainer.html");
   await expect(guide.locator(".badge")).toHaveText("Инструкция · Тренер");
-  await expect(page).toHaveURL(/\/app$/);
+  // Профиль живёт по адресу /me (адреса экранов, caldev#134).
+      await expect(page).toHaveURL(/\/me$/);
   expect(unexpectedRequests).toEqual([]);
   await guide.close();
 });

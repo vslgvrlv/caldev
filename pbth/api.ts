@@ -548,6 +548,32 @@ export function getRequestTeam(): string | null {
   return requestTeamId;
 }
 
+// Запись очереди без сети помнит команду, в которой её создали: отправка может
+// случиться позже, уже с экрана другой команды, и уйти должна под своей.
+// `enqueue` сохраняет запись целиком (`...entry`), поэтому поле переживает
+// IndexedDB без правки lib/outbox.ts.
+export type QueuedRequest = Omit<OutboxEntry, 'id' | 'createdAt' | 'attempts'> & { teamId?: string | null };
+
+export function buildQueuedRequest(
+  path: string,
+  options: RequestOptions & { offlineQueue: { dedupeKey: string; label: string } },
+  teamId: string | null = requestTeamId,
+): QueuedRequest {
+  return {
+    method: options.method || 'GET',
+    path,
+    body: options.body,
+    dedupeKey: options.offlineQueue.dedupeKey,
+    label: options.offlineQueue.label,
+    teamId,
+  };
+}
+
+/** Заголовки отправки записи из очереди: команда записи, а не текущая. */
+export function queuedRequestHeaders(entry: OutboxEntry & { teamId?: string | null }): Record<string, string> | undefined {
+  return entry.teamId ? { [TEAM_HEADER]: String(entry.teamId) } : undefined;
+}
+
 // Общий запрос к API. Треки пишут свои функции в `pbth/api/<трек>.ts` поверх него.
 export async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   let res: Response;
@@ -567,13 +593,8 @@ export async function request<T>(path: string, options?: RequestOptions): Promis
     // отправлять на логин, на отсутствие сети — поднимать приложение из
     // снимка. Раньше оба случая приходили одним TypeError и лечились одинаково.
     if (options?.offlineQueue) {
-      await enqueue({
-        method: options.method || 'GET',
-        path,
-        body: options.body,
-        dedupeKey: options.offlineQueue.dedupeKey,
-        label: options.offlineQueue.label,
-      });
+      const queued: QueuedRequest = buildQueuedRequest(path, { ...options, offlineQueue: options.offlineQueue });
+      await enqueue(queued);
       // Для человека сохранение состоялось: он нажал кнопку, форма закрылась,
       // доставка дальше — наша забота. Вернуть ошибку значило бы заставить его
       // жать «Сохранить» в поле, где сети не будет ещё несколько часов.
@@ -644,7 +665,7 @@ export const api = {
   // дубль в базе.
   async flushOfflineQueue(): Promise<void> {
     await flushOutbox(async (entry: OutboxEntry) => {
-      await request(entry.path, { method: entry.method, body: entry.body });
+      await request(entry.path, { method: entry.method, body: entry.body, headers: queuedRequestHeaders(entry) });
     });
   },
 
