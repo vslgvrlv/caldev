@@ -72,7 +72,9 @@ jobs:
 
   frontend-e2e:
     name: Frontend e2e (Playwright)
-    runs-on: ubuntu-latest
+    # Playwright 1.58 не ставит Chromium на ubuntu-latest (26.04) — закреплено
+    # 24.04, пока Playwright в pbth не обновлён до версии с поддержкой 26.04.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: pbth
