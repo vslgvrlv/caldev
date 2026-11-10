@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { UserRoleOption, Role } from '../types';
-import { Shield, User as UserIcon, LogOut, Loader2 } from 'lucide-react';
+import { Shield, User as UserIcon, LogOut, Loader2, Send } from 'lucide-react';
+import { roleLabel } from '../lib/labels';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isTelegramMiniApp, readMiniAppInitData } from '../shell/telegram';
 import { api, type AuthMeResponse } from '../api';
@@ -35,7 +36,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   const nextParam = useMemo(() => sanitizeNext(searchParams.get('next')), [searchParams]);
   const targetRedirect = nextParam ?? '/app';
   const wantsAdmin = (nextParam ?? '').startsWith('/admin');
-  const wantsInvite = isInvitePath(nextParam);
+  // Пришёл по ссылке-приглашению или по ссылке команды.
+  const wantsTeam = isInvitePath(nextParam) || /^\/join\/[^/?#]+/.test(nextParam ?? '');
 
   const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
@@ -288,7 +290,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
                 </div>
                 <div className="text-left">
                   <div className="font-bold text-white">{option.teamName}</div>
-                  <div className="text-xs text-pb-subtext uppercase tracking-wider font-bold">{option.role}</div>
+                  <div className="text-xs text-pb-subtext uppercase tracking-wider font-bold">{roleLabel(option.role)}</div>
                 </div>
               </div>
               <div className="w-2 h-2 rounded-full bg-pb-primary"></div>
@@ -300,30 +302,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   }
 
   const yandexEnabled = (import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1';
-  const yandexButton = (
-    <button
-      onClick={handleYandexLogin}
-      disabled={isLoading}
-      className="w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
-    >
-      <span className="w-6 h-6 rounded bg-[#FFCC00] text-black font-black flex items-center justify-center flex-shrink-0">Я</span>
-      <span>Продолжить с Яндексом</span>
-    </button>
+  // Вход (решение Василия 10.11.2026, п. 6): у нового человека путь один —
+  // Telegram. Яндекс остаётся тихой ссылкой для тех, кто уже привязал его в
+  // профиле: войти им впервые нельзя. Адрес возврата (`?next=`) едет в
+  // `redirectTo` и при отказе Яндекса не теряется (caldev#128).
+  const yandexLink = (
+    <div className="pt-3 text-center">
+      <button
+        onClick={handleYandexLogin}
+        disabled={isLoading}
+        className="text-sm text-pb-subtext underline underline-offset-4 hover:text-white disabled:opacity-60"
+      >
+        Войти через Яндекс
+      </button>
+      <p className="mt-1 text-xs text-pb-subtext/70 leading-relaxed">
+        Работает у тех, кто привязал Яндекс в профиле. Первый вход — через Telegram.
+      </p>
+    </div>
   );
   const telegramButton = (
     <button
       onClick={handleTelegramLogin}
       disabled={isLoading}
-      className={`w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60 ${
-        wantsInvite ? 'py-3.5' : 'py-3'
-      }`}
+      className="w-full bg-pb-primary hover:bg-pb-primary/90 text-pb-background font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
     >
       {isLoading ? (
-        <Loader2 size={18} className="animate-spin text-pb-subtext" />
+        <Loader2 size={18} className="animate-spin" />
       ) : (
         <>
-          <span className="w-6 h-6 rounded bg-[#24A1DE] text-white font-black flex items-center justify-center flex-shrink-0 text-[10px] tracking-tight">tg</span>
-          <span className={wantsInvite ? 'text-white' : 'text-pb-subtext'}>Продолжить с Telegram</span>
+          <Send size={18} />
+          <span>Войти через Telegram</span>
         </>
       )}
     </button>
@@ -348,7 +356,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
         </div>
         <h1 className="text-3xl font-bold text-white tracking-tight">PaintBall Team Hub</h1>
         <p className="text-pb-subtext mt-2 text-sm">
-          {wantsAdmin ? 'Вход в админ-режим' : 'Управляй командой, тренировками и победами.'}
+          {wantsAdmin ? 'Вход владельца платформы' : 'Управляй командой, тренировками и победами.'}
         </p>
       </div>
 
@@ -405,32 +413,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
           />
         )}
 
-        {/* Provider buttons. Neutral surface, brand-coloured logo only.
-            Hierarchy = size + order, not colour. Yandex primary (RU market),
-            Telegram secondary. Hidden when there is a known session.
-            По ссылке-приглашению приходят новички: войти Яндексом они не
-            могут (Яндекс привязывается в профиле уже после первого входа),
-            поэтому Telegram встаёт первым, а у Яндекса — пояснение. */}
         {continuityChecked && !continuity && !pairing && (
-          <div className="space-y-2">
-            {wantsInvite ? (
-              <>
-                {telegramButton}
-                {yandexEnabled && (
-                  <div className="pt-2">
-                    {yandexButton}
-                    <p className="mt-1.5 text-xs text-center text-pb-subtext/80 leading-relaxed">
-                      Яндекс — для тех, кто уже привязал его в профиле PBTH. Первый вход — через Telegram.
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {yandexEnabled && yandexButton}
-                {telegramButton}
-              </>
+          <div>
+            {wantsTeam && (
+              <p className="mb-3 text-sm text-center text-pb-subtext">
+                Войди через Telegram — после входа заявка уйдёт капитану.
+              </p>
             )}
+            {telegramButton}
+            {yandexEnabled && yandexLink}
           </div>
         )}
 
