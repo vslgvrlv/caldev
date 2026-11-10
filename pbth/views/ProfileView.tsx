@@ -43,7 +43,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           Имя и ник приходят из Telegram при входе. */}
       <div className="text-center">
         <div className="w-28 h-28 mx-auto rounded-full bg-pb-surface p-1 border-2 border-pb-primary mb-3">
-            <img src={user.avatar} className="w-full h-full rounded-full object-cover" alt="profile" />
+            <img
+              src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=1E1E2E&color=fff`}
+              className="w-full h-full rounded-full object-cover"
+              alt={user.name}
+            />
         </div>
         <h2 className="text-2xl font-bold text-white">{user.name}</h2>
         <p className="text-pb-primary font-mono text-lg">@{user.nickname}</p>
