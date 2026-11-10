@@ -117,39 +117,22 @@ teamsRouter.post(
   })
 );
 
+// Вступление по одному ID команды закрыто: раньше любой вошедший мог стать
+// игроком любой команды, зная её ID (а ID виден в старых ссылках
+// /invite/<ID команды>). В команду попадают только по действующему
+// приглашению — POST /teams/invites/:token/accept. Маршрут оставлен, чтобы
+// старые клиенты получали понятный отказ, а не 404.
 teamsRouter.post(
   "/:teamId/join",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const teamId = z.string().uuid().parse(req.params.teamId);
-    const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
-    if (effectiveRole !== "USER") {
-      return sendError(req, res, 403, "ROLE_REQUIRED", "Only user entry-role can join team by invite");
-    }
-
-    const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
-    if (!teamExists.rowCount) {
-      return sendError(req, res, 404, "NOT_FOUND", "Team not found");
-    }
-
-    const upsert = await query<{ id: string }>(
-      `INSERT INTO team_memberships (user_id, team_id, role, status, balance)
-       VALUES ($1, $2, 'PLAYER', 'ACTIVE', 0)
-       ON CONFLICT (user_id, team_id)
-       DO UPDATE SET updated_at = NOW()
-       RETURNING id`,
-      [req.authUser!.id, teamId]
+    return sendError(
+      req,
+      res,
+      410,
+      "INVITE_REQUIRED",
+      "Joining a team requires a valid invite from the captain"
     );
-
-    req.session.activeMembershipId = upsert.rows[0].id;
-    req.session.activeTeamId = teamId;
-
-    await writeAudit(req.authUser!.id, "teams.join_by_invite", {
-      membershipId: upsert.rows[0].id,
-      teamId,
-    });
-
-    return res.json({ ok: true, membershipId: upsert.rows[0].id });
   })
 );
 
