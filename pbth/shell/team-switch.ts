@@ -25,3 +25,13 @@ export function decideInitTeam(
   if (target?.membershipId) return { kind: 'switch', membershipId: String(target.membershipId) };
   return { kind: 'forbidden' };
 }
+
+/**
+ * Новый сервер на `/init?team=<код>` чужой или несуществующей команды отвечает
+ * 403 (TEAM_ACCESS_DENIED) или 404 (TEAM_NOT_FOUND). Это не сбой входа: человек
+ * вошёл, просто команда в адресе не его.
+ */
+export function isTeamDeniedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /^INIT_FAILED:(403|404):/.test(message);
+}

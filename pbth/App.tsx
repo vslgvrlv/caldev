@@ -13,7 +13,7 @@ import { resolvePostLoginAction } from './lib/post-login';
 import { parseTeamPath, readLastTeam, rememberLastTeam, switchTeamPath, teamCodeOf, teamPath } from './lib/team-url';
 import { ShellContext, type ShellState, type TeamLoadState, type EventReminderPayload, type EventEditPatch, type GamePatch } from './shell/context';
 import { ErrorBoundary } from './shell/ErrorBoundary';
-import { decideInitTeam } from './shell/team-switch';
+import { decideInitTeam, isTeamDeniedError } from './shell/team-switch';
 import { readMiniAppInitData } from './shell/telegram';
 import { AppRoutes } from './routes';
 
@@ -259,15 +259,31 @@ const App: React.FC = () => {
     const requested = (options.team === undefined ? desiredTeamRef.current : options.team) || '';
     if (!options.background) setIsLoading(true);
     try {
-      let data = await api.getInitData(requested || null);
+      let data: Awaited<ReturnType<typeof api.getInitData>>;
+      let denied = false;
+      try {
+        data = await api.getInitData(requested || null);
+      } catch (error) {
+        if (!requested || !isTeamDeniedError(error)) throw error;
+        // Новый сервер: команда в адресе чужая или её нет. Уже что-то
+        // загружено — просто отказ; иначе грузим свою команду для кнопки
+        // «Открыть мою команду».
+        if (seq !== loadSeqRef.current) return 'stale';
+        if (loadedCodeRef.current) {
+          setTeamLoad('forbidden');
+          return 'forbidden';
+        }
+        data = await api.getInitData(null);
+        denied = true;
+      }
 
       if (data?.noTeamYet) throw new Error('INIT_NO_TEAM');
       if (data?.admin) throw new Error('INIT_ADMIN_MODE');
       if (!data?.user || !data?.team) throw new Error('INIT_INVALID_SHAPE');
 
       const isSnapshot = typeof data.offlineSnapshotAt === 'number';
-      let result: InitLoadResult = 'ok';
-      if (requested) {
+      let result: InitLoadResult = denied ? 'forbidden' : 'ok';
+      if (requested && !denied) {
         const decision = decideInitTeam(requested, data as any);
         if (decision.kind === 'switch' && !isSnapshot) {
           // Старый сервер не знает `?team=`: переключаем сессию и читаем заново.

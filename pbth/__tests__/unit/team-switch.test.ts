@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideInitTeam } from '../../shell/team-switch';
+import { decideInitTeam, isTeamDeniedError } from '../../shell/team-switch';
 import { Role, type TeamContext } from '../../types';
 
 // Совместимость со старым сервером: он не знает `/init?team=` и отдаёт
@@ -39,5 +39,18 @@ describe('decideInitTeam', () => {
   it('команда владельца без членства (новый сервер) — переключать нечем', () => {
     const ownerTeams = [...teams, { membershipId: null as unknown as string, teamId: 't-c', teamName: 'C', shortCode: 'C', role: Role.CAPTAIN }];
     expect(decideInitTeam('c', { team: { id: 't-a', shortCode: 'DTA' }, teams: ownerTeams })).toEqual({ kind: 'forbidden' });
+  });
+});
+
+describe('isTeamDeniedError', () => {
+  it('новый сервер: чужая или несуществующая команда — отказ, а не сбой входа', () => {
+    expect(isTeamDeniedError(new Error('INIT_FAILED:403:No access to this team'))).toBe(true);
+    expect(isTeamDeniedError(new Error('INIT_FAILED:404:Team not found'))).toBe(true);
+  });
+
+  it('прочие ошибки — не отказ по команде', () => {
+    expect(isTeamDeniedError(new Error('INIT_FAILED:401:Unauthorized'))).toBe(false);
+    expect(isTeamDeniedError(new Error('INIT_FAILED:500:boom'))).toBe(false);
+    expect(isTeamDeniedError(new Error('Нет сети'))).toBe(false);
   });
 });
