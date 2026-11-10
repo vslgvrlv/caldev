@@ -232,9 +232,13 @@ export const PairingPanel: React.FC<PairingPanelProps> = ({ scope, redirectTo, o
             <div className="text-xs uppercase tracking-wider text-pb-subtext">Код для входа</div>
             <button
               onClick={handleCopy}
-              className="mt-2 flex w-full items-center justify-center gap-3 text-4xl font-black tracking-[0.2em] text-white transition-colors active:scale-[0.99]"
+              className="mt-2 flex w-full items-center justify-center gap-3 text-white transition-colors active:scale-[0.99]"
             >
-              {code}
+              {/* Код целиком в одну строку: на телефоне шириной 390 при
+                  text-4xl с разрядкой он рвался по дефису на две строки. */}
+              <span className="whitespace-nowrap text-3xl font-black tracking-[0.12em] tabular-nums sm:text-4xl sm:tracking-[0.2em]">
+                {code}
+              </span>
               {copied ? (
                 <Check size={18} className="text-pb-primary" />
               ) : (

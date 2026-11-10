@@ -18,6 +18,7 @@ import {
 } from "../../lib/identity-repo.js";
 import { writeAudit } from "../../lib/audit.js";
 import { query } from "../../db/pool.js";
+import { sanitizeRedirectTo, sanitizeRelativeRedirect } from "../../lib/safe-redirect.js";
 
 const yandexRouter = Router();
 
@@ -29,6 +30,16 @@ const unlinkSchema = z.object({ provider: z.enum(["telegram", "yandex"]) });
 function hashRequestPart(value: string | undefined): string | null {
   if (!value) return null;
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 32);
+}
+
+// Ошибка входа ведёт обратно на экран входа, но не должна терять, куда человек
+// шёл: новичок по ссылке-приглашению, нажавший Яндекс, иначе оказывался на
+// голом /login и приглашение пропадало.
+function loginErrorPath(code: string, redirectTo: unknown): string {
+  const next = sanitizeRelativeRedirect(redirectTo);
+  const params = new URLSearchParams({ auth_error: code });
+  if (next && next !== "/app") params.set("next", next);
+  return `/login?${params.toString()}`;
 }
 
 function requireEnabled(req: Request, res: Response): boolean {
@@ -44,7 +55,7 @@ yandexRouter.get(
   asyncHandler(async (req, res) => {
     if (!requireEnabled(req, res)) return;
     const parsed = startQuerySchema.safeParse(req.query);
-    const redirectTo = parsed.success && parsed.data.redirectTo ? parsed.data.redirectTo : "/app";
+    const redirectTo = sanitizeRedirectTo(parsed.success ? parsed.data.redirectTo : undefined, "/app");
     const { state } = await createState({
       provider: "yandex",
       intent: "login",
@@ -98,10 +109,10 @@ yandexRouter.get(
       });
       if (!result) {
         recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "NO_ACCOUNT" });
-        return res.redirect(302, `/login?auth_error=OAUTH_NO_ACCOUNT`);
+        return res.redirect(302, loginErrorPath("OAUTH_NO_ACCOUNT", stateRow.redirectTo));
       }
       recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "SUCCESS" });
-      return res.redirect(302, stateRow.redirectTo);
+      return res.redirect(302, sanitizeRedirectTo(stateRow.redirectTo, "/app"));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === "ADMIN_SCOPE_NONE") {
@@ -113,7 +124,7 @@ yandexRouter.get(
       }
       logger.warn("[yandex] callback failed", { err: message });
       recordAuthMetric({ method: "YANDEX_OAUTH", platform: "unknown", outcome: "ERROR", code: "CALLBACK_EXCEPTION" });
-      return res.redirect(302, `/login?auth_error=OAUTH_STATE_INVALID`);
+      return res.redirect(302, loginErrorPath("OAUTH_STATE_INVALID", stateRow.redirectTo));
     }
   })
 );
@@ -130,7 +141,7 @@ yandexRouter.get(
     if (!requireEnabled(req, res)) return;
     const userId = req.session.userId!;
     const parsed = startQuerySchema.safeParse(req.query);
-    const redirectTo = parsed.success && parsed.data.redirectTo ? parsed.data.redirectTo : "/app/profile";
+    const redirectTo = sanitizeRedirectTo(parsed.success ? parsed.data.redirectTo : undefined, "/app/profile");
     const { state } = await createState({
       provider: "yandex",
       intent: "link",

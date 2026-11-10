@@ -43,3 +43,10 @@ describe('sanitizeNext (login open-redirect guard)', () => {
     expect(sanitizeNext('  /admin  ')).toBe('/admin');
   });
 });
+
+describe('sanitizeNext — обратный слеш', () => {
+  it('rejects `/\\host` (browsers treat it as `//host`)', () => {
+    expect(sanitizeNext('/\\evil.example')).toBeNull();
+    expect(sanitizeNext('/\\evil.example/admin')).toBeNull();
+  });
+});

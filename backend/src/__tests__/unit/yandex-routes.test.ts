@@ -24,6 +24,55 @@ afterAll(async () => {
 });
 
 describe("yandex routes", () => {
+  it("GET /start не принимает адрес на чужой хост (/\\host, //host, https://)", async () => {
+    for (const bad of ["/\\evil.example", "//evil.example", "https://evil.example"]) {
+      const res = await request(app).get(`/api/v1/auth/yandex/start?redirectTo=${encodeURIComponent(bad)}`);
+      expect(res.status).toBe(302);
+      const state = String(res.headers.location).match(/[?&]state=([A-Za-z0-9_-]+)/)![1];
+      const stored = await pool.query<{ redirect_to: string }>(
+        `SELECT redirect_to FROM auth_oauth_state WHERE state = $1`,
+        [state]
+      );
+      expect(stored.rows[0].redirect_to, bad).toBe("/app");
+    }
+  });
+
+  it("GET /callback без аккаунта сохраняет приглашение в next", async () => {
+    const invitePath = "/invite/0b6f6d2e-6c1a-4c55-9d0d-6a3e0f1b2c3d";
+    const stateMod = await import("../../lib/oauth-state.js");
+    const { state } = await stateMod.createState({
+      provider: "yandex",
+      intent: "login",
+      redirectTo: invitePath,
+      ttlSeconds: 60,
+      ipHash: null,
+      uaHash: null,
+      linkUserId: null,
+      codeVerifier: null,
+      nonce: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: "AT", token_type: "bearer", expires_in: 3600 }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: "yandex_newbie_no_identity_777", login: "newbie", default_email: "n@y.ru" }),
+        })
+    );
+    const res = await request(app).get(`/api/v1/auth/yandex/callback?code=auth-code&state=${state}`);
+    vi.unstubAllGlobals();
+    expect(res.status).toBe(302);
+    const location = new URL(String(res.headers.location), "https://pbthub.ru");
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("auth_error")).toBe("OAUTH_NO_ACCOUNT");
+    expect(location.searchParams.get("next")).toBe(invitePath);
+  });
+
   it("GET /start redirects to authorize URL and stores state", async () => {
     const res = await request(app).get("/api/v1/auth/yandex/start?redirectTo=/app");
     expect(res.status).toBe(302);

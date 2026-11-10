@@ -36,6 +36,7 @@ import { subscribeOutbox } from './lib/outbox';
 import { OfflineBanner } from './components/OfflineBanner';
 import { eventCreateAccess, eventCreateViewProps } from './lib/event-create-access';
 import { reconcileSelectedEvent } from './lib/event-refresh';
+import { resolvePostLoginAction } from './lib/post-login';
 
 type InitLoadResult = 'ok' | 'no_team' | 'admin_mode' | 'role_selection_required' | 'invalid_shape' | 'error';
 
@@ -517,14 +518,42 @@ const App: React.FC = () => {
   }, [authStep]);
 
   // --- AUTH HANDLERS ---
-  const handleLogin = async () => {
+  // target — куда человек шёл до входа (`?next=` экрана входа).
+  const handleLogin = async (target?: string) => {
     clearLogoutGuard();
     sessionStorage.removeItem('pbth:tg-webapp-fallback-direct');
+    const action = resolvePostLoginAction(target);
+    if (action.kind === 'invite') {
+      // Новичок по приглашению ещё не в команде. Грузить приложение сейчас
+      // нельзя: /init ответит «нет команды», и вместо экрана приглашения
+      // человек получал системное окно и тупик на /app с одной кнопкой
+      // «Выйти». Ведём на приглашение — уже вошедшим; приложение команды
+      // загрузит handleJoinedTeam после «Принять приглашение».
+      sessionStorage.removeItem('pbth:post-auth-app');
+      navigate(action.path, { replace: true });
+      return;
+    }
     const ok = await tryEnterUserApp();
     if (ok) {
       sessionStorage.removeItem('pbth:post-auth-app');
       setAuthStep('APP');
       navigate('/app');
+    }
+  };
+
+  // Человек только что вступил в команду по приглашению: сервер уже сделал её
+  // активной в сессии, так что /init вернёт именно её — открываем её главную.
+  const handleJoinedTeam = async () => {
+    clearLogoutGuard();
+    sessionStorage.removeItem('pbth:post-auth-app');
+    setAppGate('READY');
+    setCurrentView('DASHBOARD');
+    setSelectedEvent(null);
+    setSelectedMember(null);
+    const ok = await tryEnterUserApp();
+    if (ok) {
+      setAuthStep('APP');
+      navigate('/app', { replace: true });
     }
   };
 
@@ -1309,7 +1338,7 @@ const App: React.FC = () => {
       <Route path="/privacy" element={<PrivacyView />} />
       <Route path="/terms" element={<TermsView />} />
       <Route path="/support" element={<SupportView />} />
-      <Route path="/invite/:inviteId" element={<InviteView />} />
+      <Route path="/invite/:inviteId" element={<InviteView onJoined={handleJoinedTeam} />} />
       {/* /admin/login сведён в /login?next=/admin — единый вход для всех ролей */}
       <Route path="/admin/login" element={<Navigate to="/login?next=/admin" replace />} />
       <Route path="/admin/*" element={<AdminConsoleView />} />

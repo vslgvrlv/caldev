@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { sanitizeRelativeRedirect } from "./safe-redirect.js";
 
 type TrustedAuthMethod =
   | "WEBAPP"
@@ -27,11 +28,6 @@ type TelegramHandoffWebhookStart = {
   profile: TelegramHandoffProfile;
 };
 
-function sanitizeRelativeRedirect(input: unknown): string | null {
-  if (typeof input !== "string" || input.length === 0) return null;
-  if (!input.startsWith("/") || input.startsWith("//")) return null;
-  return input;
-}
 
 export function buildTelegramHandoffDeepLink(botUsername: string, attemptKey: string): string {
   return `https://t.me/${botUsername}?start=login_${attemptKey}`;

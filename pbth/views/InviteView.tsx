@@ -20,7 +20,19 @@ function isAuthRequired(err: unknown): boolean {
   return message.includes('authentication required') || message.includes('401');
 }
 
-export const InviteView: React.FC = () => {
+function isAlreadyMember(err: unknown): boolean {
+  return (err as { code?: string } | null)?.code === 'ALREADY_MEMBER';
+}
+
+interface InviteViewProps {
+  /**
+   * Человек вступил в команду (или уже в ней состоял). App загружает
+   * приложение — сервер уже сделал эту команду активной — и открывает главную.
+   */
+  onJoined?: () => void | Promise<void>;
+}
+
+export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
   const navigate = useNavigate();
   const { inviteId } = useParams<{ inviteId: string }>();
   const [searchParams] = useSearchParams();
@@ -110,6 +122,15 @@ export const InviteView: React.FC = () => {
         try {
           await api.acceptTeamInvite(inviteId);
         } catch (err) {
+          // Повторно открытая ссылка: человек уже в команде — это не ошибка,
+          // просто открываем приложение.
+          if (isAlreadyMember(err)) {
+            setAccepted(true);
+            setStatusText('Вы уже в этой команде. Открываем приложение...');
+            if (onJoined) await onJoined();
+            else navigate('/app', { replace: true });
+            return;
+          }
           if (!isInviteNotFound(err)) throw err;
           // Backward compatibility fallback.
           await api.joinTeam(inviteId);
@@ -118,8 +139,9 @@ export const InviteView: React.FC = () => {
         await api.joinTeam(inviteId);
       }
       setAccepted(true);
-      setStatusText('Вы успешно вступили в команду. Перенаправляем в приложение...');
-      setTimeout(() => navigate('/app', { replace: true }), 700);
+      setStatusText('Вы вступили в команду. Открываем приложение...');
+      if (onJoined) await onJoined();
+      else navigate('/app', { replace: true });
     } catch (err) {
       if (isAuthRequired(err)) {
         setStatusText('Сначала нужно войти через Telegram.');

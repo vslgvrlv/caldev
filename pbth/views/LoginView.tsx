@@ -11,12 +11,18 @@ import {
   sendAuthTelemetry,
 } from '../lib/auth-ux';
 import { sanitizeNext } from '../lib/login-next-param';
+import { isInvitePath } from '../lib/post-login';
 import { PairingPanel } from '../components/PairingPanel';
 
 type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
 
 interface LoginViewProps {
-  onLogin: () => void;
+  /**
+   * Вход состоялся. `target` — куда человек шёл (`?next=`). Куда вести дальше,
+   * решает App: для приглашения — на экран приглашения, без загрузки
+   * приложения команды, в которой человек ещё не состоит.
+   */
+  onLogin: (target?: string) => void;
   onSelectRole: (roleOption: UserRoleOption) => void;
   availableRoles: UserRoleOption[];
 }
@@ -28,6 +34,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   const nextParam = useMemo(() => sanitizeNext(searchParams.get('next')), [searchParams]);
   const targetRedirect = nextParam ?? '/app';
   const wantsAdmin = (nextParam ?? '').startsWith('/admin');
+  const wantsInvite = isInvitePath(nextParam);
 
   const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
@@ -127,8 +134,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       return;
     }
 
-    onLogin();
-    navigate(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect, { replace: true });
+    onLogin(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect);
   };
 
   const handleSwitchAccount = async () => {
@@ -200,7 +206,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
             flow: 'MINIAPP',
             event: 'login_success',
           });
-          onLogin();
+          onLogin(targetRedirect);
           return;
         }
         setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
@@ -240,8 +246,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       navigate('/admin', { replace: true });
       return;
     }
-    onLogin();
-    navigate(target, { replace: true });
+    onLogin(target);
   };
 
   const handleLocalDevLogin = (telegramId: string) => {
@@ -295,6 +300,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
       </div>
     );
   }
+
+  const yandexEnabled = (import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1';
+  const yandexButton = (
+    <button
+      onClick={handleYandexLogin}
+      disabled={isLoading}
+      className="w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
+    >
+      <span className="w-6 h-6 rounded bg-[#FFCC00] text-black font-black flex items-center justify-center flex-shrink-0">Я</span>
+      <span>Продолжить с Яндексом</span>
+    </button>
+  );
+  const telegramButton = (
+    <button
+      onClick={handleTelegramLogin}
+      disabled={isLoading}
+      className={`w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60 ${
+        wantsInvite ? 'py-3.5' : 'py-3'
+      }`}
+    >
+      {isLoading ? (
+        <Loader2 size={18} className="animate-spin text-pb-subtext" />
+      ) : (
+        <>
+          <span className="w-6 h-6 rounded bg-[#24A1DE] text-white font-black flex items-center justify-center flex-shrink-0 text-[10px] tracking-tight">tg</span>
+          <span className={wantsInvite ? 'text-white' : 'text-pb-subtext'}>Продолжить с Telegram</span>
+        </>
+      )}
+    </button>
+  );
 
   return (
     <div
@@ -374,33 +409,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
 
         {/* Provider buttons. Neutral surface, brand-coloured logo only.
             Hierarchy = size + order, not colour. Yandex primary (RU market),
-            Telegram secondary. Hidden when there is a known session. */}
+            Telegram secondary. Hidden when there is a known session.
+            По ссылке-приглашению приходят новички: войти Яндексом они не
+            могут (Яндекс привязывается в профиле уже после первого входа),
+            поэтому Telegram встаёт первым, а у Яндекса — пояснение. */}
         {continuityChecked && !continuity && !pairing && (
           <div className="space-y-2">
-            {(import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1' && (
-              <button
-                onClick={handleYandexLogin}
-                disabled={isLoading}
-                className="w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
-              >
-                <span className="w-6 h-6 rounded bg-[#FFCC00] text-black font-black flex items-center justify-center flex-shrink-0">Я</span>
-                <span>Продолжить с Яндексом</span>
-              </button>
+            {wantsInvite ? (
+              <>
+                {telegramButton}
+                {yandexEnabled && (
+                  <div className="pt-2">
+                    {yandexButton}
+                    <p className="mt-1.5 text-xs text-center text-pb-subtext/80 leading-relaxed">
+                      Яндекс — для тех, кто уже привязал его в профиле PBTH. Первый вход — через Telegram.
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {yandexEnabled && yandexButton}
+                {telegramButton}
+              </>
             )}
-            <button
-              onClick={handleTelegramLogin}
-              disabled={isLoading}
-              className="w-full bg-pb-surface hover:bg-white/5 border border-white/10 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
-            >
-              {isLoading ? (
-                <Loader2 size={18} className="animate-spin text-pb-subtext" />
-              ) : (
-                <>
-                  <span className="w-6 h-6 rounded bg-[#24A1DE] text-white font-black flex items-center justify-center flex-shrink-0 text-[10px] tracking-tight">tg</span>
-                  <span className="text-pb-subtext">Продолжить с Telegram</span>
-                </>
-              )}
-            </button>
           </div>
         )}
 

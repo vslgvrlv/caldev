@@ -9,7 +9,8 @@
  *
  * Rules:
  *   - must be a relative path on THIS app (starts with `/`),
- *   - must not start with `//` (protocol-relative host injection),
+ *   - must not start with `//` or `/\` (protocol-relative host injection —
+ *     browsers read `/\evil.example` the same as `//evil.example`),
  *   - must not contain `\r` `\n` `\t` (header smuggling),
  *   - bounded length so we never blow up URL builders downstream.
  *
@@ -20,7 +21,7 @@ export function sanitizeNext(raw: string | null | undefined): string | null {
   const trimmed = String(raw).trim();
   if (!trimmed) return null;
   if (!trimmed.startsWith('/')) return null;
-  if (trimmed.startsWith('//')) return null;
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return null;
   if (/[\r\n\t]/.test(trimmed)) return null;
   if (trimmed.length > 256) return null;
   return trimmed;
