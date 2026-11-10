@@ -1,5 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
+import {
+  assertCaptainChangeAllowed,
+  loadMembershipByUserForUpdate,
+  loadMembershipForUpdate,
+  sendCaptainGuardError,
+  withTransaction,
+} from "../../lib/team-captains.js";
 import { query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -231,16 +238,12 @@ teamsRouter.post(
     const token = z.string().uuid().parse(req.params.token);
     const effectiveRole = getEffectiveEntryRole(req, req.authUser!);
     console.info("[teams] invite.accept attempt", {
-      token,
       userId: req.authUser!.id,
-      username: req.authUser!.username,
       accountRole: req.authUser!.account_role,
       entryRole: effectiveRole,
-      ip: req.ip,
     });
     if (effectiveRole !== "USER") {
       console.warn("[teams] invite.accept denied: non-user entry role", {
-        token,
         userId: req.authUser!.id,
         entryRole: effectiveRole,
       });
@@ -262,15 +265,15 @@ teamsRouter.post(
     );
     const invite = inviteResult.rows[0];
     if (!invite) {
-      console.warn("[teams] invite.accept failed: invite not found", { token, userId: req.authUser!.id });
+      console.warn("[teams] invite.accept failed: invite not found", { userId: req.authUser!.id });
       return sendError(req, res, 404, "INVITE_NOT_FOUND", "Invite not found");
     }
     if (invite.is_revoked) {
-      console.warn("[teams] invite.accept failed: revoked", { token, userId: req.authUser!.id });
+      console.warn("[teams] invite.accept failed: revoked", { userId: req.authUser!.id });
       return sendError(req, res, 409, "INVITE_REVOKED", "Invite is revoked");
     }
     if (new Date(invite.expires_at).getTime() < Date.now()) {
-      console.warn("[teams] invite.accept failed: expired", { token, userId: req.authUser!.id, expiresAt: invite.expires_at });
+      console.warn("[teams] invite.accept failed: expired", { userId: req.authUser!.id, expiresAt: invite.expires_at });
       return sendError(req, res, 409, "INVITE_EXPIRED", "Invite expired");
     }
 
@@ -305,11 +308,10 @@ teamsRouter.post(
     await writeAudit(req.authUser!.id, "teams.invite.accept", {
       teamId: invite.team_id,
       membershipId: membership.rows[0].id,
-      token,
+      inviteId: invite.id,
     });
 
     console.info("[teams] invite.accept success", {
-      token,
       userId: req.authUser!.id,
       membershipId: membership.rows[0].id,
       teamId: invite.team_id,
@@ -354,30 +356,39 @@ teamsRouter.post(
       return res.status(404).json({ detail: "User not found" });
     }
 
+    // Добавление в команду не трогает режим учётной записи человека
+    // (`account_role`). Раньше владельца платформы, которого добавляли в
+    // состав, молча переводили в режим игрока.
     if (user.account_role === "ADMIN") {
       const eligibleForDualMode = canChooseAdminRole({ telegram_id: user.telegram_id, username: user.username });
       if (!eligibleForDualMode) {
         return res.status(409).json({ detail: "Target user has admin account role and cannot be a team member" });
       }
-      await query(
-        `UPDATE users
-         SET account_role = 'USER', role_selected_at = NOW(), updated_at = NOW()
-         WHERE id = $1`,
-        [user.id]
-      );
     }
 
-    let inserted;
+    let inserted: { rows: Array<{ id: string }> };
     try {
-      inserted = await query<{ id: string }>(
-        `INSERT INTO team_memberships (user_id, team_id, role, status, balance)
-         VALUES ($1, $2, $3::membership_role, 'ACTIVE', 0)
-         ON CONFLICT (user_id, team_id)
-         DO UPDATE SET role = EXCLUDED.role, updated_at = NOW()
-         RETURNING id`,
-        [user.id, teamId, payload.teamRole]
-      );
+      inserted = await withTransaction(async (client) => {
+        // Повторное добавление уже состоящего человека меняет ему роль —
+        // те же правила про капитанов, что и у PATCH.
+        const existing = await loadMembershipByUserForUpdate(client, teamId, user.id);
+        await assertCaptainChangeAllowed(client, {
+          teamId,
+          target: existing,
+          change: { kind: "update", role: payload.teamRole },
+          actor: { userId: req.authUser!.id, isOwner: isRootAdmin },
+        });
+        return client.query<{ id: string }>(
+          `INSERT INTO team_memberships (user_id, team_id, role, status, balance)
+           VALUES ($1, $2, $3::membership_role, 'ACTIVE', 0)
+           ON CONFLICT (user_id, team_id)
+           DO UPDATE SET role = EXCLUDED.role, updated_at = NOW()
+           RETURNING id`,
+          [user.id, teamId, payload.teamRole]
+        );
+      });
     } catch (error: any) {
+      if (sendCaptainGuardError(res, error)) return;
       const message = String(error?.message || "").toLowerCase();
       if (message.includes("admin account cannot")) {
         return res.status(409).json({ detail: "Target user has admin account role and cannot be a team member" });
@@ -414,15 +425,31 @@ teamsRouter.patch(
       return res.status(403).json({ detail: "Captain cannot assign captain role" });
     }
 
-    const updated = await query<{ id: string }>(
-      `UPDATE team_memberships
-       SET role = COALESCE($3::membership_role, role),
-           status = COALESCE($4::player_status, status),
-           updated_at = NOW()
-       WHERE id = $1 AND team_id = $2
-       RETURNING id`,
-      [membershipId, teamId, payload.teamRole ?? null, payload.status ?? null]
-    );
+    let updated: { rowCount: number | null };
+    try {
+      updated = await withTransaction(async (client) => {
+        const target = await loadMembershipForUpdate(client, teamId, membershipId);
+        if (!target) return { rowCount: 0 };
+        await assertCaptainChangeAllowed(client, {
+          teamId,
+          target,
+          change: { kind: "update", role: payload.teamRole ?? null },
+          actor: { userId: req.authUser!.id, isOwner: isRootAdmin },
+        });
+        return client.query<{ id: string }>(
+          `UPDATE team_memberships
+           SET role = COALESCE($3::membership_role, role),
+               status = COALESCE($4::player_status, status),
+               updated_at = NOW()
+           WHERE id = $1 AND team_id = $2
+           RETURNING id`,
+          [membershipId, teamId, payload.teamRole ?? null, payload.status ?? null]
+        );
+      });
+    } catch (error) {
+      if (sendCaptainGuardError(res, error)) return;
+      throw error;
+    }
     if (!updated.rowCount) {
       return res.status(404).json({ detail: "Membership not found" });
     }
@@ -450,12 +477,28 @@ teamsRouter.delete(
       return res.status(403).json({ detail: "Only root admin or team captain can manage members" });
     }
 
-    const deleted = await query<{ id: string }>(
-      `DELETE FROM team_memberships
-       WHERE id = $1 AND team_id = $2
-       RETURNING id`,
-      [membershipId, teamId]
-    );
+    let deleted: { rowCount: number | null };
+    try {
+      deleted = await withTransaction(async (client) => {
+        const target = await loadMembershipForUpdate(client, teamId, membershipId);
+        if (!target) return { rowCount: 0 };
+        await assertCaptainChangeAllowed(client, {
+          teamId,
+          target,
+          change: { kind: "delete" },
+          actor: { userId: req.authUser!.id, isOwner: isRootAdmin },
+        });
+        return client.query<{ id: string }>(
+          `DELETE FROM team_memberships
+           WHERE id = $1 AND team_id = $2
+           RETURNING id`,
+          [membershipId, teamId]
+        );
+      });
+    } catch (error) {
+      if (sendCaptainGuardError(res, error)) return;
+      throw error;
+    }
     if (!deleted.rowCount) {
       return res.status(404).json({ detail: "Membership not found" });
     }

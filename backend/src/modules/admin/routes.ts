@@ -1,5 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
+import {
+  assertCaptainChangeAllowed,
+  loadMembershipForUpdate,
+  sendCaptainGuardError,
+  withTransaction,
+} from "../../lib/team-captains.js";
 import type { PoolClient } from "pg";
 import { pool, query } from "../../db/pool.js";
 import { asyncHandler } from "../../middleware/async-handler.js";
@@ -523,7 +529,28 @@ adminRouter.delete(
       return res.status(403).json({ detail: "Owner admin access required" });
     }
     const membershipId = z.string().uuid().parse(req.params.membershipId);
-    const deleted = await query(`DELETE FROM team_memberships WHERE id = $1 RETURNING id`, [membershipId]);
+    const owned = await query<{ team_id: string }>(`SELECT team_id FROM team_memberships WHERE id = $1`, [membershipId]);
+    const teamIdOfMembership = owned.rows[0]?.team_id;
+    if (!teamIdOfMembership) {
+      return res.status(404).json({ detail: "Membership not found" });
+    }
+    let deleted: { rowCount: number | null };
+    try {
+      deleted = await withTransaction(async (client) => {
+        const target = await loadMembershipForUpdate(client, teamIdOfMembership, membershipId);
+        if (!target) return { rowCount: 0 };
+        await assertCaptainChangeAllowed(client, {
+          teamId: teamIdOfMembership,
+          target,
+          change: { kind: "delete" },
+          actor: { userId: req.authUser!.id, isOwner: true },
+        });
+        return client.query(`DELETE FROM team_memberships WHERE id = $1 RETURNING id`, [membershipId]);
+      });
+    } catch (error) {
+      if (sendCaptainGuardError(res, error)) return;
+      throw error;
+    }
     if (!deleted.rowCount) {
       return res.status(404).json({ detail: "Membership not found" });
     }
@@ -1117,8 +1144,12 @@ adminRouter.patch(
       cost_status: "UNKNOWN" | "ESTIMATED" | "FINAL";
       source_kind: "MANUAL" | "VENUE_API" | "INTEGRATION_API";
       source_provider: string | null;
+      finance_state: "NOT_CALCULATED" | "COLLECTING" | "CLOSED";
+      has_charges: boolean;
     }>(
-      `SELECT id, team_id, cost::text, cost_status::text, source_kind::text, source_provider
+      `SELECT id, team_id, cost::text, cost_status::text, source_kind::text, source_provider,
+              finance_state::text,
+              EXISTS (SELECT 1 FROM event_member_charges c WHERE c.event_id = events.id) AS has_charges
        FROM events
        WHERE id = $1`,
       [eventId]
@@ -1130,6 +1161,24 @@ adminRouter.patch(
     const teamIds = resolveRequestedTeams(access, existing.team_id);
     if (teamIds.length === 0) {
       return res.status(403).json({ detail: "Team access denied" });
+    }
+
+    // Те же замки, что в `/events`: после начала сбора цену не меняют, а
+    // событие со сбором не отменяют — начисления остались бы без события.
+    const collectionStarted = existing.finance_state !== "NOT_CALCULATED" || existing.has_charges;
+    const costChanged =
+      (payload.cost !== undefined && payload.cost !== (existing.cost === null ? null : Number(existing.cost))) ||
+      (payload.costStatus !== undefined && payload.costStatus !== existing.cost_status);
+    if (collectionStarted && costChanged) {
+      return res.status(409).json({
+        detail: "Financial params cannot be edited after collection starts. Create correction transaction instead.",
+      });
+    }
+    if (collectionStarted && payload.isCancelled === true) {
+      return res.status(409).json({
+        detail: "По событию начат сбор денег. Удалить его нельзя, пока есть начисления.",
+        code: "EVENT_HAS_COLLECTION",
+      });
     }
 
     const nextCost =
@@ -1545,15 +1594,33 @@ adminRouter.patch(
       return res.status(403).json({ detail: "Team access denied" });
     }
 
-    const updated = await query(
-      `UPDATE team_memberships
-       SET role = COALESCE($3::membership_role, role),
-           status = COALESCE($4::player_status, status),
-           updated_at = NOW()
-       WHERE id = $1 AND team_id = $2
-       RETURNING id`,
-      [membershipId, teamId, payload.teamRole ?? null, payload.status ?? null]
-    );
+    // Те же правила про капитанов, что в `/teams`: капитан (scope TEAM) не
+    // назначает капитанов и не трогает чужих, последнего не понижает никто.
+    let updated: { rowCount: number | null };
+    try {
+      updated = await withTransaction(async (client) => {
+        const target = await loadMembershipForUpdate(client, teamId, membershipId);
+        if (!target) return { rowCount: 0 };
+        await assertCaptainChangeAllowed(client, {
+          teamId,
+          target,
+          change: { kind: "update", role: payload.teamRole ?? null },
+          actor: { userId: req.authUser!.id, isOwner: access.scope === "PLATFORM" },
+        });
+        return client.query(
+          `UPDATE team_memberships
+           SET role = COALESCE($3::membership_role, role),
+               status = COALESCE($4::player_status, status),
+               updated_at = NOW()
+           WHERE id = $1 AND team_id = $2
+           RETURNING id`,
+          [membershipId, teamId, payload.teamRole ?? null, payload.status ?? null]
+        );
+      });
+    } catch (error) {
+      if (sendCaptainGuardError(res, error)) return;
+      throw error;
+    }
     if (!updated.rowCount) {
       return res.status(404).json({ detail: "Membership not found" });
     }

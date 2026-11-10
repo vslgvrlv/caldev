@@ -51,12 +51,14 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     allowedHosts: ['pbthub.ru', 'www.pbthub.ru', 'localhost', '127.0.0.1'],
+    // Ключи со слешем на конце: Vite сравнивает ключ с началом адреса, и
+    // '/api' забирал в бэкенд модуль /api.ts — страница оставалась пустой.
     proxy: {
-      '/api': {
+      '/api/': {
         target: apiTarget,
         changeOrigin: true,
       },
-      '/calendar': {
+      '/calendar/': {
         target: apiTarget,
         changeOrigin: true,
       },

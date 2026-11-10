@@ -12,6 +12,8 @@ import {
   type ImportedTeamScheduleProjection,
 } from "../../lib/event-domain.js";
 import { resolveFeedRsvpStatus } from "../../lib/series-commitment.js";
+import { safeHttpUrl } from "../../lib/http-url.js";
+import { debtsOnlyBalance, financeScopeForRole, loadMemberChargeTotals } from "../../lib/finance-visibility.js";
 
 type RawEvent = {
   id: string;
@@ -397,7 +399,14 @@ initRouter.get(
       }
     }
 
-    const transactionsResult = await query<{
+    // Деньги команды (решение 9): книгу — баланс команды, историю операций,
+    // взносы каждого — видит только капитан. Остальным — свой долг и общий
+    // список должников. Форма ответа прежняя: старый фронтенд читает
+    // `team.budget` как число, `members[].balance` и `transactions[]`.
+    const financeScope = financeScopeForRole(activeMembership.role);
+    const chargeTotals = financeScope === "FULL" ? null : await loadMemberChargeTotals(activeMembership.team_id);
+
+    const transactionsResult = financeScope !== "FULL" ? { rows: [] } : await query<{
       id: string;
       type: "DEPOSIT" | "EXPENSE" | "FEE";
       amount: string;
@@ -466,7 +475,7 @@ initRouter.get(
         startDate: e.start_at,
         endDate: e.end_at || undefined,
         location: e.location || undefined,
-        locationUrl: e.location_url || undefined,
+        locationUrl: safeHttpUrl(e.location_url) || undefined,
         cost: e.cost !== null ? Number(e.cost) : undefined,
         costStatus: e.cost_status,
         financeState: e.finance_state,
@@ -499,8 +508,9 @@ initRouter.get(
         shortCode: team.short_code,
         logo: team.logo,
         role: activeMembership.role,
-        budget: Number(team.budget),
+        budget: financeScope === "FULL" ? Number(team.budget) : 0,
         timezone: team.timezone,
+        financeScope,
       },
       members: membersResult.rows.map((m) => {
         const stats = memberStats.get(m.id) || { total: activeTeamEventsTotal, attended: 0 };
@@ -513,7 +523,7 @@ initRouter.get(
           avatar: m.avatar,
           role: m.role,
           status: m.status,
-          balance: Number(m.balance),
+          balance: chargeTotals ? debtsOnlyBalance(chargeTotals.get(m.id), m.id === user.id) : Number(m.balance),
           stats: {
             attendanceRate,
             eventsAttended: stats.attended,

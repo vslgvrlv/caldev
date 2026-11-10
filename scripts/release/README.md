@@ -18,6 +18,19 @@ Outputs:
 ./scripts/release/deploy.sh --env prod --artifact <path-or-url> --checksum <path-or-url> --base-url https://pbthub.ru
 ```
 
+`deploy.sh` takes a database dump (`db-backup.sh`) after starting `db` and
+before build and migrations; if the dump fails, the deploy stops.
+
+## Database backup and restore
+
+```bash
+./scripts/release/db-backup.sh --env prod --label manual        # prints the dump path
+./scripts/release/db-restore.sh --env prod --file <dump> --confirm prod
+```
+
+Dumps: `/opt/pbth/shared/backups/<env>/`, last 20 kept. Details and the
+restore checklist: `RELEASE_PROTOCOL.md`.
+
 ## Rollback
 
 ```bash

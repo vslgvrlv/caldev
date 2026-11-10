@@ -24,6 +24,16 @@ const PRIMARY_YANDEX_SUB = "yandex_link_sub_42";
 const OTHER_YANDEX_SUB = "yandex_link_sub_other_77";
 const SHARED_YANDEX_SUB = "yandex_link_sub_shared_99";
 
+// Браузер, который начал привязку. Callback без сессии принимается только от
+// него же: IP (через X-Forwarded-For, trust proxy = 1) и User-Agent.
+const BROWSER = { ip: "203.0.113.7", ua: "pbth-test-browser/1.0" };
+const OTHER_BROWSER = { ip: "198.51.100.9", ua: "pbth-test-browser/1.0" };
+
+async function browserHashes(browser: { ip: string; ua: string }) {
+  const { hashRequestPart } = await import("../../modules/auth/yandex-routes.js");
+  return { ipHash: hashRequestPart(browser.ip), uaHash: hashRequestPart(browser.ua) };
+}
+
 let primaryUserId: string;
 let otherUserId: string;
 
@@ -136,8 +146,7 @@ describe("yandex link/unlink routes", () => {
       intent: "link",
       redirectTo: "/app/profile",
       ttlSeconds: 60,
-      ipHash: null,
-      uaHash: null,
+      ...(await browserHashes(BROWSER)),
       linkUserId: primaryUserId,
       codeVerifier: null,
       nonce: null,
@@ -160,7 +169,7 @@ describe("yandex link/unlink routes", () => {
     vi.stubGlobal("fetch", fetchMock);
     const res = await request(app).get(
       `/api/v1/auth/yandex/link/callback?code=auth-c&state=${state}`
-    );
+    ).set("X-Forwarded-For", BROWSER.ip).set("User-Agent", BROWSER.ua);
     vi.unstubAllGlobals();
     // No session cookie sent — the link must still persist (Telegram in-app
     // browser drops the cookie across the OAuth round-trip).
@@ -191,8 +200,7 @@ describe("yandex link/unlink routes", () => {
       intent: "link",
       redirectTo: "/app/profile",
       ttlSeconds: 60,
-      ipHash: null,
-      uaHash: null,
+      ...(await browserHashes(BROWSER)),
       linkUserId: primaryUserId,
       codeVerifier: null,
       nonce: null,
@@ -210,7 +218,7 @@ describe("yandex link/unlink routes", () => {
     vi.stubGlobal("fetch", fetchMock2);
     const resAgain = await request(app).get(
       `/api/v1/auth/yandex/link/callback?code=auth-c-again&state=${state2}`
-    );
+    ).set("X-Forwarded-For", BROWSER.ip).set("User-Agent", BROWSER.ua);
     vi.unstubAllGlobals();
     expect(resAgain.status).toBe(302);
     expect(resAgain.headers.location).toBe("/app/profile?linked=yandex");
@@ -237,8 +245,7 @@ describe("yandex link/unlink routes", () => {
       intent: "link",
       redirectTo: "/app/profile",
       ttlSeconds: 60,
-      ipHash: null,
-      uaHash: null,
+      ...(await browserHashes(BROWSER)),
       linkUserId: primaryUserId,
       codeVerifier: null,
       nonce: null,
@@ -256,7 +263,7 @@ describe("yandex link/unlink routes", () => {
     vi.stubGlobal("fetch", fetchMock);
     const res = await request(app).get(
       `/api/v1/auth/yandex/link/callback?code=auth-c2&state=${state}`
-    );
+    ).set("X-Forwarded-For", BROWSER.ip).set("User-Agent", BROWSER.ua);
     vi.unstubAllGlobals();
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("/app/profile?link_error=OAUTH_LINK_TAKEN");
@@ -277,6 +284,38 @@ describe("yandex link/unlink routes", () => {
       `DELETE FROM user_identities WHERE provider='yandex' AND provider_user_id=$1`,
       [SHARED_YANDEX_SUB]
     );
+  });
+
+  it("GET /link/callback без сессии из другого браузера не привязывает Яндекс", async () => {
+    // Сценарий ревью №7: владелец аккаунта выпустил ссылку на согласие Яндекса
+    // и переслал её другому человеку. Тот подтверждает у себя — привязки нет.
+    const stateMod = await import("../../lib/oauth-state.js");
+    const { state } = await stateMod.createState({
+      provider: "yandex",
+      intent: "link",
+      redirectTo: "/app/profile",
+      ttlSeconds: 60,
+      ...(await browserHashes(BROWSER)),
+      linkUserId: primaryUserId,
+      codeVerifier: null,
+      nonce: null,
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await request(app)
+      .get(`/api/v1/auth/yandex/link/callback?code=auth-victim&state=${state}`)
+      .set("X-Forwarded-For", OTHER_BROWSER.ip)
+      .set("User-Agent", OTHER_BROWSER.ua);
+    vi.unstubAllGlobals();
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/app/profile?link_error=OAUTH_STATE_INVALID");
+    // До Яндекса дело не дошло: код не обменивался.
+    expect(fetchMock).not.toHaveBeenCalled();
+    const linked = await pool.query(
+      `SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = 'yandex'`,
+      [primaryUserId]
+    );
+    expect(linked.rowCount).toBe(0);
   });
 
   it("POST /unlink removes yandex identity when user has >=2 identities", async () => {

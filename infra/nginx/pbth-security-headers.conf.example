@@ -1,0 +1,27 @@
+# Заголовки защиты для страниц фронтенда PBTH.
+# На сервере: /etc/nginx/snippets/pbth-security-headers.conf
+#
+# Подключается только в локациях фронтенда (/, /assets/, /icons/). Ответы
+# /api/ и /calendar/ уже несут эти заголовки от бэкенда (helmet в
+# backend/src/app.ts) — повторять их там не нужно, иначе они задвоятся.
+#
+# nginx наследует add_header с уровня server только в локации, где нет ни
+# одного своего add_header. В /assets/ и /icons/ есть свой Cache-Control,
+# поэтому фрагмент подключается в каждую локацию явно.
+
+# Только HTTPS. Те же параметры, что уже отдаёт бэкенд на /api/, — для
+# домена это ничего не меняет, но закрывает первый заход на страницу.
+add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+
+# Браузер не угадывает тип файла по содержимому.
+add_header X-Content-Type-Options "nosniff" always;
+
+# Встраивание. Мини-приложение в Telegram на телефоне и в Telegram Desktop
+# открывается во встроенном браузере, а в web.telegram.org — во фрейме.
+# Поэтому X-Frame-Options не ставим (он не умеет список сайтов), а
+# разрешаем фреймы только себе и веб-версиям Telegram.
+add_header Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org" always;
+
+# Ссылки наружу получают только домен, без пути: в адресах бывают коды
+# приглашений и ключи календаря.
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
