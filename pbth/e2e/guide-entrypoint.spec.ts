@@ -56,6 +56,11 @@ async function installApiMocks(page: Page, auth: "local" | "anonymous" = "local"
       await route.fulfill({ status: 200, json: { items: [] } });
       return;
     }
+    // Значок заявок в шапке (трек 1) у капитана и тренера.
+    if (auth === "local" && request.method() === "GET" && url.pathname === "/api/v1/join-requests") {
+      await route.fulfill({ status: 200, json: { count: 0, requests: [] } });
+      return;
+    }
     if (auth === "local" && request.method() === "GET" && url.pathname === "/api/v1/auth/identities") {
       await route.fulfill({ status: 200, json: { identities: [] } });
       return;
