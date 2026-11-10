@@ -12,6 +12,7 @@ import { TransferConfirmationModal } from '../components/TransferConfirmationMod
 import { buildEventExpensesViewModel } from '../lib/event-expenses-view-model';
 import { buildEventFinanceViewModel } from '../lib/event-finance-view-model';
 import { buildEventChargeModalState } from '../lib/event-charge-modal';
+import { canShowEventCollection } from '../lib/event-collection-access';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { EventExtBlocks } from '../shell/EventExtBlocks';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
@@ -187,7 +188,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   // Явка имеет смысл только когда событие уже началось/прошло.
   const hasEventStarted = event.startDate.getTime() <= Date.now();
   const canSendEventReminder = currentUserRole !== Role.PLAYER;
-  const canReadEventFinance = currentUserRole !== Role.PLAYER;
+  // «Сбор по событию» спрятан у всех, пока его не переделают (решение Василия
+  // 10.11.2026, п. 9). Тем же условием выключены загрузка данных и листы ниже:
+  // код и данные остаются, не показывается только то, что не работает.
+  const canReadEventFinance = canShowEventCollection(currentUserRole);
   // Расписание игр и рефлексия нужны везде, где команда выходит на поле и может
   // посмотреть на себя со стороны, — не только на турнире (Василий, 2026-07-31).
   const hasGameSchedule =
