@@ -256,26 +256,6 @@ export async function listFeed(userId: string) {
   return { slots: offers.rows.map(offerCard), bookings: bookings.rows.map(offerCard) };
 }
 
-export async function slotSummary(userId: string) {
-  const result = await query<{ free: number; bookings: number }>(
-    `SELECT
-       (SELECT COUNT(*)::int FROM event_slots s
-          JOIN events e ON e.id = s.event_id AND e.is_cancelled = FALSE AND e.start_at > now()
-          JOIN team_open_schedules os ON os.team_id = s.team_id AND os.enabled = TRUE
-          JOIN team_followers f ON f.team_id = s.team_id AND f.user_id = $1
-         WHERE s.status = 'OPEN'
-           AND NOT EXISTS (SELECT 1 FROM team_memberships tm WHERE tm.team_id = s.team_id AND tm.user_id = $1)
-           AND NOT EXISTS (SELECT 1 FROM event_slot_guests g WHERE g.event_id = s.event_id AND g.user_id = $1 AND g.status = 'BOOKED')
-           AND s.capacity > (SELECT COUNT(*) FROM event_slot_guests g WHERE g.event_id = s.event_id AND g.status = 'BOOKED')
-       ) AS free,
-       (SELECT COUNT(*)::int FROM event_slot_guests g
-          JOIN events e ON e.id = g.event_id AND e.is_cancelled = FALSE
-         WHERE g.user_id = $1 AND g.status = 'BOOKED' AND now() < ${EVENT_END_SQL}) AS bookings`,
-    [userId]
-  );
-  return result.rows[0] ?? { free: 0, bookings: 0 };
-}
-
 // --- Событие ---------------------------------------------------------------
 
 type EventRow = {

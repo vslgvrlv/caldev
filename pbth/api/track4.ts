@@ -105,7 +105,6 @@ export const slotsApi = {
   unfollow: (teamId: string) =>
     request<{ following: boolean }>(`/slots/teams/${enc(teamId)}/follow`, { method: 'DELETE' }),
   feed: () => request<SlotFeed>('/slots/feed'),
-  summary: () => request<{ free: number; bookings: number }>('/slots/summary'),
   event: (eventId: string) => request<SlotEventView>(`/slots/events/${enc(eventId)}`),
   manage: (eventId: string) => request<SlotManageView>(`/slots/events/${enc(eventId)}/manage`),
   open: (eventId: string, capacity: number, price: number) =>

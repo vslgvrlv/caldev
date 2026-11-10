@@ -23,7 +23,6 @@ import {
   openSlots,
   setOpenSchedule,
   setPaid,
-  slotSummary,
   teamCardFor,
   unfollow,
   type BookResult,
@@ -40,7 +39,6 @@ import "./guest-access.js";
 //   POST   /slots/teams/:teamId/follow           подписаться
 //   DELETE /slots/teams/:teamId/follow           отписаться
 //   GET    /slots/feed                           мои подписки, свободные слоты, мои записи
-//   GET    /slots/summary                        числа для значка в шапке
 //   GET    /slots/events/:eventId                событие глазами гостя или подписчика
 //   GET    /slots/events/:eventId/manage         блок слотов (капитан, тренер)
 //   PUT    /slots/events/:eventId                открыть N мест с ценой (капитан, тренер)
@@ -204,14 +202,6 @@ slotsRouter.get(
     const userId = req.authUser!.id;
     const [following, feed] = await Promise.all([listFollowing(userId), listFeed(userId)]);
     return res.json({ following, slots: feed.slots, bookings: feed.bookings });
-  })
-);
-
-slotsRouter.get(
-  "/summary",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    return res.json(await slotSummary(req.authUser!.id));
   })
 );
 
