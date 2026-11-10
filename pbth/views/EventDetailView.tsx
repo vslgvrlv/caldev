@@ -15,6 +15,10 @@ import { buildEventChargeModalState } from '../lib/event-charge-modal';
 import { canShowEventCollection } from '../lib/event-collection-access';
 import { AttendanceMap } from '../components/AttendanceMap';
 import { EventExtBlocks } from '../shell/EventExtBlocks';
+import { announceRemindersSent, sendEventReminder as sendTrack2Reminder, type ReminderAudience } from '../api/track2';
+import { summarizeReminderResult } from '../components/track2/reminder-result';
+import { groupAttendance } from '../lib/attendance';
+import { notify } from '../lib/notify';
 import { LocationAutocompleteInput } from '../components/LocationAutocompleteInput';
 import { GamePointsModal } from '../components/GamePointsModal';
 import { GameScoreLine } from '../components/GameScoreLine';
@@ -102,7 +106,6 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   onRsvp,
   onAddGame,
   onUpdateGame,
-  onSendEventReminder,
   onAttendeeClick,
   onDeleteEvent,
   onEditTime,
@@ -187,7 +190,9 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const canSeeEventTable = isAdminOrCaptain || currentUserRole === Role.TRAINER;
   // Явка имеет смысл только когда событие уже началось/прошло.
   const hasEventStarted = event.startDate.getTime() <= Date.now();
-  const canSendEventReminder = currentUserRole !== Role.PLAYER;
+  // Напоминать может капитан; тренер — по тренировкам и собраниям, как
+  // разрешает сервер (находка ревью №22: иначе тренер на турнире получал отказ).
+  const canSendEventReminder = isAdminOrCaptain || (currentUserRole === Role.TRAINER && isTrainerManageableType);
   // «Сбор по событию» спрятан у всех, пока его не переделают (решение Василия
   // 10.11.2026, п. 9). Тем же условием выключены загрузка данных и листы ниже:
   // код и данные остаются, не показывается только то, что не работает.
@@ -464,31 +469,51 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
     }
   };
 
-  const handleSendReminder = async () => {
-    if (isGameReminderTemplate && !reminderGameId) {
-      alert('Для игрового напоминания выберите игру из расписания.');
-      return;
-    }
+  // Трек 2: рассылка идёт своей ручкой, итог — через notify с именами тех,
+  // кому не ушло, и с пушами наравне с Telegram (раньше «Отправлено: 0»).
+  const sendReminder = async (
+    payload: { audience: ReminderAudience; template: typeof reminderTemplate; gameId?: string },
+    expected?: number
+  ) => {
     setIsRemindingUnanswered(true);
     try {
-      await onSendEventReminder({
-        eventId: event.id,
-        audience: reminderAudience,
-        template: reminderTemplate,
-        gameId: isGameReminderTemplate ? reminderGameId : undefined,
-      });
+      const result = await sendTrack2Reminder({ eventId: event.id, ...payload });
+      const summary = summarizeReminderResult(result, expected);
+      notify[summary.kind](summary.text);
+      announceRemindersSent(event.id);
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status;
+      notify.error(
+        status === 403
+          ? 'Нет прав напоминать по этому событию.'
+          : status === 400 && isGameReminderTemplate
+            ? 'Для напоминания об игре добавь игры в расписание.'
+            : 'Не удалось отправить напоминание. Проверь сеть и попробуй ещё раз.'
+      );
     } finally {
       setIsRemindingUnanswered(false);
     }
   };
 
-  const handleRemindSilent = async () => {
-    setIsRemindingUnanswered(true);
-    try {
-      await onSendEventReminder({ eventId: event.id, audience: 'UNANSWERED', template: 'EVENT_REMINDER' });
-    } finally {
-      setIsRemindingUnanswered(false);
+  const handleSendReminder = async () => {
+    if (isGameReminderTemplate && !reminderGameId) {
+      notify.error('Для напоминания об игре выбери игру из расписания.');
+      return;
     }
+    await sendReminder({
+      audience: reminderAudience,
+      template: reminderTemplate,
+      gameId: isGameReminderTemplate ? reminderGameId : undefined,
+    });
+  };
+
+  // «Напомнить (N)» в группе «Молчат»: те же люди, что на карте явки — без
+  // ответа и с «думаю»; согласие на серию считается ответом.
+  const handleRemindSilent = async () => {
+    await sendReminder(
+      { audience: 'SILENT', template: 'EVENT_REMINDER' },
+      groupAttendance(attendees).counts.silent
+    );
   };
 
   const handleAddGameSubmit = (e: React.FormEvent) => {

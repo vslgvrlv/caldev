@@ -20,13 +20,15 @@ export type TelegramNotificationJobPayload = {
   chatId: string;
   text: string;
   parseMode?: "HTML" | "MarkdownV2";
+  /** Кнопки под сообщением («Иду / Не иду», «Открыть событие»). */
+  replyMarkup?: Record<string, unknown>;
   context?: {
     actorUserId?: string;
     recipientUserId?: string;
     teamId?: string;
     eventId?: string;
     correlationId?: string;
-    type?: "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER";
+    type?: "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER" | "EVENT_AUTO_REMINDER";
   };
 };
 
@@ -65,7 +67,10 @@ async function processTelegramJob(job: any) {
   }
 
   try {
-    await sendTelegramBotMessage(payload.chatId, payload.text, payload.parseMode ? { parseMode: payload.parseMode } : undefined);
+    await sendTelegramBotMessage(payload.chatId, payload.text, {
+      ...(payload.parseMode ? { parseMode: payload.parseMode } : {}),
+      ...(payload.replyMarkup ? { replyMarkup: payload.replyMarkup } : {}),
+    });
     logger.info("notifications.queue.job_sent", {
       jobId: job?.id,
       teamId: payload.context?.teamId,

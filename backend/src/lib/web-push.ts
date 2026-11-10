@@ -31,7 +31,32 @@ export function isWebPushEnabled(): boolean {
 
 type WebPushLib = {
   setVapidDetails: (subject: string, publicKey: string, privateKey: string) => void;
-  sendNotification: (subscription: WebPushSubscription, payload: string) => Promise<unknown>;
+  sendNotification: (
+    subscription: WebPushSubscription,
+    payload: string,
+    options?: { TTL?: number; urgency?: string; timeout?: number }
+  ) => Promise<unknown>;
+};
+
+/**
+ * Содержимое пуша. `title` и `body` — как было; остальное — для service
+ * worker (`pbth/public/push-sw-handler.js`): `url` открывается по тапу
+ * (договорённость всех треков), `tag` не даёт пушу о другом событии затереть
+ * этот, `actions` и `rsvp` — кнопки «Иду / Не иду» с ключом ответа.
+ */
+export type WebPushPayload = {
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+  actions?: Array<{ action: string; title: string }>;
+  rsvp?: { token: string };
+};
+
+export type WebPushSendOptions = {
+  /** Сколько секунд push-сервису держать пуш для устройства без сети. */
+  ttlSeconds?: number;
+  urgency?: "very-low" | "low" | "normal" | "high";
 };
 
 let configured = false;
@@ -51,11 +76,18 @@ function loadWebPushLib(): WebPushLib {
 
 export async function sendWebPush(
   subscription: WebPushSubscription,
-  payload: { title: string; body: string }
+  payload: WebPushPayload,
+  options?: WebPushSendOptions
 ): Promise<WebPushResult> {
   if (!isWebPushEnabled()) return { ok: false, gone: false, reason: "Web push disabled" };
   try {
-    await loadWebPushLib().sendNotification(subscription, JSON.stringify(payload));
+    await loadWebPushLib().sendNotification(subscription, JSON.stringify(payload), {
+      // Без TTL push-сервис держит пуш до четырёх недель: устройство, бывшее
+      // без сети, получило бы «завтра тренировка» через неделю.
+      TTL: options?.ttlSeconds ?? 12 * 60 * 60,
+      urgency: options?.urgency ?? "high",
+      timeout: 10_000,
+    });
     return { ok: true };
   } catch (error) {
     return classifyWebPushError(error);
