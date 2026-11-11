@@ -32,9 +32,13 @@ describe('состав: что видит каждая роль', () => {
   it('капитан: заявки, ссылка, управление участником; роли по-русски, без ников', () => {
     const html = roster(Role.CAPTAIN, () => {});
     expect(html).toContain('Заявки');
-    expect(html).toContain('Ссылка команды');
+    expect(html).toContain('Пригласить');
     expect(html).toContain('Управление участником Артём Громов');
     expect(html).toContain('Капитан');
+    expect(html).toContain('Руководство');
+    expect(html).toContain('Резерв');
+    expect(html).toContain('2 участника · ты капитан');
+    expect(html).toContain('placeholder="Поиск игрока"');
     expect(html).toContain('Игрок · Травма');
     expect(html).toContain('· ты');
     expect(html).not.toMatch(/CAPTAIN|PLAYER|@cap|ui-avatars/);
@@ -42,13 +46,13 @@ describe('состав: что видит каждая роль', () => {
 
   it('тренер: заявки и ссылка есть, управления участником нет', () => {
     const html = roster(Role.TRAINER, () => {});
-    expect(html).toContain('Ссылка команды');
+    expect(html).toContain('Пригласить');
     expect(html).not.toContain('Управление участником');
   });
 
   it('игрок: ни заявок, ни ссылки, ни управления', () => {
     const html = roster(Role.PLAYER, () => {});
-    expect(html).not.toContain('Ссылка команды');
+    expect(html).not.toContain('Пригласить');
     expect(html).not.toContain('Заявки');
     expect(html).not.toContain('Управление участником');
     expect(html).toContain('Артём Громов');

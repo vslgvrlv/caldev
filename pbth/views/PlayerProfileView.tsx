@@ -4,8 +4,7 @@ import { roleLabel, playerStatusLabel } from '../lib/labels';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { formatBalance } from '../lib/team-roster';
 import { MemberRoleControl } from '../components/track1/MemberRoleControl';
-import { PersonAvatar } from '../components/people/PersonAvatar';
-import { Button, Glass, Icon, Row, Screen, ScreenBar, teamPaint } from '../ui';
+import { Avatar, Button, Glass, Icon, Row, Screen, ScreenBar, teamPaint } from '../ui';
 import './team/team.css';
 
 interface PlayerProfileViewProps {
@@ -56,10 +55,10 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
     <Screen paints={teamId ? [teamPaint(teamId)] : undefined}>
       <ScreenBar onBack={onBack} title="Профиль игрока" subtitle={teamName} />
 
-      <div className="pbth-hero">
-        <PersonAvatar name={member.name} photo={member.avatar} size={96} />
-        <h2 className="pbth-hero__name">{member.name}</h2>
-        <div className="pbth-hero__nick">@{member.nickname}</div>
+      <div className="pbth-phero">
+        <Avatar name={member.name} src={member.avatar} size={96} />
+        <h2 className="pbth-phero__name">{member.name}</h2>
+        <div className="pbth-phero__nick">@{member.nickname}</div>
         <div className="pbth-small">
           {roleLabel(member.role)} · {playerStatusLabel(member.status)}
         </div>

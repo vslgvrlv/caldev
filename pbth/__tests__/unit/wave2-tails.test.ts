@@ -181,9 +181,9 @@ describe('7. ссылка команды у тренера', () => {
     expect(teamLinkAccess(Role.CAPTAIN)).toEqual({ canShare: true, canRotate: true });
     expect(teamLinkAccess(Role.ADMIN)).toEqual({ canShare: true, canRotate: true });
     expect(teamLinkAccess(Role.PLAYER)).toEqual({ canShare: false, canRotate: false });
-    expect(renderTeam(Role.TRAINER)).toContain('Ссылка команды');
-    expect(renderTeam(Role.CAPTAIN)).toContain('Ссылка команды');
-    expect(renderTeam(Role.PLAYER)).not.toContain('Ссылка команды');
+    expect(renderTeam(Role.TRAINER)).toContain('Пригласить');
+    expect(renderTeam(Role.CAPTAIN)).toContain('Пригласить');
+    expect(renderTeam(Role.PLAYER)).not.toContain('Пригласить');
   });
 
   it('подпись шторки — от лица того, кто её открыл', () => {
@@ -236,9 +236,9 @@ describe('11. склонения', () => {
   });
 
   it('шапка состава', () => {
-    expect(renderTeam(Role.CAPTAIN, 1)).toContain('1 игрок · ты капитан<');
-    expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 игрока · ты капитан<');
-    expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 игроков · ты капитан<');
+    expect(renderTeam(Role.CAPTAIN, 1)).toContain('1 участник · ты капитан<');
+    expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 участника · ты капитан<');
+    expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 участников · ты капитан<');
   });
 });
 

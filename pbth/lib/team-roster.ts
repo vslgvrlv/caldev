@@ -50,10 +50,24 @@ export function isLeader(member: TeamMember): boolean {
   return member.role === Role.ADMIN || member.role === Role.CAPTAIN;
 }
 
-/** «12 игроков · ты капитан». */
+export type RosterGroup = { key: 'leaders' | 'staff' | 'players' | 'reserve'; title: string; members: TeamMember[] };
+
+/** Группы состава с тихими заголовками; пустые не возвращаются. Порядок внутри группы — как пришло. */
+export function groupRoster(members: TeamMember[]): RosterGroup[] {
+  const groups: RosterGroup[] = [
+    { key: 'leaders', title: 'Руководство', members: [] },
+    { key: 'staff', title: 'Тренерский штаб', members: [] },
+    { key: 'players', title: 'Основной состав', members: [] },
+    { key: 'reserve', title: 'Резерв', members: [] },
+  ];
+  for (const m of members) groups[rank(m)].members.push(m);
+  return groups.filter((g) => g.members.length > 0);
+}
+
+/** «12 участников · ты капитан». Считаются все члены команды. */
 export function rosterHeadline(count: number, role: Role | string, via?: 'membership' | 'owner'): string {
   const who = via === 'owner' ? 'владелец платформы' : roleLabel(role).toLowerCase();
-  return `${countLabel(count, 'игрок', 'игрока', 'игроков')} · ты ${who}`;
+  return `${countLabel(count, 'участник', 'участника', 'участников')} · ты ${who}`;
 }
 
 /** «85% · 11 из 13» для режима «Посещаемость». */

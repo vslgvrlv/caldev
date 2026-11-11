@@ -4,9 +4,8 @@ import { roleLabel } from '../lib/labels';
 import { ProfileIdentities } from '../components/ProfileIdentities';
 import { GuideEntrypoint } from '../components/GuideEntrypoint';
 import { PushOptIn } from '../components/PushOptIn';
-import { PersonAvatar } from '../components/people/PersonAvatar';
 import { ReminderSettings } from '../components/track2/ReminderSettings';
-import { Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../ui';
+import { Avatar, Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../ui';
 import './team/team.css';
 
 interface ProfileViewProps {
@@ -67,10 +66,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       {/* Редактирования профиля здесь нет: прежняя форма («Редактировать →
           Сохранить», «Новый пароль», кнопка фото) ничего не сохраняла.
           Имя и ник приходят из Telegram при входе. */}
-      <div className="pbth-hero">
-        <PersonAvatar name={user.name} photo={user.avatar} size={96} />
-        <h1 className="pbth-hero__name">{user.name}</h1>
-        <div className="pbth-hero__nick">@{user.nickname}</div>
+      <div className="pbth-phero">
+        <Avatar name={user.name} src={user.avatar} size={96} />
+        <h1 className="pbth-phero__name">{user.name}</h1>
+        <div className="pbth-phero__nick">@{user.nickname}</div>
         <div className="pbth-small">Имя и ник берутся из Telegram.</div>
       </div>
 
@@ -132,7 +131,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <Row lead={iconLead('share-2')} title="Поделиться ссылкой" chevron onClick={onShareLink} />
         <Row lead={iconLead('download')} title="Скачать .ics (файл)" chevron onClick={onDownloadICS} />
       </Glass>
-      <p className="pbth-note">Подпишись на свой календарь, чтобы видеть события в Google и Apple Calendar.</p>
+      <p className="pbth-pnote">Подпишись на свой календарь, чтобы видеть события в Google и Apple Calendar.</p>
 
       <Glass className="pbth-team__panel" style={{ marginTop: 24 }}>
         <Row

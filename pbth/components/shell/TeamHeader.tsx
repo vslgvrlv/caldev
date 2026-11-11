@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import type { Team, TeamContext, User } from '../../types';
+import { Avatar } from '../../ui';
 import { roleLabel } from '../../lib/labels';
 import { switchTeamPath, teamCodeOf } from '../../lib/team-url';
 import { shellExtensions, type ShellExtContext } from '../../shell/extensions';
@@ -52,13 +53,7 @@ export const TeamHeader: React.FC<TeamHeaderProps> = ({ user, team, teamCode, te
       style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
     >
       <div className="flex items-center space-x-3 min-w-0">
-        <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-pb-primary to-blue-500 p-[2px]">
-          <img
-            src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0F0F0F&color=fff`}
-            alt=""
-            className="w-full h-full rounded-full object-cover border-2 border-pb-background"
-          />
-        </div>
+        <Avatar name={user.name} src={user.avatar} size={40} />
         <div className="relative min-w-0">
           <button
             type="button"

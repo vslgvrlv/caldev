@@ -8,9 +8,12 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { TeamHeader } from '../components/shell/TeamHeader';
 import { ContentLoader, ScreenLoader } from '../components/shell/ScreenLoader';
 import { DataUnavailableScreen, TeamForbiddenScreen } from '../components/shell/StateScreens';
+import { TeamsPicker } from '../components/shell/TeamsPicker';
+import { TeamsPickerContext } from './teams-picker-context';
+import { shellExtensions, type ShellExtContext } from './extensions';
 import { eventCreateAccess } from '../lib/event-create-access';
-import { findTeamByCode, parseTeamPath, teamPath } from '../lib/team-url';
-import type { Team } from '../types';
+import { findTeamByCode, parseTeamPath, teamCodeOf, teamPath } from '../lib/team-url';
+import type { Team, TeamContext } from '../types';
 
 // Оболочка экранов команды `/t/:team/*` и профиля `/me`.
 //
@@ -25,6 +28,12 @@ const SECTION_SAFE_TOP = {
   // Старые экраны уходят под плавающую нижнюю панель: запас под неё и под вырез снизу.
   paddingBottom: 'calc(var(--pb-safe-bottom) + 16px)',
 } as React.CSSProperties;
+
+/**
+ * Разделы в новом виде: рисуют свою шапку и фон внутри экрана, старая шапка
+ * команды над ними не нужна. Календарь и разделы треков пока в старом виде.
+ */
+const NEW_LOOK_SECTIONS = new Set(['', 'roster', 'requests', 'money']);
 
 function isRecordScreen(pathname: string): boolean {
   const parsed = parseTeamPath(pathname);
@@ -90,6 +99,7 @@ const TeamShellInner: React.FC = () => {
   }, [ready, shell.team]);
 
   const recordScreen = isRecordScreen(location.pathname);
+  const [teamsOpen, setTeamsOpen] = React.useState(false);
 
   if (!ready && shell.teamLoad === 'forbidden') {
     return (
@@ -144,26 +154,55 @@ const TeamShellInner: React.FC = () => {
 
   const canCreate = ready && shell.team ? eventCreateAccess(shell.team.role).canCreate : false;
   const section = parseTeamPath(location.pathname)?.section ?? '';
-  // Главная рисует свою шапку внутри экрана (краски фона зависят от событий).
-  const home = section === '';
+  // Экран в новом виде (главная, состав, заявки, казна) рисует свою шапку внутри себя.
+  const newLook = NEW_LOOK_SECTIONS.has(section);
+
+  const extCtx: ShellExtContext | null =
+    shell.user && shell.team && ready ? { user: shell.user, team: shell.team, teamCode: code, role: shell.team.role, teams: shell.teams } : null;
+  const menuItems = extCtx
+    ? shellExtensions.teamMenu
+        .filter((item) => !item.visible || item.visible(extCtx))
+        .map((item) => ({ id: item.id, label: item.label, to: item.to(extCtx) }))
+    : [];
+  const pickTeam = (target: TeamContext) => {
+    setTeamsOpen(false);
+    const targetCode = teamCodeOf({ teamId: target.teamId, shortCode: target.shortCode });
+    if (targetCode !== code) navigate(teamPath(targetCode));
+  };
 
   return (
-    <Frame plain={home}>
-      {!home && shell.user && headerTeam && (
+    <Frame plain={newLook}>
+      {!newLook && shell.user && headerTeam && (
         <TeamHeader user={shell.user} team={headerTeam} teamCode={code} teams={shell.teams} />
       )}
       <OnboardingNote />
-      <div className="flex-1" style={home ? undefined : SECTION_SAFE_TOP}>
-        {ready ? (
-          <Suspense fallback={<ContentLoader />}>
-            <Outlet />
-          </Suspense>
-        ) : (
-          <ContentLoader />
-        )}
+      <div className="flex-1" style={newLook ? undefined : SECTION_SAFE_TOP}>
+        <TeamsPickerContext.Provider value={() => setTeamsOpen(true)}>
+          {ready ? (
+            <Suspense fallback={<ContentLoader />}>
+              <Outlet />
+            </Suspense>
+          ) : (
+            <ContentLoader />
+          )}
+        </TeamsPickerContext.Provider>
       </div>
 
       <ShellNav teamCode={code} canCreate={canCreate && section !== 'requests' && section !== 'journal'} />
+      {section === 'roster' && (
+        <TeamsPicker
+          open={teamsOpen}
+          onClose={() => setTeamsOpen(false)}
+          teams={shell.teams}
+          currentCode={code}
+          items={menuItems}
+          onPickTeam={pickTeam}
+          onPickItem={(to) => {
+            setTeamsOpen(false);
+            navigate(to);
+          }}
+        />
+      )}
     </Frame>
   );
 };

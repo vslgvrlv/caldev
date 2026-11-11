@@ -3,13 +3,12 @@ import { useShell } from '../../shell/context';
 import { useNavigate } from 'react-router-dom';
 import { joinUrl, notifyJoinRequestsChanged, track1Api, type PendingJoinRequest } from '../../api/track1';
 import { notify, errorText } from '../../lib/notify';
-import { PersonAvatar } from '../../components/people/PersonAvatar';
 import { sinceLabel } from '../../lib/team-roster';
 import { teamCodeOf, teamPath } from '../../lib/team-url';
 import { copyText } from '../../lib/copy-text';
 import { countLabel } from '../../lib/plural';
 import { roleLabel } from '../../lib/labels';
-import { Button, Glass, Icon, Screen, ScreenBar, TeamMark, teamPaint } from '../../ui';
+import { Avatar, Button, Glass, Icon, Screen, ScreenBar, TeamMark, teamPaint } from '../../ui';
 import '../team/team.css';
 
 // Заявки на вступление, `/t/:team/requests` (трек 1). Видят капитан и
@@ -22,7 +21,7 @@ export const JoinRequestsView: React.FC = () => {
   const canDecide = team?.role === 'CAPTAIN' || team?.role === 'TRAINER' || team?.role === 'ADMIN';
   const [items, setItems] = React.useState<PendingJoinRequest[] | null>(null);
   const [failed, setFailed] = React.useState(false);
-  const [busy, setBusy] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState<{ id: string; decision: 'approve' | 'decline' } | null>(null);
 
   const load = React.useCallback(async () => {
     if (!canDecide) return;
@@ -42,7 +41,7 @@ export const JoinRequestsView: React.FC = () => {
 
   const decide = async (item: PendingJoinRequest, decision: 'approve' | 'decline') => {
     if (busy) return;
-    setBusy(item.id);
+    setBusy({ id: item.id, decision });
     try {
       await track1Api.decideJoinRequest(item.id, decision);
       notify.success(decision === 'approve' ? `${item.user.name} теперь в составе` : 'Заявка отклонена');
@@ -98,11 +97,11 @@ export const JoinRequestsView: React.FC = () => {
       </div>
 
       {!canDecide ? (
-        <Glass className="pbth-empty">
+        <Glass className="pbth-rempty">
           <div className="pbth-muted">Заявки решают капитан и тренер.</div>
         </Glass>
       ) : failed ? (
-        <Glass className="pbth-empty">
+        <Glass className="pbth-rempty">
           <div className="pbth-muted">Заявки не загрузились.</div>
           <Button variant="glass2" onClick={() => void load()}>
             Обновить
@@ -113,12 +112,12 @@ export const JoinRequestsView: React.FC = () => {
           <div className="ui-skeleton" style={{ height: 140 }} aria-label="Загружаю заявки" />
         </Glass>
       ) : items.length === 0 ? (
-        <Glass className="pbth-empty">
+        <Glass className="pbth-rempty">
           <span className="pbth-iconlead ui-glass2" style={{ width: 72, height: 72 }}>
             <Icon name="inbox" size={32} />
           </span>
-          <h3 className="pbth-empty__title">Заявок нет</h3>
-          <p className="pbth-empty__text">Позови игроков ссылкой команды</p>
+          <h3 className="pbth-rempty__title">Заявок нет</h3>
+          <p className="pbth-rempty__text">Позови игроков ссылкой команды</p>
           <Button variant="light" block icon="copy" onClick={() => void copyLink()}>
             Скопировать ссылку
           </Button>
@@ -128,23 +127,34 @@ export const JoinRequestsView: React.FC = () => {
           {items.map((item) => (
             <div key={item.id} className="pbth-req">
               <div className="pbth-req__who">
-                <PersonAvatar name={item.user.name || item.user.nickname} photo={item.user.avatar} size={48} />
+                <Avatar name={item.user.name || item.user.nickname} src={item.user.avatar} size={48} />
                 <div className="pbth-req__text">
                   <div className="pbth-req__name">{item.user.name || item.user.nickname}</div>
                   <div className="pbth-small">
                     {item.user.username ? `@${item.user.username} · ` : ''}
                     {sinceLabel(item.createdAt)}
                   </div>
-                  <div className="pbth-req__sub">
-                    <Icon name="link" size={14} /> по ссылке команды
-                  </div>
                 </div>
               </div>
               <div className="pbth-req__btns">
-                <Button variant="light" icon="check" disabled={busy !== null} onClick={() => void decide(item, 'approve')}>
+                <Button
+                  variant="light"
+                  icon={busy?.id === item.id && busy.decision === 'approve' ? 'loader-circle' : 'check'}
+                  className={busy?.id === item.id && busy.decision === 'approve' ? 'pbth-spinbtn' : undefined}
+                  aria-busy={busy?.id === item.id && busy.decision === 'approve'}
+                  disabled={busy !== null}
+                  onClick={() => void decide(item, 'approve')}
+                >
                   Принять
                 </Button>
-                <Button variant="glass2" disabled={busy !== null} onClick={() => void decide(item, 'decline')}>
+                <Button
+                  variant="glass2"
+                  icon={busy?.id === item.id && busy.decision === 'decline' ? 'loader-circle' : undefined}
+                  className={busy?.id === item.id && busy.decision === 'decline' ? 'pbth-spinbtn' : undefined}
+                  aria-busy={busy?.id === item.id && busy.decision === 'decline'}
+                  disabled={busy !== null}
+                  onClick={() => void decide(item, 'decline')}
+                >
                   Отклонить
                 </Button>
               </div>

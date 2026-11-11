@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
-import { PersonAvatar } from '../components/people/PersonAvatar';
+import { useOpenTeams } from '../shell/teams-picker-context';
 import { teamLinkAccess } from '../lib/team-link-access';
-import { attendanceLabel, filterMembers, isLeader, memberSub, rosterHeadline, sortRoster } from '../lib/team-roster';
+import { attendanceLabel, filterMembers, groupRoster, isLeader, memberSub, rosterHeadline, sortRoster } from '../lib/team-roster';
 import { usePendingRequests } from '../lib/use-pending-requests';
-import { Button, Glass, Icon, Row, Screen, Seg, Sheet, TeamMark, teamPaint } from '../ui';
+import { Avatar, Button, Glass, Icon, Row, Screen, Seg, Sheet, TeamMark, teamPaint } from '../ui';
 import './team/team.css';
 
 interface TeamViewProps {
@@ -36,9 +36,6 @@ const VIEW_ITEMS = [
   { value: 'STATS', label: 'Посещаемость' },
 ];
 
-/** Поиск нужен, когда игроков больше, чем помещается на экран. */
-const SEARCH_FROM = 11;
-
 export const TeamView: React.FC<TeamViewProps> = ({
   team,
   members,
@@ -55,13 +52,16 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const [view, setView] = useState<View>('ROSTER');
   const [quickMember, setQuickMember] = useState<TeamMember | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
+  const openTeams = useOpenTeams();
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
   // Ссылку команды показывают капитан и тренер (заявки одобряют оба), отзывает — капитан.
   const linkAccess = teamLinkAccess(currentUserRole);
   const pending = usePendingRequests(linkAccess.canShare && !!onOpenRequests, team.id);
 
-  const visible = sortRoster(filterMembers(members, searchTerm), view === 'STATS' ? 'attendance' : 'roster');
+  const found = filterMembers(members, searchTerm);
+  const visible = sortRoster(found, view === 'STATS' ? 'attendance' : 'roster');
+  const groups = view === 'STATS' ? [{ key: 'all', title: '', members: visible }] : groupRoster(found);
 
   const runQuickAction = async (fn: () => Promise<void> | void) => {
     if (!quickMember || quickBusy) return;
@@ -82,7 +82,9 @@ export const TeamView: React.FC<TeamViewProps> = ({
   return (
     <Screen paints={[paint]}>
       <div className="pbth-team__hero">
-        <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={72} />
+        <button type="button" className="pbth-team__markbtn" aria-label="Выбрать команду" onClick={openTeams}>
+          <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={72} />
+        </button>
         <div className="pbth-team__heroText">
           <h1 className="pbth-team__name">{team.name}</h1>
           <div className="pbth-team__meta">{rosterHeadline(members.length, currentUserRole, team.via)}</div>
@@ -91,16 +93,14 @@ export const TeamView: React.FC<TeamViewProps> = ({
 
       <div className="pbth-team__tools">
         <Seg items={VIEW_ITEMS} value={view} onChange={onViewChange} label="Что показать" fill />
-        {members.length >= SEARCH_FROM && (
-          <input
-            type="search"
-            className="ui-input"
-            placeholder="Поиск игрока"
-            aria-label="Поиск игрока"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        )}
+        <input
+          type="search"
+          className="ui-input"
+          placeholder="Поиск игрока"
+          aria-label="Поиск игрока"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
       <Glass className="pbth-team__panel">
@@ -115,18 +115,22 @@ export const TeamView: React.FC<TeamViewProps> = ({
         {view === 'ROSTER' && linkAccess.canShare && (
           <Row
             lead={<span className="pbth-iconlead ui-glass2"><Icon name="link" /></span>}
-            title="Ссылка команды"
+            title="Пригласить"
+            sub="ссылка команды"
             chevron
             onClick={() => setLinkOpen(true)}
           />
         )}
-        {visible.map((member) => {
+        {groups.map((group) => (
+          <React.Fragment key={group.key}>
+            {group.title && <div className="pbth-team__group">{group.title}</div>}
+            {group.members.map((member) => {
           const att = attendanceLabel(member);
           const isMe = member.id === currentUserId;
           return (
             <Row
               key={member.id}
-              lead={<PersonAvatar name={member.name} photo={member.avatar} size={40} />}
+              lead={<Avatar name={member.name} src={member.avatar} size={40} />}
               title={
                 <span className="pbth-team__name-line">
                   {member.name}
@@ -178,6 +182,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
             />
           );
         })}
+          </React.Fragment>
+        ))}
         {visible.length === 0 && <div className="pbth-team__empty">Никого не найдено</div>}
       </Glass>
 

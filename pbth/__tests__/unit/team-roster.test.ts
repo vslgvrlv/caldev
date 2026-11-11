@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PlayerStatus, Role, type TeamMember } from '../../types';
 import {
   attendanceLabel,
+  groupRoster,
   filterMembers,
   formatBalance,
   joinLinkHint,
@@ -33,6 +34,16 @@ describe('состав: порядок, подписи', () => {
     expect(sortRoster(list).map((x) => x.id)).toEqual(['c1', 't1', 'p1', 'p2', 'r1']);
   });
 
+  it('группы с подписями, пустые пропускаются', () => {
+    expect(groupRoster(list).map((g) => [g.title, g.members.map((x) => x.id)])).toEqual([
+      ['Руководство', ['c1']],
+      ['Тренерский штаб', ['t1']],
+      ['Основной состав', ['p1', 'p2']],
+      ['Резерв', ['r1']],
+    ]);
+    expect(groupRoster([m('a', Role.PLAYER)]).map((g) => g.title)).toEqual(['Основной состав']);
+  });
+
   it('посещаемость — по убыванию', () => {
     expect(sortRoster(list, 'attendance')[0].id).toBe('p2');
   });
@@ -51,9 +62,9 @@ describe('состав: порядок, подписи', () => {
   });
 
   it('заголовок со склонением и ролью', () => {
-    expect(rosterHeadline(1, Role.PLAYER)).toBe('1 игрок · ты игрок');
-    expect(rosterHeadline(12, Role.CAPTAIN)).toBe('12 игроков · ты капитан');
-    expect(rosterHeadline(3, Role.ADMIN, 'owner')).toBe('3 игрока · ты владелец платформы');
+    expect(rosterHeadline(1, Role.PLAYER)).toBe('1 участник · ты игрок');
+    expect(rosterHeadline(12, Role.CAPTAIN)).toBe('12 участников · ты капитан');
+    expect(rosterHeadline(3, Role.ADMIN, 'owner')).toBe('3 участника · ты владелец платформы');
   });
 
   it('посещаемость строкой', () => {
