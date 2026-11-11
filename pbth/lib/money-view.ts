@@ -50,3 +50,9 @@ export function transactionLine(t: Transaction): TransactionLine {
     kind,
   };
 }
+
+/** Размер крупной суммы по длине строки: огромный → 28 → 20, чтобы сумма с «₽» была в одну строку на 360. */
+export function bigSumSize(text: string): 'xl' | 'l' | 'm' {
+  const len = Array.from(text).length;
+  return len <= 9 ? 'xl' : len <= 16 ? 'l' : 'm';
+}

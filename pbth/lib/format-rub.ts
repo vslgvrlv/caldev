@@ -1,33 +1,44 @@
-// Суммы в рублях: «3 000 ₽». Разряды и знак рубля отделены неразрывными
-// пробелами, чтобы сумма не ломалась на две строки. Копейки показываются, только
-// если они есть.
+// Суммы в рублях: «3 000 ₽», «−500 ₽», «+1 800 ₽». Разряды и знак рубля отделены
+// неразрывными пробелами, минус — настоящий (U+2212) и без пробела перед числом.
+// Копейки показываются, только если они есть, и всегда двумя цифрами (в базе
+// numeric с двумя знаками). Не число — тире: ошибка данных не должна выглядеть
+// как «0 ₽».
+//
+// ui-kit-allow: `UI.stat.fmt(v, 'money')` округляет до целых рублей и копейки теряет.
 
-const NBSP = ' ';
+const NBSP = ' '; // ui-kit-allow: см. выше, готовый fmt копейки не держит
 const MINUS = '−';
+const DASH = '—';
 
-function groupDigits(abs: number): string {
-  const whole = Math.trunc(abs);
-  const fraction = Math.round((abs - whole) * 100);
-  // 12.999 -> 13.00: переносим округление в целую часть.
-  const carry = fraction === 100 ? 1 : 0;
-  const intPart = String(whole + carry).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
-  const cents = fraction === 100 ? 0 : fraction;
-  return cents === 0 ? intPart : `${intPart},${String(cents).padStart(2, '0')}`;
+function toFinite(value: unknown): number | null {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim().replace(',', '.')) : NaN;
+  return Number.isFinite(n) ? n : null;
 }
 
-function finite(value: number): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+/** Модуль суммы в копейках, округление до двух знаков. */
+function absCents(n: number): number {
+  return Math.round(Math.abs(n) * 100);
 }
 
-/** «1 500 ₽». Знак числа не показывает: сумма берётся по модулю. */
-export function formatRub(value: number): string {
-  return `${groupDigits(Math.abs(finite(value)))}${NBSP}₽`;
+function body(cents: number): string {
+  const whole = Math.floor(cents / 100);
+  const rest = cents % 100;
+  const intPart = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+  return rest === 0 ? intPart : `${intPart},${String(rest).padStart(2, '0')}`;
 }
 
-/** «+1 800 ₽» / «−12 000 ₽» (настоящий минус U+2212). Ноль — без знака. */
-export function formatRubSigned(value: number, sign: 'plus' | 'minus' | 'none'): string {
-  const abs = Math.abs(finite(value));
-  if (sign === 'none' || abs === 0) return formatRub(abs);
-  return `${sign === 'plus' ? '+' : MINUS}${formatRub(abs)}`;
+/** «1 500 ₽», «−500 ₽», «0 ₽»; не число — «—». Знак сохраняется. */
+export function formatRub(value: unknown): string {
+  const n = toFinite(value);
+  if (n === null) return DASH;
+  const cents = absCents(n);
+  return `${n < 0 && cents > 0 ? MINUS : ''}${body(cents)}${NBSP}₽`;
+}
+
+/** Как formatRub, но положительной сумме добавляет «+»: «+1 800 ₽». Ноль — без знака. */
+export function formatRubSigned(value: unknown): string {
+  const n = toFinite(value);
+  if (n === null) return DASH;
+  return n > 0 && absCents(n) > 0 ? `+${formatRub(n)}` : formatRub(n);
 }

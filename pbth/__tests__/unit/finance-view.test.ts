@@ -209,6 +209,15 @@ describe('казна капитана', () => {
   });
 });
 
+describe('казна капитана: отрицательный остаток', () => {
+  it('не теряет знак и подписывает «Казна в минусе»', () => {
+    const html = render({ currentUserRole: Role.CAPTAIN, currentUserId: 'cap', team: team(Role.CAPTAIN, -500) });
+    expect(html).toContain('\u2212500 ₽');
+    expect(html).toContain('Казна в минусе');
+    expect(render({ currentUserRole: Role.CAPTAIN, currentUserId: 'cap' })).not.toContain('Казна в минусе');
+  });
+});
+
 describe('казна тренера', () => {
   // Бэкенд (PR 131) отдаёт книгу команды только капитану и владельцу. Тренеру —
   // как игроку: долги, а не баланс и история.

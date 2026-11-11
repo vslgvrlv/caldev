@@ -3,7 +3,7 @@ import { Transaction, TransactionType, Role, TeamMember, Team } from '../types';
 import { api } from '../api';
 import { buildTreasuryViewModel, type Debtor, type MyDebt } from '../lib/treasury-view';
 import { formatRub, formatRubSigned } from '../lib/format-rub';
-import { groupTransactionsByDay, transactionLine } from '../lib/money-view';
+import { bigSumSize, groupTransactionsByDay, transactionLine } from '../lib/money-view';
 import { Avatar, Button, Glass, Icon, Row, Screen, ScreenBar, Sheet, TeamMark, teamPaint } from '../ui';
 import './finance-view.css';
 
@@ -140,7 +140,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         <ScreenBar
           mark={<TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={32} />}
           title="Казна"
-          subtitle={team.name}
         />
 
         {/* Баланс команды — только капитан */}
@@ -149,7 +148,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <div className="pbth-money__label">
               <Icon name="wallet" size={20} /> Остаток казны
             </div>
-            <div className="pbth-money__big">{formatRub(team.budget)}</div>
+            <BigSum text={formatRub(team.budget)} />
+            {Number(team.budget) < 0 && <div className="pbth-money__note">Казна в минусе</div>}
             {vm.debtorsKnown && vm.totalDebt > 0 && (
               <Glass layer={2} className="pbth-money__sub">
                 <span className="pbth-money__sub-label">Долг игроков</span>
@@ -273,9 +273,13 @@ function MyDebtCard({ myDebt }: { myDebt: MyDebt }) {
       <div className="pbth-money__label">
         <Icon name="coins" size={20} /> Твой долг
       </div>
-      <div className="pbth-money__big">{formatRub(myDebt.amount)}</div>
+      <BigSum text={formatRub(myDebt.amount)} />
     </Glass>
   );
+}
+
+function BigSum({ text }: { text: string }) {
+  return <div className={`pbth-money__big pbth-money__big--${bigSumSize(text)}`}>{text}</div>;
 }
 
 function DebtsNotLoaded() {
@@ -304,13 +308,13 @@ function DebtorsList({
       {debtors.map((d) => (
         <Row
           key={d.id}
-          lead={<Avatar name={d.name} />}
+          lead={<PersonAvatar name={d.name} src={d.avatar} />}
           title={d.id === meId ? `${d.name} (ты)` : d.name}
           trailing={
             <>
               <span className="pbth-money__sum">{formatRub(d.amount)}</span>
               {canRemind && (
-                <Button size="sm" variant="glass2" disabled={remindingUserIds.has(d.id)} onClick={() => onRemind(d.id, d.name)}>
+                <Button size="sm" variant="glass2" className="pbth-money__rem" disabled={remindingUserIds.has(d.id)} onClick={() => onRemind(d.id, d.name)}>
                   {remindingUserIds.has(d.id) ? 'Отправляем...' : 'Напомнить'}
                 </Button>
               )}
@@ -322,8 +326,16 @@ function DebtorsList({
   );
 }
 
+// Фото из данных участника или инициалы; ui/Avatar фото пока не держит.
+function PersonAvatar({ name, src }: { name: string; src?: string }) {
+  if (!src) return <Avatar name={name} />;
+  return <img className="pbth-money__photo" src={src} width={40} height={40} alt={name} loading="lazy" decoding="async" />;
+}
+
 function TransactionRow({ t }: { t: Transaction }) {
   const line = transactionLine(t);
+  const sum =
+    line.sign === 'plus' ? formatRubSigned(t.amount) : line.sign === 'minus' ? formatRub(-Math.abs(Number(t.amount))) : formatRub(t.amount);
   const lead =
     line.kind === 'person' ? (
       <Avatar name={line.title} />
@@ -339,7 +351,7 @@ function TransactionRow({ t }: { t: Transaction }) {
       sub={line.sub}
       trailing={
         <span className={`pbth-money__sum${line.sign === 'plus' ? '' : ' pbth-money__sum--out'}`}>
-          {formatRubSigned(t.amount, line.sign)}
+          {sum}
         </span>
       }
     />

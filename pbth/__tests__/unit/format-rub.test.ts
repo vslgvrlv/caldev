@@ -1,43 +1,58 @@
 import { describe, expect, it } from 'vitest';
 import { formatRub, formatRubSigned } from '../../lib/format-rub';
-import { dayLabel, groupTransactionsByDay, transactionLine } from '../../lib/money-view';
+import { bigSumSize, dayLabel, groupTransactionsByDay, transactionLine } from '../../lib/money-view';
 import { TransactionType, type Transaction } from '../../types';
 
 describe('formatRub', () => {
-  it('разряды и знак рубля — неразрывные пробелы', () => {
-    expect(formatRub(32000)).toBe('32 000 ₽');
-    expect(formatRub(1500)).toBe('1 500 ₽');
-    expect(formatRub(1234567)).toBe('1 234 567 ₽');
-    expect(formatRub(500)).toBe('500 ₽');
+  it('положительные: разряды и знак рубля — неразрывные пробелы', () => {
+    expect(formatRub(32000)).toBe('32\u00A0000\u00A0₽');
+    expect(formatRub(1234567)).toBe('1\u00A0234\u00A0567\u00A0₽');
+    expect(formatRub(500)).toBe('500\u00A0₽');
   });
-  it('ноль и нечисло — «0 ₽»', () => {
-    expect(formatRub(0)).toBe('0 ₽');
-    expect(formatRub(NaN)).toBe('0 ₽');
-    expect(formatRub(undefined as unknown as number)).toBe('0 ₽');
+  it('отрицательные сохраняют знак: настоящий минус, без пробела перед числом', () => {
+    expect(formatRub(-500)).toBe('\u2212500\u00A0₽');
+    expect(formatRub(-2500.75)).toBe('\u22122\u00A0500,75\u00A0₽');
+    expect(formatRub(-0.5)).toBe('\u22120,50\u00A0₽');
+    expect(formatRub(-500)).not.toContain('-');
   });
-  it('копейки показываются, только если есть', () => {
-    expect(formatRub(1500.5)).toBe('1 500,50 ₽');
-    expect(formatRub(10.07)).toBe('10,07 ₽');
-    expect(formatRub(12.999)).toBe('13 ₽');
+  it('ноль и то, что округляется в ноль, — без знака', () => {
+    expect(formatRub(0)).toBe('0\u00A0₽');
+    expect(formatRub(-0)).toBe('0\u00A0₽');
+    expect(formatRub(-0.001)).toBe('0\u00A0₽');
   });
-  it('без знака формат берёт модуль', () => {
-    expect(formatRub(-500)).toBe('500 ₽');
+  it('копейки только если есть, всегда две цифры', () => {
+    expect(formatRub(1500.5)).toBe('1\u00A0500,50\u00A0₽');
+    expect(formatRub(0.5)).toBe('0,50\u00A0₽');
+    expect(formatRub(10.07)).toBe('10,07\u00A0₽');
+    expect(formatRub(12.999)).toBe('13\u00A0₽');
+    expect(formatRub(1234567.5)).toBe('1\u00A0234\u00A0567,50\u00A0₽');
+  });
+  it('не число — тире, а не «0 ₽»', () => {
+    for (const bad of ['abc', {}, [], Infinity, -Infinity, NaN, undefined, null, '', true]) {
+      expect(formatRub(bad)).toBe('\u2014');
+      expect(formatRubSigned(bad)).toBe('\u2014');
+    }
+  });
+  it('число строкой читается как число', () => {
+    expect(formatRub('1500.25')).toBe('1\u00A0500,25\u00A0₽');
   });
 });
 
 describe('formatRubSigned', () => {
-  it('плюс и настоящий минус U+2212', () => {
-    expect(formatRubSigned(1800, 'plus')).toBe('+1 800 ₽');
-    expect(formatRubSigned(12000, 'minus')).toBe('−12 000 ₽');
-    expect(formatRubSigned(12000, 'minus')).not.toContain('-');
+  it('плюс положительным, минус отрицательным, ноль без знака', () => {
+    expect(formatRubSigned(1800)).toBe('+1\u00A0800\u00A0₽');
+    expect(formatRubSigned(-12000)).toBe('\u221212\u00A0000\u00A0₽');
+    expect(formatRubSigned(0)).toBe('0\u00A0₽');
+    expect(formatRubSigned(0.001)).toBe('0\u00A0₽');
   });
-  it('без знака и ноль — без знака', () => {
-    expect(formatRubSigned(3500, 'none')).toBe('3 500 ₽');
-    expect(formatRubSigned(0, 'plus')).toBe('0 ₽');
-    expect(formatRubSigned(0, 'minus')).toBe('0 ₽');
-  });
-  it('знак переданной суммы не удваивается', () => {
-    expect(formatRubSigned(-100, 'minus')).toBe('−100 ₽');
+});
+
+describe('bigSumSize', () => {
+  it('огромный → 28 → 20 по длине строки', () => {
+    expect(bigSumSize(formatRub(32000))).toBe('xl');
+    expect(bigSumSize(formatRub(1234567))).toBe('l');
+    expect(bigSumSize(formatRub(1234567.5))).toBe('l');
+    expect(bigSumSize(formatRub(-1234567890.5))).toBe('m');
   });
 });
 
@@ -108,5 +123,20 @@ describe('сборы события: суммы с неразрывным про
     });
     expect(vm.summaryCards[1].value).toBe('4 500 ₽');
     expect(vm.summaryCards[2].value).toBe('7 500 ₽');
+  });
+});
+
+describe('сборы события: знак сохраняется', () => {
+  it('отрицательное «осталось собрать» не превращается в положительное', () => {
+    const vm = buildEventFinanceViewModel({
+      currentUserRole: Role.CAPTAIN,
+      detail: {
+        event: { id: 'e', title: 't', type: 'TRAINING', startDate: '2026-11-11', financeState: 'COLLECTING' },
+        summary: { chargedTotal: 0, paidTotal: 0, outstandingTotal: -150, collectionRatePct: 0 },
+        participants: [],
+        payments: [],
+      },
+    });
+    expect(vm.summaryCards[2].value).toBe('\u2212150\u00A0₽');
   });
 });
