@@ -1,4 +1,4 @@
-import { request } from '../api';
+import { request, type InviteNextEvent } from '../api';
 
 // Клиент трека 1 «Вход и заявки» (ревизия PBTH, 11.11.2026). Ручки — в
 // backend/src/modules/join-requests, team-requests и teams (ссылка команды).
@@ -23,6 +23,10 @@ export type JoinLinkPreview = {
   authenticated: boolean;
   member: boolean;
   request: JoinRequest | null;
+  /** Необязательные факты о команде: капитан, число людей, ближайшее событие. */
+  inviter?: { name: string } | null;
+  membersCount?: number;
+  nextEvent?: InviteNextEvent | null;
 };
 
 export type SubmitJoinResult = { member: boolean; team: TeamBrief; request: JoinRequest | null };
