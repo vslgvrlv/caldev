@@ -194,12 +194,12 @@ pg_restore --list < файл` (проверка), остановить бэке�
 `pg_restore -d <новая> --no-owner --exit-on-error --single-transaction < файл`,
 затем `ALTER DATABASE ... RENAME` из базы `postgres`.
 
-## Заголовки защиты (применить на сервере руками)
+## Заголовки защиты (на сервере с 11.11.2026)
 
 Бэкенд уже ставит заголовки на `/api/` и `/calendar/` (helmet: HSTS, `nosniff`,
 `X-Frame-Options`, `Referrer-Policy: no-referrer`). Страницы фронтенда идут
-от контейнера фронтенда без заголовков. В репозитории это уже описано, на
-сервере — нет:
+от контейнера фронтенда без заголовков — их добавляет nginx. С 11.11.2026
+фрагмент подключён на сервере для прода и staging:
 
 - `infra/nginx/pbth-security-headers.conf.example` — фрагмент с заголовками:
   HSTS (те же параметры, что у бэкенда), `X-Content-Type-Options: nosniff`,
@@ -211,12 +211,19 @@ pg_restore --list < файл` (проверка), остановить бэке�
   `/assets/`, `/icons/` обоих доменов. В `/api/` и `/calendar/` не включать —
   заголовки задвоятся.
 
-Порядок на сервере:
+На сервере конфиг лежит в двух файлах, а не в одном, как в образце:
+`/etc/nginx/sites-available/pbth.conf` (прод, фронтенд на `127.0.0.1:3000`,
+бэкенд на `:8000`) и `pbth-staging.conf` (staging, `:3200` и `:8200`). Тот же
+nginx обслуживает сайты защитаплёнкой.рф и zashchitaplenkoy.ru — после любой
+правки проверять и их. Бэкапы до правки 11.11.2026:
+`pbth.conf.bak-20261111-102855-headers`, `pbth-staging.conf.bak-20261111-102734-headers`.
+
+Порядок, если понадобится повторить (новый сервер, восстановление):
 
 ```bash
-cp /etc/nginx/sites-available/pbth.conf /etc/nginx/sites-available/pbth.conf.bak-$(date +%F)
+cp -p /etc/nginx/sites-available/pbth-staging.conf /etc/nginx/sites-available/pbth-staging.conf.bak-$(date +%F)
 cp infra/nginx/pbth-security-headers.conf.example /etc/nginx/snippets/pbth-security-headers.conf
-# в pbth.conf добавить строку include в location /, /assets/, /icons/ (staging и prod)
+# в конфиге добавить строку include в location /, /assets/, /icons/ — после proxy_pass
 nginx -t && systemctl reload nginx
 ```
 
