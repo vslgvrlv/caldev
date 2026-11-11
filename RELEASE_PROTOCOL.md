@@ -46,6 +46,16 @@ Auth v2 env block is mandatory for both files:
 - `AUTH_SLO_MAX_ERROR_RATE`
 - `AUTH_SLO_TOKEN` (optional)
 
+Переменная из файла окружения доходит до бэкенда только если она перечислена
+в разделе `environment` сервиса `backend` в `docker-compose.release.yml`.
+Добавил новую настройку в код — добавь её и туда, иначе на сервере она
+молча останется значением по умолчанию (тест
+`backend/src/__tests__/unit/release-compose-env.test.ts`).
+
+Авто-напоминания о явке включаются строкой `AUTO_REMINDERS_ENABLED=1` в файле
+окружения и следующим выкатом. Проверка: в логе бэкенда есть
+`reminders.auto.started`.
+
 ## How to release (copy-paste flow)
 
 ### 1) On Mac: build artifact
