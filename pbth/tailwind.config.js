@@ -12,8 +12,25 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Новые экраны: шрифт темы ui-kit (Manrope). Старые остаются на font-sans.
+        ui: ['var(--ui-font)'],
+      },
+      borderRadius: {
+        'ui-sm': 'var(--ui-radius-sm)',
+        'ui-md': 'var(--ui-radius-md)',
+        'ui-lg': 'var(--ui-radius-lg)',
       },
       colors: {
+        // Токены ui-kit для новых экранов (bg-ui-bg, text-ui-muted, ...). Старая палитра pb-* не тронута.
+        'ui-bg': 'var(--ui-bg)',
+        'ui-surface': 'var(--ui-surface)',
+        'ui-surface-2': 'var(--ui-surface-2)',
+        'ui-text': 'var(--ui-text)',
+        'ui-muted': 'var(--ui-muted)',
+        'ui-border': 'var(--ui-border)',
+        'ui-accent': 'var(--ui-accent)',
+        'ui-accent-text': 'var(--ui-accent-text)',
+        'ui-danger': 'var(--ui-danger)',
         pb: {
           primary: '#00E676',
           secondary: '#39FF14',

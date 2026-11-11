@@ -1,0 +1,343 @@
+/* ui-kit 0.43.0 */
+/* src/tokens/tokens.css */
+/* ui-kit: словарь токенов --ui-*. Значения по умолчанию нейтральные (светлые);
+   продукт переопределяет их темой themes/<продукт>.css, тёмная версия — атрибутом [data-ui-theme="dark"]. */
+:root {
+  --ui-bg: #f6f6f4;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #efefec;
+  --ui-text: #1c1c1a;
+  --ui-muted: #6b6b66;
+  --ui-border: #d8d8d3;
+  --ui-accent: #2f5fd0;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #c0362a;
+  --ui-success: #1d7a4d;
+  --ui-warning: #8a5a00;
+  --ui-overlay: rgba(20, 20, 18, .45);
+
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+
+  --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ui-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Текст для чтения (0.32.0): пропорциональный системный; темы не перекрывают, даже если их --ui-font моноширинный */
+  --ui-font-text: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ui-space: 8px;
+  --ui-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+
+  --ui-z-toast: 12000;
+  --ui-z-dialog: 11000;
+  --ui-z-palette: 10500;
+
+  --ui-dialog-w-md: 560px;
+  --ui-dialog-w-lg: 820px;
+  --ui-dialog-w-xl: 1120px;
+  --ui-dialog-title-size: 17px;
+  --ui-dialog-title-weight: 700;
+  --ui-dialog-subtitle-size: 13px;
+  --ui-dialog-action-size: 14px;
+  --ui-dialog-pad-x: 20px;
+  --ui-dialog-pad-y: 16px;
+  --ui-overlay-blur: 0px;
+
+  --ui-icon-stroke: 2;
+  /* Кривая переходов для мелких движений (подсказка графика); тема может подставить свою */
+  --ui-ease: ease;
+
+  /* Контролы (0.14.0): высота, скругление, шрифт кнопки, сегменты, кольцо фокуса, панель */
+  --ui-ctl-h: 36px;
+  --ui-ctl-pad-x: 14px;
+  --ui-ctl-radius: var(--ui-radius-md);
+  --ui-ctl-size: 14px;
+  --ui-btn-size: 13px;
+  --ui-btn-weight: 600;
+  --ui-seg-radius: var(--ui-radius-sm);
+  --ui-seg-active-bg: var(--ui-accent);
+  --ui-seg-active-text: var(--ui-accent-text);
+  --ui-seg-hover-bg: rgba(127, 127, 127, .12);
+  --ui-focus-ring: rgba(47, 95, 208, .18);
+  --ui-panel-bg: var(--ui-surface);
+  --ui-panel-border: var(--ui-border);
+  --ui-panel-shadow: none;
+  --ui-panel-pad: 12px;
+  --ui-panel-title-weight: 700;
+
+  /* Кнопка и сегменты под телефон (0.37.0): по умолчанию — прежний вид. Фон кнопки, вид выключенной, трекинг, сжатие при нажатии,
+     промежуток раздельных сегментов (.ui-seg--split). Производные от других токенов не заданы (initial): запас в var() берёт
+     значение там, где стоит кнопка, — иначе фон, заданный странице на контейнере, не дошёл бы до нажатой и выключенной. */
+  --ui-btn-bg: transparent;
+  --ui-btn-disabled-opacity: .4;
+  --ui-btn-tracking: .02em;
+  --ui-btn-gap: 6px;
+  --ui-btn-pressed-text: initial;
+  --ui-btn-press-scale: .96;
+  --ui-seg-gap: 8px;
+  --ui-btn-pressed-bg: initial;           /* запас: var(--ui-btn-bg) */
+  --ui-btn-primary-disabled-bg: initial;  /* запас: var(--ui-accent) */
+  --ui-btn-primary-disabled-text: initial; /* запас: var(--ui-accent-text) */
+
+  /* Выключатель .ui-switch (0.42.0): не заданы (initial) — цвета берутся из запаса там, где стоит выключатель. */
+  --ui-switch-on: initial;        /* запас: var(--ui-accent) */
+  --ui-switch-off: initial;       /* запас: 22% --ui-text */
+  --ui-switch-thumb: initial;     /* запас: 65% --ui-text */
+  --ui-switch-thumb-on: initial;  /* запас: var(--ui-accent-text) */
+
+  /* Подъём активного (0.18.0): фон, кромка и тень активного пункта сайдбара, активного сегмента; свечение главной кнопки.
+     Не заданы (initial) — компоненты рисуют как раньше; тема включает подъём, задав значения. */
+  --ui-lift-bg: initial;
+  --ui-lift-border: initial;
+  --ui-lift-shadow: initial;
+  --ui-btn-primary-shadow: initial;
+}
+
+[data-ui-theme="dark"] {
+  color-scheme: dark;
+  --ui-bg: #121212;
+  --ui-surface: #1b1b1a;
+  --ui-surface-2: #242423;
+  --ui-text: #ecebe7;
+  --ui-muted: #9c9a94;
+  --ui-border: #34332f;
+  --ui-accent: #7da0f0;
+  --ui-accent-text: #101010;
+  --ui-danger: #ef7a6c;
+  --ui-success: #5cc98f;
+  --ui-warning: #e0b052;
+  --ui-overlay: rgba(0, 0, 0, .6);
+  --ui-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  --ui-focus-ring: rgba(125, 160, 240, .25);
+}
+[data-ui-theme="light"] { color-scheme: light; }
+
+/* ─── Стекло: панель на размытии, цветные пятна под слоем, свечение акцента. Нейтральные (светлые) значения; темы переопределяют. ─── */
+:root {
+  --ui-glass-bg: rgba(255, 255, 255, .62);
+  --ui-glass-border: rgba(20, 20, 18, .09);
+  --ui-glass-highlight: rgba(255, 255, 255, .7);
+  --ui-glass-blur: 20px;
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .10);
+  --ui-glow: rgba(47, 95, 208, .35);
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(47, 95, 208, .10), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(120, 90, 220, .08), transparent 62%);
+  --ui-violet: #7c5cd6;
+  --ui-font-num: var(--ui-font-mono);
+}
+[data-ui-theme="dark"] {
+  --ui-glass-bg: rgba(255, 255, 255, .035);
+  --ui-glass-border: rgba(255, 255, 255, .08);
+  --ui-glass-highlight: rgba(255, 255, 255, .06);
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .42);
+  --ui-glow: rgba(125, 160, 240, .5);
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(125, 160, 240, .16), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(167, 139, 250, .12), transparent 62%);
+  --ui-violet: #a78bfa;
+}
+/* Стеклянная панель */
+.ui-glass {
+  position: relative; box-sizing: border-box; overflow: hidden;
+  border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-glass-bg); box-shadow: var(--ui-glass-shadow), inset 0 1px 0 var(--ui-glass-highlight);
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(140%); -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(140%);
+}
+/* Второй слой стекла (0.18.0): карточка внутри стеклянной панели. По умолчанию — обычная поверхность панели; темы делают её светлее и дают блик с цветной тенью. */
+:root {
+  --ui-glass2-bg: var(--ui-surface-2);
+  --ui-glass2-border: var(--ui-border);
+  --ui-glass2-highlight: transparent;
+  --ui-glass2-shadow: 0 0 0 0 transparent;
+}
+.ui-glass2 {
+  position: relative; box-sizing: border-box;
+  border: 1px solid var(--ui-glass2-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-glass2-bg); box-shadow: var(--ui-glass2-shadow), inset 0 1px 0 var(--ui-glass2-highlight);
+}
+/* Пятна под слоем — чтобы размытие было видно. Один элемент на страницу, под контентом. */
+.ui-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--ui-backdrop); }
+/* Каскадное появление детей: добавить класс контейнеру после замены содержимого (UI.skeleton.swap делает сам). */
+@keyframes ui-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.ui-enter > * { animation: ui-enter 520ms cubic-bezier(.22, 1, .36, 1) both; }
+.ui-enter > :nth-child(2) { animation-delay: 60ms; }
+.ui-enter > :nth-child(3) { animation-delay: 120ms; }
+.ui-enter > :nth-child(4) { animation-delay: 180ms; }
+.ui-enter > :nth-child(5) { animation-delay: 240ms; }
+.ui-enter > :nth-child(6) { animation-delay: 300ms; }
+.ui-enter > :nth-child(7) { animation-delay: 360ms; }
+.ui-enter > :nth-child(n+8) { animation-delay: 420ms; }
+@media (prefers-reduced-motion: reduce) { .ui-enter > * { animation: none; } }
+
+/* ─── Палитра Cmd/Ctrl+K: нейтральные значения; темы подгоняют под бренд. ─── */
+:root {
+  --ui-pal-overlay: rgba(20, 20, 18, .28);
+  --ui-pal-shadow: var(--ui-shadow);
+  --ui-pal-radius: var(--ui-radius-lg);
+  --ui-pal-radius-row: var(--ui-radius-md);
+  --ui-pal-radius-ic: var(--ui-radius-sm);
+  --ui-pal-radius-kbd: var(--ui-radius-sm);
+  --ui-pal-foot-bg: var(--ui-bg);
+  --ui-pal-sep: var(--ui-border);
+  --ui-pal-trigger-hover-border: var(--ui-muted);
+  --ui-pal-title-font: var(--ui-font);
+}
+[data-ui-theme="dark"] { --ui-pal-overlay: rgba(0, 0, 0, .55); }
+
+/* src/icon/icon.css */
+.ui-icon { display: inline-block; flex-shrink: 0; vertical-align: -0.125em; stroke-width: var(--ui-icon-stroke, 2); }
+
+/* src/controls/controls.css */
+/* Контролы: кнопка, сегменты, поле, селект, галочка, чип, подпись, панель, верхняя панель.
+   База — Steel ZP (байбл app.защитапленкой.рф/system; до 0.13.0 жили только в themes/zp-steel.css как rnp-*).
+   Размеры и цвета — токены --ui-ctl-*, --ui-btn-*, --ui-seg-*, --ui-panel-*; бренд продукта — в его теме.
+   Из этого файла сборка делает прокладку rnp-* для zp-steel.css (scripts/aliases.js): из @-правил допустимо только @media.
+   Наведение (0.37.0) — только там, где есть мышь: @media (hover: hover) стоит вокруг каждого правила :hover на его прежнем месте,
+   порядок и специфичность правил те же. На телефоне после касания кнопка не остаётся «наведённой».
+   --ui-btn-fill и --ui-btn-primary-fill/-ink — внутренние: через них нажатая и выключенная кнопка меняют фон, не поднимая специфичность. */
+.ui-btn {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--ui-btn-gap, 6px);
+  height: var(--ui-ctl-h); padding: 0 var(--ui-ctl-pad-x); border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius);
+  background: var(--ui-btn-fill, var(--ui-btn-bg, transparent)); color: var(--ui-text); font: inherit; font-size: var(--ui-btn-size); font-weight: var(--ui-btn-weight);
+  letter-spacing: var(--ui-btn-tracking, .02em); line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none;
+  transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease), color 150ms var(--ui-ease), transform 150ms var(--ui-ease);
+}
+@media (hover: hover) {
+  .ui-btn:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
+}
+.ui-btn:active { transform: scale(var(--ui-btn-press-scale, .96)); transition-duration: 80ms; }
+.ui-btn:focus-visible, .ui-seg > button:focus-visible, .ui-input:focus-visible, .ui-select:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-btn:disabled, .ui-btn[aria-disabled="true"] { opacity: var(--ui-btn-disabled-opacity, .4); cursor: not-allowed; transform: none; }
+.ui-btn[aria-pressed="true"] { --ui-btn-fill: var(--ui-btn-pressed-bg, var(--ui-btn-bg, transparent)); border-color: var(--ui-accent); color: var(--ui-btn-pressed-text, var(--ui-accent)); }
+.ui-btn svg, .ui-seg > button svg { width: 1.15em; height: 1.15em; flex: none; }
+.ui-btn--primary { border-color: transparent; background: var(--ui-btn-primary-fill, var(--ui-accent)); color: var(--ui-btn-primary-ink, var(--ui-accent-text)); box-shadow: var(--ui-btn-primary-shadow, none); }
+.ui-btn--primary:disabled, .ui-btn--primary[aria-disabled="true"] { --ui-btn-primary-fill: var(--ui-btn-primary-disabled-bg, var(--ui-accent)); --ui-btn-primary-ink: var(--ui-btn-primary-disabled-text, var(--ui-accent-text)); }
+@media (hover: hover) {
+  .ui-btn--primary:hover { border-color: transparent; background: var(--ui-accent-hover, var(--ui-accent)); color: var(--ui-accent-text); filter: brightness(var(--ui-btn-hover-brightness, 1.08)); transform: translateY(-1px); }
+}
+.ui-btn--danger { border-color: transparent; background: var(--ui-danger); color: var(--ui-accent-text); }
+@media (hover: hover) {
+  .ui-btn--danger:hover { border-color: transparent; color: var(--ui-accent-text); filter: brightness(1.08); }
+}
+.ui-btn--ghost { --ui-btn-bg: transparent; border-color: transparent; }
+@media (hover: hover) {
+  .ui-btn--ghost:hover { background: var(--ui-surface-2); }
+  /* Выключенная кнопка под мышью выглядит как без мыши (0.37.0): правила только для выключенных, включённые не задеты. */
+  .ui-btn:disabled:hover, .ui-btn[aria-disabled="true"]:hover { border-color: var(--ui-border); color: var(--ui-text); }
+  .ui-btn[aria-pressed="true"]:disabled:hover, .ui-btn[aria-pressed="true"][aria-disabled="true"]:hover { border-color: var(--ui-accent); color: var(--ui-btn-pressed-text, var(--ui-accent)); }
+  .ui-btn--primary:disabled:hover, .ui-btn--primary[aria-disabled="true"]:hover { border-color: transparent; background: var(--ui-btn-primary-fill, var(--ui-accent)); color: var(--ui-btn-primary-ink, var(--ui-accent-text)); filter: none; transform: none; }
+  .ui-btn--danger:disabled:hover, .ui-btn--danger[aria-disabled="true"]:hover { border-color: transparent; color: var(--ui-accent-text); filter: none; }
+  .ui-btn--ghost:disabled:hover, .ui-btn--ghost[aria-disabled="true"]:hover { border-color: transparent; background: var(--ui-btn-fill, var(--ui-btn-bg, transparent)); }
+}
+/* Кнопка на втором слое стекла (0.42.0): фон и рамка из --ui-glass2-*, как у .ui-glass2. Нажатая и выключенная меняют вид так же, как у обычной .ui-btn. */
+.ui-btn--glass2 { --ui-btn-bg: var(--ui-glass2-bg); border-color: var(--ui-glass2-border); box-shadow: var(--ui-glass2-shadow), inset 0 1px 0 var(--ui-glass2-highlight); }
+.ui-btn--sm { height: calc(var(--ui-ctl-h) - 8px); padding: 0 10px; font-size: calc(var(--ui-btn-size) - 1px); }
+
+.ui-seg { box-sizing: border-box; display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius); background: var(--ui-surface-2); }
+.ui-seg > button {
+  display: inline-flex; align-items: center; gap: 6px; height: calc(var(--ui-ctl-h) - 10px); padding: 0 10px; border: 0; border-radius: var(--ui-seg-radius);
+  background: transparent; color: var(--ui-seg-text, var(--ui-text)); font: inherit; font-size: var(--ui-btn-size); line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background 200ms var(--ui-ease), color 200ms var(--ui-ease);
+}
+@media (hover: hover) {
+  .ui-seg > button:hover:not(.is-active):not([aria-pressed="true"]) { background: var(--ui-seg-hover-bg); }
+}
+.ui-seg > button.is-active, .ui-seg > button[aria-pressed="true"] {
+  background: var(--ui-lift-bg, var(--ui-seg-active-bg)); color: var(--ui-seg-active-text);
+  box-shadow: inset 0 0 0 1px var(--ui-lift-border, transparent), var(--ui-lift-shadow, 0 0 0 0 transparent);
+}
+/* Раздельные сегменты (0.37.0): та же разметка и UI.seg.mount, но без дорожки — отдельные кнопки с рамкой, как .ui-btn.
+   Промежуток — margin соседа, не gap: страницы для клиентов открывают и в старых встроенных браузерах. Тон нажатой — --ui-lift-border / --ui-lift-bg. */
+.ui-seg--split { gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.ui-seg--split > button {
+  box-sizing: border-box; justify-content: center; height: var(--ui-ctl-h); padding: 0 var(--ui-ctl-pad-x);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius); background: var(--ui-btn-bg, transparent);
+  font-size: var(--ui-btn-size); font-weight: var(--ui-btn-weight); letter-spacing: var(--ui-btn-tracking, .02em);
+  transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease), color 150ms var(--ui-ease);
+}
+.ui-seg--split > button + button { margin-left: var(--ui-seg-gap, 8px); }
+@media (hover: hover) {
+  .ui-seg--split > button:hover:not(.is-active):not([aria-pressed="true"]) { border-color: var(--ui-accent); background: var(--ui-btn-bg, transparent); color: var(--ui-accent); }
+}
+.ui-seg--split > button.is-active, .ui-seg--split > button[aria-pressed="true"] {
+  /* Как нажатая .ui-btn, а не подъём дорожки: --ui-lift-* темы (в zp — прозрачная рамка и свечение) сюда не действуют. Тон — свои переменные. */
+  border-color: var(--ui-seg-split-on-border, var(--ui-accent)); background: var(--ui-seg-split-on-bg, var(--ui-btn-pressed-bg, var(--ui-btn-bg, transparent))); color: var(--ui-text);
+  box-shadow: none;
+}
+/* Во всю ширину ряда (0.37.0): кнопки поровну; для обычных и раздельных сегментов. */
+.ui-seg--fill { display: flex; width: 100%; }
+.ui-seg--fill > button { flex: 1 1 0; min-width: 0; justify-content: center; }
+
+.ui-input, .ui-select {
+  box-sizing: border-box; height: var(--ui-ctl-h); padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius);
+  background: var(--ui-surface-2); color: var(--ui-text); font: inherit; font-size: var(--ui-ctl-size); outline: none;
+  transition: border-color 200ms var(--ui-ease), box-shadow 200ms var(--ui-ease);
+}
+.ui-input::placeholder { color: var(--ui-muted); }
+.ui-input:focus, .ui-select:focus { border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-input:disabled, .ui-select:disabled { opacity: .5; cursor: not-allowed; }
+.ui-label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--ui-muted); }
+
+.ui-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ui-ctl-size); cursor: pointer; }
+.ui-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--ui-accent); cursor: pointer; }
+
+/* Выключатель (0.42.0): input[type=checkbox][role=switch].ui-switch, чистый CSS. Дорожка 52×30, вокруг неё 7px невидимого поля — касание 66×44 (цель 44px).
+   Цвет включённого — --ui-switch-on (по умолчанию --ui-accent), выключенной дорожки — --ui-switch-off, бегунка — --ui-switch-thumb / --ui-switch-thumb-on.
+   Бегунок нарисован фоном дорожки и сдвигается background-position, поэтому псевдоэлементы не нужны. */
+.ui-switch {
+  -webkit-appearance: none; appearance: none; box-sizing: content-box; flex: none; width: 52px; height: 30px; margin: 0; padding: 7px; border: 0; border-radius: 22px;
+  background-color: var(--ui-switch-off, color-mix(in srgb, var(--ui-text) 22%, transparent));
+  background-image: radial-gradient(circle 12px at center, var(--ui-switch-thumb, color-mix(in srgb, var(--ui-text) 65%, transparent)) 99%, transparent 100%);
+  background-size: 30px 30px; background-repeat: no-repeat; background-position: 0 50%; background-origin: content-box; background-clip: content-box;
+  cursor: pointer; transition: background-position 160ms var(--ui-ease), background-color 160ms var(--ui-ease);
+}
+.ui-switch:checked {
+  background-color: var(--ui-switch-on, var(--ui-accent));
+  background-image: radial-gradient(circle 12px at center, var(--ui-switch-thumb-on, var(--ui-accent-text)) 99%, transparent 100%);
+  background-position: 100% 50%;
+}
+.ui-switch:focus-visible { outline: 2px solid var(--ui-switch-on, var(--ui-accent)); outline-offset: -5px; }
+.ui-switch:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .ui-switch { transition: none; } }
+
+.ui-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-chip-radius, var(--ui-ctl-radius)); color: var(--ui-muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+.ui-chip--accent { border-color: var(--ui-accent); color: var(--ui-accent); }
+.ui-chip--solid { border-color: transparent; background: var(--ui-accent); color: var(--ui-accent-text); }
+.ui-chip--success { border-color: var(--ui-success); color: var(--ui-success); }
+.ui-chip--warning { border-color: var(--ui-warning); color: var(--ui-warning); }
+.ui-chip--danger { border-color: var(--ui-danger); color: var(--ui-danger); }
+/* Мягкая пилюля (0.18.0): заливка цвета тона ~17 %, текст цвета тона, без рамки. Тон — второй класс: --success, --warning, --danger, --info, --muted; без него — акцент. */
+.ui-chip--soft { --ui-chip-tone: var(--ui-accent); height: 22px; padding: 0 9px; border-color: transparent; border-radius: 999px; background: color-mix(in srgb, var(--ui-chip-tone) 17%, transparent); color: var(--ui-chip-tone); }
+.ui-chip--soft.ui-chip--success { --ui-chip-tone: var(--ui-success); border-color: transparent; color: var(--ui-success); }
+.ui-chip--soft.ui-chip--warning { --ui-chip-tone: var(--ui-warning); border-color: transparent; color: var(--ui-warning); }
+.ui-chip--soft.ui-chip--danger { --ui-chip-tone: var(--ui-danger); border-color: transparent; color: var(--ui-danger); }
+.ui-chip--soft.ui-chip--info { --ui-chip-tone: var(--ui-link, var(--ui-accent)); border-color: transparent; color: var(--ui-link, var(--ui-accent)); }
+.ui-chip--soft.ui-chip--muted { --ui-chip-tone: var(--ui-muted); border-color: transparent; color: var(--ui-muted); }
+.ui-chip svg { width: 1.1em; height: 1.1em; flex: none; }
+
+.ui-panel { position: relative; box-sizing: border-box; background: var(--ui-panel-bg); border: 1px solid var(--ui-panel-border); border-radius: var(--ui-radius-lg); box-shadow: var(--ui-panel-shadow); }
+.ui-panel__pad { padding: var(--ui-panel-pad); }
+.ui-panel__title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 15px; font-weight: var(--ui-panel-title-weight); }
+.ui-panel__subtitle { margin: 0 0 10px; font-size: 12px; color: var(--ui-muted); }
+
+.ui-topbar { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px; background: var(--ui-surface); border-bottom: 1px solid var(--ui-border); }
+.ui-topbar--sticky { position: sticky; top: 0; z-index: 5; }
+.ui-topbar__title { font-size: 14px; font-weight: 700; }
+.ui-topbar__muted { color: var(--ui-muted); }
+.ui-topbar__spacer { flex: 1 1 auto; }
+
+/* Крошки (0.33.0): путь одной строкой, шрифт --ui-font (в теме arc моноширинный), разделитель «/» цветом --ui-muted.
+   Средние части сворачиваются в «…» (UI.crumbs), последняя — текст, при нехватке ширины обрезается многоточием. */
+.ui-crumbs { position: relative; box-sizing: border-box; min-width: 0; font-family: var(--ui-font); font-size: 13px; line-height: 1.4; color: var(--ui-muted); }
+.ui-crumbs__list { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; overflow: hidden; list-style: none; white-space: nowrap; }
+.ui-crumbs__item { flex: none; display: inline-flex; align-items: center; min-width: 0; }
+.ui-crumbs__item + .ui-crumbs__item::before { content: "/"; padding: 0 6px; color: var(--ui-muted); }
+.ui-crumbs__item:last-child { flex: 0 1 auto; min-width: 6ch; }
+.ui-crumbs__link, .ui-crumbs__text, .ui-crumbs__more, .ui-crumbs__menu-item { color: var(--ui-muted); text-decoration: none; }
+.ui-crumbs__link, .ui-crumbs__more { border-radius: var(--ui-radius-sm); transition: color 120ms var(--ui-ease, ease); }
+.ui-crumbs__link:hover, .ui-crumbs__more:hover { color: var(--ui-text); }
+.ui-crumbs__link:focus-visible, .ui-crumbs__more:focus-visible, .ui-crumbs__menu-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-crumbs__cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ui-text); }
+.ui-crumbs__more { padding: 0 4px; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.ui-crumbs__menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--ui-z-pop, 100); display: flex; flex-direction: column; min-width: 160px; max-width: min(320px, 90vw); padding: 4px; }
+.ui-crumbs__menu[hidden] { display: none; }
+.ui-crumbs__menu-item { display: block; padding: 6px 10px; border-radius: var(--ui-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.ui-crumbs__menu-item:hover { background: var(--ui-surface-2); color: var(--ui-text); }

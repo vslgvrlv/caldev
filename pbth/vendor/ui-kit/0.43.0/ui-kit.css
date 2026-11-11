@@ -1,0 +1,1632 @@
+/* ui-kit 0.43.0 */
+/* src/tokens/tokens.css */
+/* ui-kit: словарь токенов --ui-*. Значения по умолчанию нейтральные (светлые);
+   продукт переопределяет их темой themes/<продукт>.css, тёмная версия — атрибутом [data-ui-theme="dark"]. */
+:root {
+  --ui-bg: #f6f6f4;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #efefec;
+  --ui-text: #1c1c1a;
+  --ui-muted: #6b6b66;
+  --ui-border: #d8d8d3;
+  --ui-accent: #2f5fd0;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #c0362a;
+  --ui-success: #1d7a4d;
+  --ui-warning: #8a5a00;
+  --ui-overlay: rgba(20, 20, 18, .45);
+
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 8px;
+  --ui-radius-lg: 12px;
+
+  --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ui-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Текст для чтения (0.32.0): пропорциональный системный; темы не перекрывают, даже если их --ui-font моноширинный */
+  --ui-font-text: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ui-space: 8px;
+  --ui-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+
+  --ui-z-toast: 12000;
+  --ui-z-dialog: 11000;
+  --ui-z-palette: 10500;
+
+  --ui-dialog-w-md: 560px;
+  --ui-dialog-w-lg: 820px;
+  --ui-dialog-w-xl: 1120px;
+  --ui-dialog-title-size: 17px;
+  --ui-dialog-title-weight: 700;
+  --ui-dialog-subtitle-size: 13px;
+  --ui-dialog-action-size: 14px;
+  --ui-dialog-pad-x: 20px;
+  --ui-dialog-pad-y: 16px;
+  --ui-overlay-blur: 0px;
+
+  --ui-icon-stroke: 2;
+  /* Кривая переходов для мелких движений (подсказка графика); тема может подставить свою */
+  --ui-ease: ease;
+
+  /* Контролы (0.14.0): высота, скругление, шрифт кнопки, сегменты, кольцо фокуса, панель */
+  --ui-ctl-h: 36px;
+  --ui-ctl-pad-x: 14px;
+  --ui-ctl-radius: var(--ui-radius-md);
+  --ui-ctl-size: 14px;
+  --ui-btn-size: 13px;
+  --ui-btn-weight: 600;
+  --ui-seg-radius: var(--ui-radius-sm);
+  --ui-seg-active-bg: var(--ui-accent);
+  --ui-seg-active-text: var(--ui-accent-text);
+  --ui-seg-hover-bg: rgba(127, 127, 127, .12);
+  --ui-focus-ring: rgba(47, 95, 208, .18);
+  --ui-panel-bg: var(--ui-surface);
+  --ui-panel-border: var(--ui-border);
+  --ui-panel-shadow: none;
+  --ui-panel-pad: 12px;
+  --ui-panel-title-weight: 700;
+
+  /* Кнопка и сегменты под телефон (0.37.0): по умолчанию — прежний вид. Фон кнопки, вид выключенной, трекинг, сжатие при нажатии,
+     промежуток раздельных сегментов (.ui-seg--split). Производные от других токенов не заданы (initial): запас в var() берёт
+     значение там, где стоит кнопка, — иначе фон, заданный странице на контейнере, не дошёл бы до нажатой и выключенной. */
+  --ui-btn-bg: transparent;
+  --ui-btn-disabled-opacity: .4;
+  --ui-btn-tracking: .02em;
+  --ui-btn-gap: 6px;
+  --ui-btn-pressed-text: initial;
+  --ui-btn-press-scale: .96;
+  --ui-seg-gap: 8px;
+  --ui-btn-pressed-bg: initial;           /* запас: var(--ui-btn-bg) */
+  --ui-btn-primary-disabled-bg: initial;  /* запас: var(--ui-accent) */
+  --ui-btn-primary-disabled-text: initial; /* запас: var(--ui-accent-text) */
+
+  /* Выключатель .ui-switch (0.42.0): не заданы (initial) — цвета берутся из запаса там, где стоит выключатель. */
+  --ui-switch-on: initial;        /* запас: var(--ui-accent) */
+  --ui-switch-off: initial;       /* запас: 22% --ui-text */
+  --ui-switch-thumb: initial;     /* запас: 65% --ui-text */
+  --ui-switch-thumb-on: initial;  /* запас: var(--ui-accent-text) */
+
+  /* Подъём активного (0.18.0): фон, кромка и тень активного пункта сайдбара, активного сегмента; свечение главной кнопки.
+     Не заданы (initial) — компоненты рисуют как раньше; тема включает подъём, задав значения. */
+  --ui-lift-bg: initial;
+  --ui-lift-border: initial;
+  --ui-lift-shadow: initial;
+  --ui-btn-primary-shadow: initial;
+}
+
+[data-ui-theme="dark"] {
+  color-scheme: dark;
+  --ui-bg: #121212;
+  --ui-surface: #1b1b1a;
+  --ui-surface-2: #242423;
+  --ui-text: #ecebe7;
+  --ui-muted: #9c9a94;
+  --ui-border: #34332f;
+  --ui-accent: #7da0f0;
+  --ui-accent-text: #101010;
+  --ui-danger: #ef7a6c;
+  --ui-success: #5cc98f;
+  --ui-warning: #e0b052;
+  --ui-overlay: rgba(0, 0, 0, .6);
+  --ui-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  --ui-focus-ring: rgba(125, 160, 240, .25);
+}
+[data-ui-theme="light"] { color-scheme: light; }
+
+/* ─── Стекло: панель на размытии, цветные пятна под слоем, свечение акцента. Нейтральные (светлые) значения; темы переопределяют. ─── */
+:root {
+  --ui-glass-bg: rgba(255, 255, 255, .62);
+  --ui-glass-border: rgba(20, 20, 18, .09);
+  --ui-glass-highlight: rgba(255, 255, 255, .7);
+  --ui-glass-blur: 20px;
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .10);
+  --ui-glow: rgba(47, 95, 208, .35);
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(47, 95, 208, .10), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(120, 90, 220, .08), transparent 62%);
+  --ui-violet: #7c5cd6;
+  --ui-font-num: var(--ui-font-mono);
+}
+[data-ui-theme="dark"] {
+  --ui-glass-bg: rgba(255, 255, 255, .035);
+  --ui-glass-border: rgba(255, 255, 255, .08);
+  --ui-glass-highlight: rgba(255, 255, 255, .06);
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .42);
+  --ui-glow: rgba(125, 160, 240, .5);
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(125, 160, 240, .16), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(167, 139, 250, .12), transparent 62%);
+  --ui-violet: #a78bfa;
+}
+/* Стеклянная панель */
+.ui-glass {
+  position: relative; box-sizing: border-box; overflow: hidden;
+  border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-glass-bg); box-shadow: var(--ui-glass-shadow), inset 0 1px 0 var(--ui-glass-highlight);
+  backdrop-filter: blur(var(--ui-glass-blur)) saturate(140%); -webkit-backdrop-filter: blur(var(--ui-glass-blur)) saturate(140%);
+}
+/* Второй слой стекла (0.18.0): карточка внутри стеклянной панели. По умолчанию — обычная поверхность панели; темы делают её светлее и дают блик с цветной тенью. */
+:root {
+  --ui-glass2-bg: var(--ui-surface-2);
+  --ui-glass2-border: var(--ui-border);
+  --ui-glass2-highlight: transparent;
+  --ui-glass2-shadow: 0 0 0 0 transparent;
+}
+.ui-glass2 {
+  position: relative; box-sizing: border-box;
+  border: 1px solid var(--ui-glass2-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-glass2-bg); box-shadow: var(--ui-glass2-shadow), inset 0 1px 0 var(--ui-glass2-highlight);
+}
+/* Пятна под слоем — чтобы размытие было видно. Один элемент на страницу, под контентом. */
+.ui-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--ui-backdrop); }
+/* Каскадное появление детей: добавить класс контейнеру после замены содержимого (UI.skeleton.swap делает сам). */
+@keyframes ui-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.ui-enter > * { animation: ui-enter 520ms cubic-bezier(.22, 1, .36, 1) both; }
+.ui-enter > :nth-child(2) { animation-delay: 60ms; }
+.ui-enter > :nth-child(3) { animation-delay: 120ms; }
+.ui-enter > :nth-child(4) { animation-delay: 180ms; }
+.ui-enter > :nth-child(5) { animation-delay: 240ms; }
+.ui-enter > :nth-child(6) { animation-delay: 300ms; }
+.ui-enter > :nth-child(7) { animation-delay: 360ms; }
+.ui-enter > :nth-child(n+8) { animation-delay: 420ms; }
+@media (prefers-reduced-motion: reduce) { .ui-enter > * { animation: none; } }
+
+/* ─── Палитра Cmd/Ctrl+K: нейтральные значения; темы подгоняют под бренд. ─── */
+:root {
+  --ui-pal-overlay: rgba(20, 20, 18, .28);
+  --ui-pal-shadow: var(--ui-shadow);
+  --ui-pal-radius: var(--ui-radius-lg);
+  --ui-pal-radius-row: var(--ui-radius-md);
+  --ui-pal-radius-ic: var(--ui-radius-sm);
+  --ui-pal-radius-kbd: var(--ui-radius-sm);
+  --ui-pal-foot-bg: var(--ui-bg);
+  --ui-pal-sep: var(--ui-border);
+  --ui-pal-trigger-hover-border: var(--ui-muted);
+  --ui-pal-title-font: var(--ui-font);
+}
+[data-ui-theme="dark"] { --ui-pal-overlay: rgba(0, 0, 0, .55); }
+
+/* src/icon/icon.css */
+.ui-icon { display: inline-block; flex-shrink: 0; vertical-align: -0.125em; stroke-width: var(--ui-icon-stroke, 2); }
+
+/* src/toast/toast.css */
+.ui-toast-host {
+  position: fixed; z-index: var(--ui-z-toast);
+  left: 50%; bottom: 24px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--ui-space) * 1);
+  width: max-content; max-width: min(92vw, 480px);
+  pointer-events: none;
+  font-family: var(--ui-font);
+}
+.ui-toast {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: calc(var(--ui-space) * 1.5);
+  box-sizing: border-box; max-width: 100%;
+  padding: 10px 14px;
+  background: var(--ui-surface-2); color: var(--ui-text);
+  border: 1px solid var(--ui-border); border-left-width: 3px;
+  border-radius: var(--ui-radius-md); box-shadow: var(--ui-shadow);
+  font-size: 14px; line-height: 1.4;
+  animation: ui-toast-in .2s ease-out both;
+}
+.ui-toast--success { border-left-color: var(--ui-success); }
+.ui-toast--error { border-left-color: var(--ui-danger); }
+.ui-toast--info { border-left-color: var(--ui-accent); }
+.ui-toast__msg { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ui-toast__act {
+  flex: none; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;
+  padding: 6px 12px; min-height: 32px;
+  color: var(--ui-text); background: transparent;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm);
+}
+.ui-toast__bar {
+  flex: none; width: 34px; height: 2px; border-radius: 1px;
+  background: var(--ui-accent); transform-origin: left;
+  animation: ui-toast-drain linear forwards;
+}
+.ui-toast[data-paused] .ui-toast__bar { animation-play-state: paused; }
+.ui-toast__x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 4px; margin: -4px -6px -4px 0; font: inherit; line-height: 1; cursor: pointer;
+  color: var(--ui-muted); background: none; border: 0; border-radius: var(--ui-radius-sm);
+}
+.ui-toast__x:hover { color: var(--ui-text); }
+.ui-toast__x:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+.ui-toast__act:hover { background: var(--ui-surface); border-color: var(--ui-muted); }
+.ui-toast__act:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+@keyframes ui-toast-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes ui-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (max-width: 600px) {
+  .ui-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .ui-toast__act { min-height: 40px; padding: 8px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .ui-toast { animation: none; } .ui-toast__bar { animation: none; } }
+
+/* src/dialog/dialog.css */
+.ui-dialog {
+  box-sizing: border-box; margin: auto; padding: 0; border: var(--ui-dialog-border, 1px solid var(--ui-border)); border-radius: var(--ui-radius-lg);
+  width: min(var(--ui-dialog-w-md), calc(100vw - 32px)); max-height: min(86vh, 86dvh); overflow: hidden;
+  background: var(--ui-surface); color: var(--ui-text); box-shadow: var(--ui-dialog-shadow, var(--ui-shadow));
+  font-family: var(--ui-font); font-size: 14px; line-height: 1.5;
+}
+/* Размеры идут до @media: на узких экранах правило шторки (равная специфичность, позже в файле) перекрывает любой размер */
+.ui-dialog--lg { width: min(var(--ui-dialog-w-lg), calc(100vw - 32px)); }
+.ui-dialog--xl { width: min(var(--ui-dialog-w-xl), calc(100vw - 32px)); }
+.ui-dialog[open] { display: flex; animation: ui-dialog-in .18s ease-out; }
+.ui-dialog::backdrop { background: var(--ui-overlay); backdrop-filter: blur(var(--ui-overlay-blur)); }
+/* Пока открыто окно, страница под ним не прокручивается */
+html:has(dialog.ui-dialog[open]) { overflow: hidden; }
+/* max-height от окна: иначе высокое содержимое растягивает панель за край, тело не прокручивается, а кнопки обрезаются (телефон, 0.16.0) */
+.ui-dialog__panel { display: flex; flex-direction: column; width: 100%; min-height: 0; max-height: inherit; }
+.ui-dialog__grip { display: none; }
+.ui-dialog__head { display: flex; align-items: flex-start; gap: calc(var(--ui-space) * 2); padding: var(--ui-dialog-pad-y) calc(var(--ui-dialog-pad-x) - 8px) 8px var(--ui-dialog-pad-x); }
+.ui-dialog__title { flex: 1 1 auto; margin: 0; font-size: var(--ui-dialog-title-size); font-weight: var(--ui-dialog-title-weight); line-height: 1.3; overflow-wrap: anywhere; }
+/* Только с subtitle / head: обёртки появляются при этих опциях */
+.ui-dialog__titles { flex: 1 1 0%; min-width: 0; }
+.ui-dialog__subtitle { margin-top: 2px; color: var(--ui-muted); font-size: var(--ui-dialog-subtitle-size); line-height: 1.4; overflow-wrap: anywhere; }
+.ui-dialog__aside { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space); min-height: 36px; }
+.ui-dialog__x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0;
+  color: var(--ui-muted); background: transparent; border: 0; border-radius: var(--ui-radius-sm); cursor: pointer;
+}
+.ui-dialog__x:hover { color: var(--ui-text); background: var(--ui-surface-2); }
+.ui-dialog__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px var(--ui-dialog-pad-x) var(--ui-dialog-pad-y); overscroll-behavior: contain; }
+.ui-dialog__text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ui-dialog__foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--ui-space); padding: 12px var(--ui-dialog-pad-x) var(--ui-dialog-pad-y); border-top: 1px solid var(--ui-border); }
+.ui-dialog__btn {
+  font: inherit; font-weight: 600; font-size: var(--ui-dialog-action-size); min-height: 36px; padding: 6px 16px; cursor: pointer;
+  color: var(--ui-text); background: transparent; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+}
+.ui-dialog__btn:hover { background: var(--ui-surface-2); }
+.ui-dialog__btn--primary { color: var(--ui-accent-text); background: var(--ui-accent); border-color: var(--ui-accent); }
+.ui-dialog__btn--primary:hover { background: var(--ui-accent); filter: brightness(1.08); }
+.ui-dialog__btn--danger { color: var(--ui-danger); border-color: var(--ui-danger); }
+.ui-dialog__btn--danger:hover { background: var(--ui-surface-2); }
+.ui-dialog :is(.ui-dialog__x, .ui-dialog__btn):focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+@keyframes ui-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes ui-dialog-up { from { transform: translateY(100%); } to { transform: none; } }
+/* Узкие экраны: шторка снизу, как карточка сотрудника в хабе Агатоса */
+@media (max-width: 600px) {
+  .ui-dialog { width: 100vw; max-width: none; margin: auto 0 0; border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; border-bottom: 0; max-height: 90dvh; }
+  .ui-dialog[open] { animation: ui-dialog-up .22s cubic-bezier(.2, .8, .2, 1); }
+  .ui-dialog__grip { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--ui-border); }
+  .ui-dialog__head { padding-top: 8px; }
+  .ui-dialog__head:has(> .ui-dialog__aside) { flex-wrap: wrap; }
+  .ui-dialog__head > .ui-dialog__aside { order: 3; flex: 1 1 100%; }
+  .ui-dialog__foot { padding-bottom: calc(var(--ui-dialog-pad-y) + env(safe-area-inset-bottom)); }
+  .ui-dialog__btn { flex: 1 1 auto; min-height: 44px; }
+}
+/* Боковая шторка (0.33.0): на всю высоту у края; идёт после @media и сильнее его правила, поэтому на телефоне остаётся боковой */
+@keyframes ui-dialog-from-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes ui-dialog-from-right { from { transform: translateX(100%); } to { transform: none; } }
+.ui-dialog.ui-dialog--side {
+  --ui-dialog-side-gap: var(--ui-dialog-side-w, min(300px, 86vw));
+  width: var(--ui-dialog-side-gap); max-width: none; height: 100vh; height: 100dvh; max-height: none; margin-top: 0; margin-bottom: 0;
+  border-top: 0; border-bottom: 0; border-radius: 0;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.ui-dialog.ui-dialog--left { margin-left: 0; margin-right: auto; border-left: 0; padding-left: env(safe-area-inset-left); }
+.ui-dialog.ui-dialog--right { margin-left: auto; margin-right: 0; border-right: 0; padding-right: env(safe-area-inset-right); }
+.ui-dialog.ui-dialog--left[open] { animation: ui-dialog-from-left .22s var(--ui-ease, ease-out); }
+.ui-dialog.ui-dialog--right[open] { animation: ui-dialog-from-right .22s var(--ui-ease, ease-out); }
+.ui-dialog--side .ui-dialog__panel { height: 100%; max-height: none; }
+.ui-dialog--side .ui-dialog__body { padding: 0; }
+@media (prefers-reduced-motion: reduce) { .ui-dialog[open], .ui-dialog.ui-dialog--side[open] { animation: none; } }
+
+/* src/period/period.css */
+.ui-period { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ui-period__chip {
+  box-sizing: border-box; height: 28px; padding: 0 11px; cursor: pointer;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-2); color: var(--ui-muted);
+  font: 500 11px var(--ui-font); transition: all .15s;
+}
+.ui-period__chip:hover { border-color: var(--ui-accent); color: var(--ui-text); }
+.ui-period__chip.is-active { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-accent-text); font-weight: 600; }
+.ui-period__nav { width: 28px; padding: 0; font-size: 13px; line-height: 1; }
+.ui-period__nav:disabled { opacity: .3; cursor: default; }
+.ui-period__nav:disabled:hover { border-color: var(--ui-border); color: var(--ui-muted); }
+.ui-period__custom { display: flex; align-items: center; gap: 4px; }
+.ui-period__sep { color: var(--ui-muted); }
+.ui-period__date {
+  box-sizing: border-box; height: 28px; padding: 0 6px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-2); color: var(--ui-text); font: 500 11px var(--ui-font);
+}
+.ui-period__label { margin-left: 4px; font: 500 11px var(--ui-font); color: var(--ui-muted); white-space: nowrap; }
+.ui-period__error { flex: 1 1 100%; font: 500 11px var(--ui-font); color: var(--ui-danger); }
+.ui-period__error:empty { display: none; }
+.ui-period :is(.ui-period__chip, .ui-period__date):focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+
+/* src/drill/drill.css */
+.ui-drill__wrap { max-height: 60vh; overflow: auto; }
+/* В окне прокручивается его тело: липкая шапка таблицы держится за него */
+.ui-dialog .ui-drill__wrap { max-height: none; overflow: visible; }
+.ui-drill { width: 100%; border-collapse: collapse; font-family: var(--ui-font); font-size: 12.5px; line-height: normal; color: var(--ui-text); }
+.ui-drill th {
+  text-align: left; color: var(--ui-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+  padding: 5px 10px; border-bottom: 1px solid var(--ui-border);
+  position: sticky; top: 0; background: var(--ui-surface); z-index: 1;
+}
+.ui-drill td { padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--ui-text) 5%, transparent); }
+.ui-drill th.num, .ui-drill td.num { text-align: right; font-family: var(--ui-font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-drill td:first-child { min-width: 90px; }
+.ui-drill tbody tr:hover { background: var(--ui-surface-2); }
+.ui-drill a { color: var(--ui-link, var(--ui-accent)); text-decoration: none; }
+.ui-drill a:hover { text-decoration: underline; }
+.ui-drill tfoot td { padding: 7px 10px; font-family: var(--ui-font-mono); font-weight: 600; border-top: 1px solid var(--ui-border); }
+.ui-drill th.is-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.ui-drill th.is-sortable:hover { color: var(--ui-text); }
+.ui-drill th.is-active { color: var(--ui-accent); }
+.ui-drill__arrow { margin-left: 4px; opacity: .45; font-size: 10px; }
+.ui-drill th.is-active .ui-drill__arrow { opacity: 1; }
+.ui-drill__sub { color: var(--ui-muted); font-size: 11px; }
+.ui-drill__note { padding: 8px 0; color: var(--ui-muted); font-family: var(--ui-font); font-size: 12px; }
+.ui-drill__badge {
+  display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; white-space: nowrap;
+  border: 1px solid var(--ui-border); color: var(--ui-muted);
+}
+/* Вложенные строки (с 0.39.0): стрелка в первой колонке, дети с отступом по глубине */
+.ui-drill tr[hidden] { display: none; }
+.ui-drill tr.ui-drill__parent { cursor: pointer; }
+.ui-drill__toggle {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; margin: 0 4px 0 0; padding: 0; vertical-align: -2px;
+  border: 0; border-radius: var(--ui-radius-sm, 4px); background: none; color: var(--ui-muted); font: 600 16px/1 var(--ui-font); cursor: pointer;
+  transition: transform .15s ease, color .15s ease;
+}
+.ui-drill__toggle[aria-expanded="true"] { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .ui-drill__toggle { transition: none; } }
+.ui-drill__toggle:hover { color: var(--ui-text); background: var(--ui-surface-2); }
+.ui-drill__toggle:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+.ui-drill__toggle[aria-expanded="true"] { color: var(--ui-accent); }
+.ui-drill__toggle-pad { display: inline-block; width: 22px; }
+.ui-drill tr.ui-drill__child > td { background: color-mix(in srgb, var(--ui-text) 2.5%, transparent); }
+.ui-drill tr.ui-drill__child > td:first-child { padding-left: calc(10px + var(--ui-drill-depth, 1) * 22px); }
+
+/* src/tip/tip.css */
+/* Единая подсказка при наведении (UI.tip): стеклянная карточка рядом с точкой, одна на все графики. Стекло — из .ui-glass (tokens.css).
+   Фон — --ui-chart-tip-bg (по умолчанию стекло темы), скругление — --ui-chart-tip-radius. Ход — transform с замедлением (--ui-glide); .ui-chart-tip — прежнее имя того же класса. */
+:root { --ui-glide: 180ms cubic-bezier(.22, 1, .36, 1); }
+.ui-tip {
+  position: absolute; left: 0; top: 0; z-index: 3; width: max-content; max-width: 100%; min-width: 150px; padding: 8px 10px; pointer-events: none; opacity: 0;
+  border-radius: var(--ui-chart-tip-radius, 8px); font-family: var(--ui-font); font-size: 11px; color: var(--ui-text);
+  background: var(--ui-chart-tip-bg, var(--ui-glass-bg)); will-change: transform;
+  transition: transform var(--ui-glide), opacity 120ms var(--ui-ease, ease);
+}
+.ui-tip.is-on { opacity: 1; }
+/* Первый показ после скрытия: встаёт на место без хода из угла */
+.ui-tip.is-snap { transition: opacity 120ms var(--ui-ease, ease); }
+.ui-tip__d { margin-bottom: 4px; font-family: var(--ui-font-num); font-size: 10px; color: var(--ui-muted); }
+.ui-tip__l { display: flex; justify-content: space-between; gap: 10px; font-family: var(--ui-font-num); font-variant-numeric: tabular-nums; }
+.ui-tip__l i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 2px; vertical-align: middle; }
+.ui-tip__l.bad b { color: var(--ui-danger); }
+.ui-tip__l.good b { color: var(--ui-success); }
+
+@media (prefers-reduced-motion: reduce) { .ui-tip, .ui-tip.is-snap { transition: none; } }
+
+/* src/stat/stat.css */
+/* Карточка показателя: подпись, число, дельта, иконка в цветной плитке, спарклайн. Стекло из .ui-glass (tokens.css). */
+.ui-stat {
+  position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto auto; gap: 4px 12px;
+  padding: 14px 16px 12px; min-height: 120px; color: var(--ui-text); font-family: var(--ui-font);
+  --ui-stat-tone: var(--ui-accent);
+}
+.ui-stat.ui-glass2 { overflow: hidden; }
+.ui-stat[role="button"] { cursor: pointer; }
+.ui-stat[role="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.ui-stat--accent { --ui-stat-tone: var(--ui-accent); }
+.ui-stat--blue   { --ui-stat-tone: var(--ui-link, var(--ui-accent)); }
+.ui-stat--violet { --ui-stat-tone: var(--ui-violet, #a78bfa); }
+.ui-stat--green  { --ui-stat-tone: var(--ui-success); }
+.ui-stat--warn   { --ui-stat-tone: var(--ui-warning); }
+.ui-stat--danger { --ui-stat-tone: var(--ui-danger); }
+
+.ui-stat__label { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; color: var(--ui-muted); font-size: 11.5px; font-weight: 500; line-height: 1.25; }
+.ui-stat__name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ui-stat__tag {
+  flex: none; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--ui-stat-tone) 45%, transparent); border-radius: var(--ui-radius-sm);
+  color: var(--ui-stat-tone); font-family: var(--ui-font-num); font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+}
+.ui-stat__info {
+  flex: none; width: 16px; height: 16px; padding: 0; border: 1px solid var(--ui-border); border-radius: 50%; background: transparent;
+  color: var(--ui-muted); font: 600 10px/1 var(--ui-font-num); cursor: pointer; opacity: .7;
+}
+.ui-stat__info:hover, .ui-stat__info:focus-visible { opacity: 1; border-color: var(--ui-accent); color: var(--ui-accent); outline: none; }
+
+.ui-stat__icon {
+  grid-column: 2; grid-row: 1 / 3; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px;
+  color: var(--ui-stat-tone); background: color-mix(in srgb, var(--ui-stat-tone) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-stat-tone) 28%, transparent);
+}
+.ui-stat__icon svg { width: 18px; height: 18px; }
+
+.ui-stat__value {
+  grid-column: 1; font-family: var(--ui-font-num); font-size: 27px; font-weight: 800; line-height: 1.05; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ui-stat__row { grid-column: 1 / 3; display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; }
+.ui-stat__delta {
+  flex: none; padding: 2px 7px; border-radius: 10px; font-family: var(--ui-font-num); font-size: 10.5px; font-weight: 700; white-space: nowrap;
+  color: var(--ui-muted); background: color-mix(in srgb, var(--ui-muted) 14%, transparent);
+}
+.ui-stat__delta.is-good { color: var(--ui-success); background: color-mix(in srgb, var(--ui-success) 14%, transparent); }
+.ui-stat__delta.is-bad  { color: var(--ui-danger);  background: color-mix(in srgb, var(--ui-danger) 14%, transparent); }
+.ui-stat__delta.is-none { display: none; }
+.ui-stat__hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ui-muted); font-size: 11px; opacity: .85; }
+.ui-stat__hint:empty { display: none; }
+
+.ui-stat__spark { grid-column: 1 / 3; height: 34px; margin-top: 4px; padding: 0; color: var(--ui-stat-tone); }
+.ui-stat__spark.is-empty { display: none; }
+/* Спарклайн (в карточке и сам по себе через UI.stat.spark): рисуется 1:1 под размер блока, не растягивается. */
+.ui-spark { display: block; width: 100%; overflow: visible; }
+.ui-stat__svg { height: 100%; }
+.ui-stat__svg.is-up   { color: var(--ui-stat-tone); }
+.ui-stat__svg.is-down { color: var(--ui-stat-tone); }
+
+/* Подписи и наведение: строка подписей под линией (высота линии не меняется), кружок, вертикальная линия и подсказка UI.tip у ближайшей точки. */
+.ui-spark__plot { position: relative; height: 100%; touch-action: pan-y; }
+.ui-spark__line { height: 100%; }
+.ui-stat__spark.has-ticks { height: auto; }
+.ui-stat__spark.has-ticks .ui-spark__plot { height: 34px; }
+.ui-spark__ticks { position: relative; height: 14px; margin-top: 2px; }
+.ui-spark__tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 10px; line-height: 14px; white-space: nowrap; color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font)); }
+.ui-spark__tick.is-last { color: var(--ui-text); font-weight: 600; }
+.ui-spark__dot, .ui-spark__cross { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; will-change: transform;
+  transition: transform var(--ui-glide, 180ms cubic-bezier(.22, 1, .36, 1)), opacity .12s var(--ui-ease, ease); }
+.ui-spark__dot { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px var(--ui-bg); }
+/* Тонкая вертикальная линия через всю высоту линии, едет вместе с кружком */
+.ui-spark__cross { bottom: 0; width: 1px; background: color-mix(in srgb, var(--ui-text) 22%, transparent); }
+.ui-spark__dot.is-on, .ui-spark__cross.is-on { opacity: 1; }
+/* Первый показ после скрытия: встают на место без хода из угла */
+.ui-spark__dot.is-snap, .ui-spark__cross.is-snap { transition: opacity .12s var(--ui-ease, ease); }
+@media (prefers-reduced-motion: reduce) { .ui-spark__dot, .ui-spark__cross { transition: none; } }
+
+@media (max-width: 767px) {
+  .ui-stat { padding: 12px 12px 10px; min-height: 104px; }
+  .ui-stat__value { font-size: 22px; }
+  .ui-stat__icon { width: 30px; height: 30px; border-radius: 8px; }
+}
+
+/* src/barlist/barlist.css */
+/* Рейтинг-список с полосой: значок, название и подпись, число справа, под строкой тонкая полоса доли. Стекло из .ui-glass (tokens.css). */
+.ui-barlist { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 10px; color: var(--ui-text); font-family: var(--ui-font); --ui-barlist-tone: var(--ui-accent); }
+.ui-barlist__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.ui-barlist__titles { min-width: 0; }
+.ui-barlist__title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.ui-barlist__subtitle { margin-top: 2px; color: var(--ui-muted); font-size: 11.5px; line-height: 1.3; }
+.ui-barlist__more { flex: none; padding: 0; border: 0; background: none; color: var(--ui-accent); font: 600 12px/1.3 var(--ui-font); cursor: pointer; }
+.ui-barlist__more:hover { text-decoration: underline; }
+.ui-barlist__more:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
+
+.ui-barlist--accent { --ui-barlist-tone: var(--ui-accent); }
+.ui-barlist--blue   { --ui-barlist-tone: var(--ui-link, var(--ui-accent)); }
+.ui-barlist--violet { --ui-barlist-tone: var(--ui-violet, #a78bfa); }
+.ui-barlist--green  { --ui-barlist-tone: var(--ui-success); }
+.ui-barlist--warn   { --ui-barlist-tone: var(--ui-warning); }
+.ui-barlist--danger { --ui-barlist-tone: var(--ui-danger); }
+
+.ui-barlist__row {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; width: 100%; box-sizing: border-box;
+  margin: 0; padding: 8px 6px; border: 0; border-radius: var(--ui-radius-md); background: none; color: inherit; font: inherit; text-align: left;
+}
+button.ui-barlist__row { cursor: pointer; }
+button.ui-barlist__row:hover { background: color-mix(in srgb, var(--ui-text) 5%, transparent); }
+button.ui-barlist__row:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+.ui-barlist__badge, .ui-barlist__ico {
+  grid-row: 1; width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--ui-radius-md);
+  color: var(--ui-barlist-tone); background: color-mix(in srgb, var(--ui-barlist-tone) 16%, transparent);
+  font-family: var(--ui-font-num); font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+}
+.ui-barlist__badge.is-none { visibility: hidden; }
+.ui-barlist__ico svg { width: 16px; height: 16px; }
+.ui-barlist__main { display: flex; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.ui-barlist__label { overflow: hidden; min-width: 0; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.ui-barlist__sub { flex: none; max-width: 45%; overflow: hidden; color: var(--ui-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.ui-barlist__value { font-family: var(--ui-font-num); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-barlist__track { position: relative; grid-column: 1 / -1; height: 5px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--ui-text) 6%, transparent); }
+.ui-barlist__ghost { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: color-mix(in srgb, var(--ui-barlist-tone) 30%, transparent); transform-origin: left center; }
+.ui-barlist__fill { position: relative; display: block; height: 100%; border-radius: 3px; background: var(--ui-barlist-tone); transform-origin: left center; }
+.ui-barlist.is-first .ui-barlist__fill, .ui-barlist.is-first .ui-barlist__ghost { animation: ui-barlist-grow .7s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--ui-barlist-i, 0) * 60ms); }
+@keyframes ui-barlist-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.ui-barlist__empty { padding: 18px 0; color: var(--ui-muted); font-size: 12px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .ui-barlist.is-first .ui-barlist__fill, .ui-barlist.is-first .ui-barlist__ghost { animation: none; } }
+@media (max-width: 767px) { .ui-barlist { padding: 12px 12px 8px; } .ui-barlist__sub { max-width: 40%; } }
+
+/* src/feed/feed.css */
+/* Лента событий (0.42.0: lead, status, actions, токены размеров текста --ui-feed-name-size, --ui-feed-sub-size, --ui-feed-time-size, --ui-feed-lead-size; умолчания равны прежним числам): значок типа в круге на тонированном фоне, заголовок и подпись, справа сумма или время. Стекло из .ui-glass (tokens.css). */
+.ui-feed { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 10px; color: var(--ui-text); font-family: var(--ui-font); --ui-feed-tone: var(--ui-accent); }
+.ui-feed__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.ui-feed__titles { min-width: 0; }
+.ui-feed__title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.25; }
+.ui-feed__subtitle { margin-top: 2px; color: var(--ui-muted); font-size: 11.5px; line-height: 1.3; }
+.ui-feed__more { flex: none; padding: 0; border: 0; background: none; color: var(--ui-accent); font: 600 12px/1.3 var(--ui-font); cursor: pointer; }
+.ui-feed__more:hover { text-decoration: underline; }
+.ui-feed__more:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
+
+.ui-feed--accent { --ui-feed-tone: var(--ui-accent); }
+.ui-feed--blue   { --ui-feed-tone: var(--ui-link, var(--ui-accent)); }
+.ui-feed--violet { --ui-feed-tone: var(--ui-violet, #a78bfa); }
+.ui-feed--green  { --ui-feed-tone: var(--ui-success); }
+.ui-feed--warn   { --ui-feed-tone: var(--ui-warning); }
+.ui-feed--danger { --ui-feed-tone: var(--ui-danger); }
+
+.ui-feed__row {
+  display: grid; grid-template-columns: var(--ui-feed-lead-size, 32px) minmax(0, 1fr) auto; align-items: center; gap: 0 12px; box-sizing: border-box;
+  padding: 8px 6px; border-radius: var(--ui-radius-md); color: inherit; text-decoration: none;
+}
+a.ui-feed__row:hover { background: color-mix(in srgb, var(--ui-text) 5%, transparent); }
+a.ui-feed__row:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+.ui-feed__ico { grid-row: 1 / 3; width: var(--ui-feed-lead-size, 32px); height: var(--ui-feed-lead-size, 32px); display: grid; place-items: center; border-radius: 50%; color: var(--ui-feed-tone); background: color-mix(in srgb, var(--ui-feed-tone) 16%, transparent); }
+.ui-feed__ico svg { width: 16px; height: 16px; }
+.ui-feed__main { grid-row: 1 / 3; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ui-feed__name { overflow: hidden; font-size: var(--ui-feed-name-size, 13px); font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.ui-feed__sub { overflow: hidden; color: var(--ui-muted); font-size: var(--ui-feed-sub-size, 11.5px); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.ui-feed__amount { grid-column: 3; grid-row: 1; justify-self: end; color: var(--ui-success); font-family: var(--ui-font-num); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-feed__time { grid-column: 3; grid-row: 1 / 3; justify-self: end; color: var(--ui-muted); font-family: var(--ui-font-num); font-size: var(--ui-feed-time-size, 11.5px); white-space: nowrap; }
+.ui-feed__time.is-under { grid-row: 2; }
+.ui-feed__ico--lead { border-radius: 0; background: none; color: inherit; }
+.ui-feed__ico--lead svg { width: auto; height: auto; } /* размер знака задаёт сама разметка продукта */
+.ui-feed__side { grid-column: 3; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; }
+.ui-feed__status { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-muted); font-size: var(--ui-feed-sub-size, 11.5px); font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.ui-feed__status--success { color: var(--ui-success); }
+.ui-feed__status-ico svg { width: 12px; height: 12px; display: block; }
+.ui-feed__actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 6px 8px calc(var(--ui-feed-lead-size, 32px) + 18px); }
+.ui-feed__empty { padding: 18px 0; color: var(--ui-muted); font-size: 12px; text-align: center; }
+@media (max-width: 767px) { .ui-feed { padding: 12px 12px 8px; } }
+
+/* src/month/month.css */
+/* Сетка месяца UI.month (0.42.0). Размеры — токены --ui-month-day-h (высота ячейки), --ui-month-day-radius, --ui-month-dot (точка); цвета — токены темы.
+   Сегодня — число на плашке цвета текста; выбранный день — рамка и тон акцента (не плашка): состояния различимы, когда совпадают. Точки берут цвет из --p. */
+.ui-month { box-sizing: border-box; color: var(--ui-text); font-family: var(--ui-font); }
+.ui-month__nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.ui-month__arrow { width: 44px; padding: 0; }
+.ui-month__title { font-size: 16px; font-weight: 700; line-height: 1.3; }
+.ui-month__grid { display: grid; gap: 2px; }
+.ui-month__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.ui-month__wd { padding: 6px 0; text-align: center; color: var(--ui-muted); font-size: 12px; font-weight: 600; }
+.ui-month__cell { min-width: 0; }
+.ui-month__d {
+  box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; height: var(--ui-month-day-h, 48px); padding: 0;
+  border: 1px solid transparent; border-radius: var(--ui-month-day-radius, 12px); background: transparent; color: var(--ui-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease);
+}
+@media (hover: hover) { .ui-month__d:hover { background: color-mix(in srgb, var(--ui-text) 7%, transparent); } }
+.ui-month__d:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-month__num { display: grid; place-items: center; min-width: 28px; height: 22px; padding: 0 4px; border-radius: 11px; line-height: 1; font-variant-numeric: tabular-nums; }
+.ui-month__d.is-out { color: var(--ui-muted); opacity: .5; }
+.ui-month__d.is-today .ui-month__num { background: var(--ui-text); color: var(--ui-bg); font-weight: 800; }
+.ui-month__d.is-selected { border-color: var(--ui-accent); background: color-mix(in srgb, var(--ui-accent) 14%, transparent); }
+.ui-month__dots { display: flex; align-items: center; justify-content: center; gap: 3px; height: var(--ui-month-dot, 6px); }
+.ui-month__dots i { width: var(--ui-month-dot, 6px); height: var(--ui-month-dot, 6px); border-radius: 50%; background: var(--p, var(--ui-accent)); }
+.ui-month__more { color: var(--ui-muted); font-size: 9px; font-weight: 700; line-height: 1; }
+@media (prefers-reduced-motion: reduce) { .ui-month__d { transition: none; } }
+
+/* src/chart/chart.css */
+/* Графики Chart.js: обёртка холста с высотой и подсказка при наведении — общая UI.tip (src/tip).
+   Высота — --ui-chart-h (260px). */
+.ui-chart { position: relative; width: 100%; height: var(--ui-chart-h, 260px); }
+.ui-chart canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* Закреплённая выноска у точки (UI.chart.callout): стеклянная карточка из трёх строк — ключ, число с единицей, дельта. Прячется, пока активна подсказка.
+   Фон — --ui-chart-callout-bg (по умолчанию стекло темы): тёмная плашка подсказки zp в светлом режиме не годится, текст выноски цвета --ui-text. */
+.ui-chart-callout {
+  position: absolute; left: 0; top: 0; z-index: 2; min-width: 112px; padding: 8px 10px; pointer-events: none; opacity: 0;
+  border-radius: var(--ui-chart-tip-radius, 8px); font-family: var(--ui-font); color: var(--ui-text);
+  background: var(--ui-chart-callout-bg, var(--ui-glass-bg)); transition: opacity 160ms var(--ui-ease, ease);
+}
+.ui-chart-callout__k { font-family: var(--ui-font-num); font-size: 10px; color: var(--ui-muted); white-space: nowrap; }
+.ui-chart-callout__v { display: flex; align-items: baseline; gap: 4px; margin-top: 2px; white-space: nowrap; }
+.ui-chart-callout__v b { font-family: var(--ui-font-num); font-size: 20px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ui-chart-callout__v span { color: var(--ui-muted); font-size: 11px; }
+.ui-chart-callout__d { display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; font-family: var(--ui-font-num); font-size: 11px; font-weight: 700; color: var(--ui-muted); }
+.ui-chart-callout__d i { display: inline-flex; }
+.ui-chart-callout__d svg { width: 12px; height: 12px; }
+.ui-chart-callout__d.is-up { color: var(--ui-success); }
+.ui-chart-callout__d.is-down { color: var(--ui-danger); }
+
+/* Итог в шапке графика (UI.chart.head): название и подпись, крупное число, пилюля дельты (.ui-chip--soft), подпись дельты. */
+.ui-chart-head { display: grid; gap: 6px; margin-bottom: 8px; font-family: var(--ui-font); color: var(--ui-text); }
+.ui-chart-head__top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.ui-chart-head__title { font-size: 13px; font-weight: 700; }
+.ui-chart-head__sub { color: var(--ui-muted); font-size: 11.5px; }
+.ui-chart-head__main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ui-chart-head__value { font-family: var(--ui-font-num); font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.ui-chart-head__unit { color: var(--ui-muted); font-size: 13px; font-weight: 600; }
+.ui-chart-head__delta { align-self: center; font-family: var(--ui-font-num); font-weight: 700; }
+.ui-chart-head__delta svg { width: 12px; height: 12px; }
+.ui-chart-head__dlabel { color: var(--ui-muted); font-size: 11.5px; }
+
+@media (prefers-reduced-motion: reduce) { .ui-chart-callout { transition: none; } }
+
+/* src/ring/ring.css */
+/* Кольцо выполнения плана: SVG в реальных пикселях, легенда справа или снизу. Цвет дуги и точки — тон сегмента (--ui-ring-c). */
+.ui-ring { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; color: var(--ui-text); font-family: var(--ui-font); }
+.ui-ring--bottom { flex-direction: column; align-items: flex-start; }
+.ui-ring__figure { position: relative; flex: none; }
+.ui-ring__svgbox, .ui-ring__svg { display: block; }
+.ui-ring__center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+.ui-ring__value { font-family: var(--ui-font-num); font-weight: 800; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.ui-ring__label { margin-top: 4px; color: var(--ui-muted); font-size: 10.5px; }
+.ui-ring__label:empty { display: none; }
+.ui-ring__track { stroke: color-mix(in srgb, var(--ui-text) 8%, transparent); }
+.ui-ring__track.is-empty { stroke-width: 2px; stroke-dasharray: 1 7; stroke-linecap: round; stroke: color-mix(in srgb, var(--ui-muted) 70%, transparent); }
+.ui-ring__arc { stroke: var(--ui-ring-c, var(--ui-accent)); }
+.ui-ring__arc.is-draw { animation: ui-ring-draw 900ms cubic-bezier(.22, 1, .36, 1) both; animation-delay: calc(var(--ui-ring-i, 0) * 140ms); }
+@keyframes ui-ring-draw { from { stroke-dashoffset: var(--ui-ring-len); } to { stroke-dashoffset: 0; } }
+.ui-ring-t-accent  { --ui-ring-c: var(--ui-accent); }
+.ui-ring-t-success { --ui-ring-c: var(--ui-success); }
+.ui-ring-t-warning { --ui-ring-c: var(--ui-warning); }
+.ui-ring-t-danger  { --ui-ring-c: var(--ui-danger); }
+.ui-ring-t-info    { --ui-ring-c: var(--ui-link, var(--ui-accent)); }
+.ui-ring-t-violet  { --ui-ring-c: var(--ui-violet, var(--ui-accent)); }
+.ui-ring-t-muted   { --ui-ring-c: color-mix(in srgb, var(--ui-muted) 55%, transparent); }
+.ui-ring__side { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
+.ui-ring__legend { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 160px; }
+.ui-ring__row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.ui-ring__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-ring-c, var(--ui-accent)); }
+.ui-ring__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ui-muted); }
+.ui-ring__row.is-rest .ui-ring__name { opacity: .8; }
+.ui-ring__num { flex: none; font-family: var(--ui-font-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ui-ring__empty-text { max-width: 240px; color: var(--ui-muted); font-size: 12.5px; line-height: 1.45; }
+.ui-ring.is-empty .ui-ring__center { display: none; }
+@media (prefers-reduced-motion: reduce) { .ui-ring__arc.is-draw { animation: none; } }
+
+/* src/skeleton/skeleton.css */
+/* Скелетоны: волна акцента по серому, формы по виду содержимого; каскадное появление .ui-enter — в tokens.css. */
+@keyframes ui-skel-wave { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.ui-skel {
+  box-sizing: border-box; border-radius: var(--ui-radius-md);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ui-text) 6%, transparent) 25%, color-mix(in srgb, var(--ui-accent) 22%, transparent) 50%, color-mix(in srgb, var(--ui-text) 6%, transparent) 75%);
+  background-size: 200% 100%; animation: ui-skel-wave 2400ms ease-in-out infinite;
+}
+.ui-skeleton { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.ui-skeleton__row { display: flex; gap: 10px; align-items: center; }
+.ui-skeleton__row .ui-skel:first-child { flex: none; }
+.ui-skeleton__row .ui-skel:not(:first-child) { flex: 1 1 0; width: auto !important; }
+.ui-skeleton__side { display: flex; gap: 14px; align-items: center; }
+.ui-skeleton__side > .ui-skel:first-child { flex: none; }
+.ui-skeleton__col { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; }
+@media (prefers-reduced-motion: reduce) { .ui-skel { animation: none; } }
+
+/* src/reveal/reveal.css */
+/* Появление при прокрутке и проявление картинок (UI.reveal, UI.reveal.images). Прячет только при классе ui-reveal-ready на <html>:
+   без JS и при «уменьшить движение» всё видно сразу. Задержку каскада ставит UI.reveal в --ui-reveal-delay.
+   Чтобы спрятать до запуска (например, пока идёт вступление), продукт ставит ui-reveal-ready на <html> сам — встроенным скриптом в <head>. */
+.ui-reveal-ready .ui-reveal:not(.is-visible) { opacity: 0; transform: translateY(18px) scale(.985); }
+.ui-reveal-ready .ui-reveal--blur:not(.is-visible) { filter: blur(10px); transform: translateY(8px) scale(1.02); }
+.ui-reveal {
+  transition: opacity 620ms cubic-bezier(.22, 1, .36, 1), transform 720ms cubic-bezier(.22, 1, .36, 1), filter 720ms cubic-bezier(.22, 1, .36, 1);
+  transition-delay: var(--ui-reveal-delay, 0ms);
+}
+
+/* Части внутри .ui-reveal (0.17.0), включаются вместе с ним:
+   __curtain — открывается шторкой снизу вверх (фото, обложка); __zoom — «отъезжает» с увеличения к своему размеру (кадр внутри шторки);
+   __late — догоняет с задержкой +160 мс (подпись, цена, кнопки под фото). */
+.ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__curtain { clip-path: inset(100% 0 0 0); }
+.ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__zoom { transform: scale(1.14); }
+.ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__late { opacity: 0; transform: translateY(12px); }
+.ui-reveal__curtain { clip-path: inset(0 0 0 0); transition: clip-path 1000ms cubic-bezier(.65, 0, .35, 1) var(--ui-reveal-delay, 0ms); }
+.ui-reveal__zoom { transition: transform 1500ms cubic-bezier(.22, 1, .36, 1) var(--ui-reveal-delay, 0ms); }
+.ui-reveal__late {
+  transition: opacity 620ms cubic-bezier(.22, 1, .36, 1) calc(var(--ui-reveal-delay, 0ms) + 160ms),
+              transform 720ms cubic-bezier(.22, 1, .36, 1) calc(var(--ui-reveal-delay, 0ms) + 160ms);
+}
+
+/* Картинка проявляется после загрузки. С 0.17.0 только прозрачностью: масштаб остаётся за __zoom, чтобы не спорить с ним */
+.ui-reveal-ready img.ui-img:not(.is-loaded) { opacity: 0; }
+img.ui-img { transition: opacity 520ms ease; }
+img.ui-img.ui-reveal__zoom { transition: opacity 520ms ease, transform 1500ms cubic-bezier(.22, 1, .36, 1) var(--ui-reveal-delay, 0ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-reveal, .ui-reveal__curtain, .ui-reveal__zoom, .ui-reveal__late, img.ui-img { transition: none; }
+  .ui-reveal-ready .ui-reveal:not(.is-visible), .ui-reveal-ready img.ui-img:not(.is-loaded),
+  .ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__late { opacity: 1; transform: none; filter: none; }
+  .ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__curtain { clip-path: none; }
+  .ui-reveal-ready .ui-reveal:not(.is-visible) .ui-reveal__zoom { transform: none; }
+}
+
+/* src/sidenav/sidenav.css */
+/* Сайдбар с группами (стекло) и нижняя панель на телефоне. Ширина — --ui-sidenav-w (232px). */
+:root { --ui-sidenav-w: 232px; --ui-sidenav-bottom-h: 58px; --ui-sidenav-bottom-label-size: 10px; --ui-sidenav-bottom-gap: 12px; }
+.ui-sidenav {
+  box-sizing: border-box; display: flex; flex-direction: column; width: var(--ui-sidenav-w); height: 100vh; height: 100dvh;
+  position: sticky; top: 0; padding: 18px 14px; gap: 2px;
+  background: color-mix(in srgb, var(--ui-text) 2%, transparent); border-right: 1px solid var(--ui-glass-border);
+  backdrop-filter: blur(var(--ui-glass-blur)); -webkit-backdrop-filter: blur(var(--ui-glass-blur));
+  color: var(--ui-text); font-family: var(--ui-font); font-size: 12.5px;
+}
+.ui-sidenav__brand { display: flex; align-items: center; gap: 9px; padding: 4px 8px 16px; color: inherit; text-decoration: none; }
+.ui-sidenav__search {
+  display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 34px; margin-bottom: 12px; padding: 0 10px;
+  border: 1px solid var(--ui-glass-border); border-radius: var(--ui-radius-md); background: color-mix(in srgb, var(--ui-text) 3%, transparent);
+  color: var(--ui-muted); font: 500 12px var(--ui-font); cursor: pointer; text-align: left;
+}
+.ui-sidenav__search:hover { border-color: var(--ui-accent); color: var(--ui-text); }
+.ui-sidenav__search .ui-sidenav__text { flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ui-sidenav__kbd { font-family: system-ui, sans-serif; font-size: 10px; color: var(--ui-muted); border: 1px solid var(--ui-glass-border); border-radius: 4px; padding: 1px 5px; }
+.ui-sidenav__groups { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.ui-sidenav__title { padding: 12px 10px 6px; color: var(--ui-muted); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+.ui-sidenav__item {
+  position: relative; display: flex; align-items: center; gap: 10px; box-sizing: border-box; height: 34px; padding: 0 10px;
+  border-radius: var(--ui-radius-md); color: var(--ui-muted); text-decoration: none; font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  transition: color 150ms, background 150ms;
+}
+.ui-sidenav__item:hover { color: var(--ui-text); background: color-mix(in srgb, var(--ui-text) 4%, transparent); }
+.ui-sidenav__item:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.ui-sidenav__item.is-active {
+  color: var(--ui-text);
+  background: var(--ui-lift-bg, linear-gradient(90deg, color-mix(in srgb, var(--ui-accent) 22%, transparent), color-mix(in srgb, var(--ui-accent) 6%, transparent)));
+  box-shadow: inset 0 0 0 1px var(--ui-lift-border, color-mix(in srgb, var(--ui-accent) 25%, transparent)), var(--ui-lift-shadow, 0 0 0 0 transparent);
+}
+.ui-sidenav__item.is-active::before {
+  content: ""; position: absolute; left: -14px; top: 9px; width: 3px; height: 16px; border-radius: 0 3px 3px 0;
+  background: var(--ui-accent); box-shadow: 0 0 12px var(--ui-glow);
+}
+.ui-sidenav__ico { display: inline-flex; flex: none; }
+.ui-sidenav__ico svg { width: 16px; height: 16px; }
+.ui-sidenav__item .ui-sidenav__text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.ui-sidenav__badge { flex: none; padding: 1px 6px; border-radius: 10px; font-family: var(--ui-font-num); font-size: 10px; color: var(--ui-danger); background: color-mix(in srgb, var(--ui-danger) 18%, transparent); }
+.ui-sidenav__dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ui-warning); box-shadow: 0 0 8px var(--ui-warning); }
+.ui-sidenav__footer { margin-top: auto; padding-top: 10px; }
+
+/* Нижняя панель на телефоне. Правила панели вне медиазапроса: на десктопе она display: none, а рамка-телефон витрины
+   (.ui-doc__phone) показывает её внутри блока. Ширина экрана включает только display и отступ страницы. */
+.ui-sidenav-bottom {
+  display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--ui-z-dialog, 11000); grid-auto-flow: column; grid-auto-columns: 1fr;
+  height: calc(var(--ui-sidenav-bottom-h) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: color-mix(in srgb, var(--ui-bg) 88%, transparent); border-top: 1px solid var(--ui-glass-border);
+  backdrop-filter: blur(var(--ui-glass-blur)); -webkit-backdrop-filter: blur(var(--ui-glass-blur));
+  font-family: var(--ui-font);
+}
+.ui-sidenav-bottom__item {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; padding: 6px 2px 0;
+  border: 0; background: transparent; color: var(--ui-muted); text-decoration: none; font: 500 var(--ui-sidenav-bottom-label-size, 10px) var(--ui-font); cursor: pointer;
+}
+.ui-sidenav-bottom__item .ui-sidenav__text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-sidenav-bottom__item .ui-sidenav__ico svg { width: 20px; height: 20px; }
+.ui-sidenav-bottom__item.is-active { color: var(--ui-sidenav-bottom-active, var(--ui-accent)); }
+.ui-sidenav-bottom__item:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.ui-sidenav-bottom__item .ui-sidenav__badge { position: absolute; transform: translate(14px, -16px); }
+.ui-sidenav-more { position: fixed; inset: 0; z-index: calc(var(--ui-z-dialog, 11000) + 1); }
+.ui-sidenav-more[hidden] { display: none; }
+.ui-sidenav-more__backdrop { position: absolute; inset: 0; background: var(--ui-overlay); }
+.ui-sidenav-more__sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; display: grid; gap: 2px; padding: 12px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; background: var(--ui-surface); border-top: 1px solid var(--ui-border);
+  font-family: var(--ui-font);
+}
+.ui-sidenav-more__sheet .ui-sidenav__item { height: 44px; font-size: 14px; }
+.ui-sidenav-more__sheet .ui-sidenav__item.is-active::before { display: none; }
+/* Нижняя панель парит (cfg.floating, 0.42.0): капсула с отступом --ui-sidenav-bottom-gap от краёв и от низа, с учётом safe-area. Высота — --ui-sidenav-bottom-h,
+   без запаса под нижнюю кромку: отступ снизу уже включает safe-area. Центральное действие по-прежнему выступает над панелью, поэтому overflow не обрезается. */
+.ui-sidenav-bottom--floating {
+  left: calc(var(--ui-sidenav-bottom-gap) + env(safe-area-inset-left, 0px)); right: calc(var(--ui-sidenav-bottom-gap) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--ui-sidenav-bottom-gap) + env(safe-area-inset-bottom, 0px)); height: var(--ui-sidenav-bottom-h); padding-bottom: 0;
+  border: 1px solid var(--ui-glass-border); border-radius: 999px; box-shadow: var(--ui-glass-shadow);
+}
+/* Стекло на нижней панели (cfg.glass, 0.42.0): UI.glass вешает фон, размытие и блик; верхняя линия обычной панели не нужна */
+.ui-sidenav-bottom--glass:not(.ui-sidenav-bottom--floating) { border-top: 0; }
+@media (max-width: 767px) {
+  .ui-sidenav { display: none; }
+  .ui-sidenav-bottom { display: grid; }
+  body:has(.ui-sidenav-bottom) { padding-bottom: calc(var(--ui-sidenav-bottom-h) + env(safe-area-inset-bottom, 0px)); }
+  body:has(.ui-sidenav-bottom--floating) { padding-bottom: calc(var(--ui-sidenav-bottom-h) + var(--ui-sidenav-bottom-gap) * 2 + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Стекло (cfg.glass, 0.21.0): по Apple Liquid Glass стекло — весь навигационный слой, а не выбранный пункт.
+   Панель плавает с отступом --ui-sidenav-gap, скругление --ui-sidenav-radius; содержимое страницы может заходить под край
+   и преломляется кромкой (UI.glass). Внутри всё тихо: выбранный — светлая капсула, наведение — свет из-под курсора только
+   по наведённому пункту, нажатие — пункт на миг поднимается в стекло с бликом по кромке. Полоски слева и тени у пунктов нет,
+   поэтому ничего не ложится на соседей. */
+:root { --ui-sidenav-gap: 10px; --ui-sidenav-radius: 22px; --ui-sidenav-item-radius: 17px; }
+.ui-sidenav.ui-sidenav--glass {
+  top: var(--ui-sidenav-gap); width: calc(var(--ui-sidenav-w) - var(--ui-sidenav-gap) * 2); margin: var(--ui-sidenav-gap);
+  height: calc(100vh - var(--ui-sidenav-gap) * 2); height: calc(100dvh - var(--ui-sidenav-gap) * 2);
+  padding: 16px 10px; border: 0; border-radius: var(--ui-sidenav-radius); z-index: 2;
+}
+.ui-sidenav--glass .ui-sidenav__brand { padding: 4px 12px 16px; }
+.ui-sidenav--glass .ui-sidenav__search { border-radius: var(--ui-sidenav-item-radius); border-color: transparent; background: color-mix(in srgb, var(--ui-text) 6%, transparent); }
+.ui-sidenav--glass .ui-sidenav__title { padding: 12px 12px 6px; }
+.ui-sidenav--glass .ui-sidenav__item {
+  padding: 0 12px; border-radius: var(--ui-sidenav-item-radius); overflow: hidden;
+  transition: color 150ms, background 150ms, transform 180ms cubic-bezier(.22, 1, .36, 1), box-shadow 180ms cubic-bezier(.22, 1, .36, 1);
+}
+.ui-sidenav--glass .ui-sidenav__item.is-active { color: var(--ui-text); background: var(--ui-sidenav-sel, color-mix(in srgb, var(--ui-text) 12%, transparent)); box-shadow: none; }
+.ui-sidenav--glass .ui-sidenav__item.is-active::before { display: none; }
+.ui-sidenav--glass .ui-sidenav__item.is-active .ui-sidenav__ico { color: var(--ui-accent); }
+.ui-sidenav--glass .ui-sidenav__item:hover { color: var(--ui-text); background: transparent; }
+.ui-sidenav--glass .ui-sidenav__item.is-active:hover { background: var(--ui-sidenav-sel, color-mix(in srgb, var(--ui-text) 12%, transparent)); }
+.ui-sidenav--glass .ui-sidenav__item::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 200ms;
+  background: radial-gradient(120px 64px at var(--ui-px, 50%) 50%, var(--ui-sidenav-glow, rgba(255, 255, 255, .11)), color-mix(in srgb, var(--ui-sidenav-glow, rgba(255, 255, 255, .11)) 25%, transparent) 60%, transparent 85%);
+}
+.ui-sidenav--glass .ui-sidenav__item:hover::after { opacity: 1; }
+.ui-sidenav--glass .ui-sidenav__item > * { position: relative; z-index: 1; }
+/* Пункт как стекло включается только на нажатие: фон, размытие и тень UI.glass у него сняты, блик скрыт до .is-press */
+.ui-sidenav--glass .ui-sidenav__item.ui-lglass { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+.ui-sidenav--glass .ui-sidenav__item.is-active.ui-lglass { background: var(--ui-sidenav-sel, color-mix(in srgb, var(--ui-text) 12%, transparent)); }
+.ui-sidenav--glass .ui-sidenav__item .ui-lglass__spec { opacity: 0; transition: opacity 160ms; }
+.ui-sidenav--glass .ui-sidenav__item.is-press {
+  transform: scale(1.035); overflow: visible; color: var(--ui-text);
+  box-shadow: 0 8px 18px -8px rgba(0, 0, 0, .55), inset 0 0 0 .5px color-mix(in srgb, var(--ui-text) 22%, transparent);
+}
+.ui-sidenav--glass .ui-sidenav__item.is-press .ui-lglass__spec { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-sidenav--glass .ui-sidenav__item { transition: none; }
+  .ui-sidenav--glass .ui-sidenav__item.is-press { transform: none; }
+}
+
+/* Кнопка действия продукта (cfg.action, 0.22.0). В сайдбаре — первой под брендом, во всю ширину, акцентная.
+   На нижней панели — по центру между пунктами, круг крупнее пунктов, чуть приподнят над панелью. Меню действий — у продукта (UI.dialog). */
+:root { --ui-sidenav-action-size: 46px; }
+.ui-sidenav__action {
+  display: flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; height: 36px; margin: 0 0 12px; padding: 0 12px;
+  border: 0; border-radius: var(--ui-radius-md); background: var(--ui-accent); color: var(--ui-bg); font: 600 12.5px var(--ui-font); cursor: pointer;
+  box-shadow: var(--ui-btn-primary-shadow, 0 0 0 0 transparent); transition: filter 150ms, transform 120ms;
+}
+.ui-sidenav__action:hover { filter: brightness(1.08); }
+.ui-sidenav__action:active { transform: scale(.98); }
+.ui-sidenav__action:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.ui-sidenav__action .ui-sidenav__ico svg { width: 16px; height: 16px; }
+.ui-sidenav--glass .ui-sidenav__action { border-radius: 18px; }
+.ui-sidenav-bottom__item.ui-sidenav-bottom__action { padding-top: 0; color: var(--ui-accent); font-weight: 600; }
+.ui-sidenav-bottom__action .ui-sidenav__ico {
+  box-sizing: border-box; width: var(--ui-sidenav-action-size); height: var(--ui-sidenav-action-size); margin-top: calc(var(--ui-sidenav-action-size) * -.35);
+  align-items: center; justify-content: center; border-radius: 50%; background: var(--ui-accent); color: var(--ui-bg);
+  box-shadow: var(--ui-sidenav-action-glow, 0 6px 18px -6px color-mix(in srgb, var(--ui-accent) 70%, transparent)), var(--ui-sidenav-action-ring, 0 0 0 4px var(--ui-bg));
+  transition: transform 120ms;
+}
+.ui-sidenav-bottom__action .ui-sidenav__ico svg { width: 22px; height: 22px; }
+.ui-sidenav-bottom__action:active .ui-sidenav__ico { transform: scale(.94); }
+.ui-sidenav-bottom__action:focus-visible { outline: none; }
+.ui-sidenav-bottom__action:focus-visible .ui-sidenav__ico { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.ui-sidenav-bottom__action .ui-sidenav__text { margin-top: 2px; }
+
+/* Body продукта, свёрнутая полоса «одни иконки» и колонка рядом (0.40.0). Без новых опций ничего из этого не включается.
+   Токены: --ui-sidenav-rail-w (ширина полосы), --ui-sidenav-panel-w (колонка рядом с полосой). */
+:root { --ui-sidenav-rail-w: 56px; --ui-sidenav-panel-w: 248px; }
+.ui-sidenav--has-body > :not(.ui-sidenav__body) { flex-shrink: 0; }
+.ui-sidenav--has-body .ui-sidenav__groups { flex: none; overflow: visible; }
+.ui-sidenav__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-top: 8px; }
+.ui-sidenav__collapse {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; align-self: flex-start; box-sizing: border-box; width: 30px; height: 28px; margin: -8px 0 8px 4px; padding: 0;
+  border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-muted); cursor: pointer;
+  transition: color 150ms, background 150ms;
+}
+.ui-sidenav__collapse:hover { color: var(--ui-text); background: color-mix(in srgb, var(--ui-text) 6%, transparent); }
+.ui-sidenav__collapse:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.ui-sidenav__collapse .ui-sidenav__ico svg { width: 16px; height: 16px; }
+
+.ui-sidenav.ui-sidenav--collapsed { width: var(--ui-sidenav-rail-w); padding: 10px 8px; align-items: stretch; }
+.ui-sidenav--collapsed .ui-sidenav__brand, .ui-sidenav--collapsed .ui-sidenav__title, .ui-sidenav--collapsed .ui-sidenav__text,
+.ui-sidenav--collapsed .ui-sidenav__kbd, .ui-sidenav--collapsed .ui-sidenav__body { display: none; }
+.ui-sidenav--collapsed .ui-sidenav__groups { overflow-x: hidden; }
+.ui-sidenav--collapsed .ui-sidenav__group + .ui-sidenav__group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--ui-glass-border); }
+.ui-sidenav--collapsed .ui-sidenav__collapse { align-self: center; width: 40px; height: 40px; margin: 0 0 6px; }
+.ui-sidenav--collapsed .ui-sidenav__item { justify-content: center; width: 40px; height: 40px; padding: 0; gap: 0; margin-bottom: 2px; }
+.ui-sidenav--collapsed .ui-sidenav__item.is-active::before { left: -8px; top: 12px; }
+.ui-sidenav--collapsed .ui-sidenav__badge {
+  position: absolute; top: 2px; right: 2px; min-width: 14px; box-sizing: border-box; padding: 0 4px; font-size: 9px; line-height: 14px; text-align: center;
+}
+.ui-sidenav--collapsed .ui-sidenav__dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; }
+.ui-sidenav--collapsed .ui-sidenav__search { justify-content: center; width: 40px; height: 40px; padding: 0; gap: 0; margin-bottom: 6px; }
+.ui-sidenav--collapsed .ui-sidenav__action { width: 40px; height: 40px; padding: 0; gap: 0; margin-bottom: 8px; border-radius: 50%; }
+.ui-sidenav--collapsed .ui-sidenav__footer { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ui-sidenav.ui-sidenav--glass.ui-sidenav--collapsed { width: var(--ui-sidenav-rail-w); padding: 10px 8px; }
+.ui-sidenav--glass.ui-sidenav--collapsed .ui-sidenav__item { padding: 0; }
+
+.ui-sidenav-host--split { display: flex; align-items: stretch; }
+.ui-sidenav-panel {
+  box-sizing: border-box; flex: none; width: var(--ui-sidenav-panel-w); height: 100vh; height: 100dvh; position: sticky; top: 0; padding: 18px 14px;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--ui-text) 2%, transparent); border-right: 1px solid var(--ui-glass-border);
+  backdrop-filter: blur(var(--ui-glass-blur)); -webkit-backdrop-filter: blur(var(--ui-glass-blur));
+  color: var(--ui-text); font-family: var(--ui-font); font-size: 12.5px;
+}
+.ui-sidenav-panel .ui-sidenav__body { display: block; margin-top: 0; overflow: visible; }
+.ui-sidenav-bottom__more .ui-sidenav__dot { position: absolute; top: 8px; left: calc(50% + 6px); }
+@media (max-width: 767px) { .ui-sidenav-panel { display: none; } }
+
+/* src/palette/palette.css */
+/* ui-kit: палитра Cmd/Ctrl+K, шпаргалка клавиш и кнопка «Найти…» в шапке. Только токены --ui-*; бренд — в themes/<продукт>.css. */
+
+/* ── Кнопка «Найти… ⌘K» ── */
+.ui-pal-trigger {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  height: 32px; min-width: 200px; padding: 0 6px 0 10px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-pal-radius-row); background: var(--ui-bg);
+  color: var(--ui-muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.ui-pal-trigger:hover { border-color: var(--ui-pal-trigger-hover-border); color: var(--ui-text); background: var(--ui-surface); }
+.ui-pal-trigger__text { flex: 1; text-align: left; }
+.ui-pal-trigger kbd, .ui-pal kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px;
+  border: 1px solid var(--ui-border); border-bottom-width: 2px; border-radius: var(--ui-pal-radius-kbd); background: var(--ui-surface);
+  font: 500 11px/1 var(--ui-font); color: var(--ui-muted); white-space: nowrap;
+}
+@media (max-width: 1100px) { .ui-pal-trigger { min-width: 0; } }
+
+/* ── Подложка и окно ── */
+html.ui-pal-lock { overflow: hidden; }
+.ui-pal {
+  position: fixed; inset: 0; z-index: var(--ui-z-palette);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 12vh 16px 16px;
+  background: var(--ui-pal-overlay);
+  backdrop-filter: blur(var(--ui-pal-overlay-blur, 0px));
+  animation: ui-pal-fade .15s ease-out;
+}
+.ui-pal[hidden], dialog.ui-pal:not([open]) { display: none; }
+/* <dialog> в верхнем слое: снимаем у него оформление браузера, подложка — сам слой на весь экран */
+dialog.ui-pal {
+  width: auto; height: auto; max-width: none; max-height: none; margin: 0;
+  border: 0; color: inherit; overflow: visible;
+}
+dialog.ui-pal::backdrop { background: transparent; }
+.ui-pal__box {
+  display: flex; flex-direction: column; width: 100%; max-width: 640px; max-height: min(560px, 76vh);
+  background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-pal-radius); overflow: hidden;
+  box-shadow: var(--ui-pal-shadow);
+  font-family: var(--ui-font); color: var(--ui-text);
+  animation: ui-pal-in .17s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes ui-pal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-pal-in { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ui-pal, .ui-pal__box { animation: none; } }
+
+.ui-pal__search { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--ui-border); flex-shrink: 0; }
+.ui-pal__search-ic { display: grid; place-items: center; color: var(--ui-muted); }
+.ui-pal__input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+  font: 400 16px/1.2 var(--ui-font); color: var(--ui-text);
+}
+.ui-pal__input:focus-visible { outline: 0; }
+.ui-pal__cancel { display: none; border: 0; background: transparent; color: var(--ui-accent); font: 500 15px var(--ui-font); padding: 8px 4px; cursor: pointer; }
+
+.ui-pal__list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 6px; scroll-padding: 6px; }
+.ui-pal__sec { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-muted); }
+.ui-pal__row {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px;
+  border-radius: var(--ui-pal-radius-row); cursor: pointer; user-select: none;
+  transition: background-color .1s;
+}
+.ui-pal__row.is-active { background: var(--ui-bg); box-shadow: inset 2px 0 0 var(--ui-accent); }
+.ui-pal__ic {
+  display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0;
+  border-radius: var(--ui-pal-radius-ic); background: var(--ui-bg); color: var(--ui-muted);
+}
+.ui-pal__row.is-active .ui-pal__ic { background: var(--ui-surface); color: var(--ui-text); }
+.ui-pal__main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.ui-pal__title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 60%; }
+.ui-pal__title mark { background: transparent; color: var(--ui-accent); font-weight: 600; }
+.ui-pal__hint { font-size: 13px; color: var(--ui-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ui-pal__side { display: inline-flex; gap: 3px; flex-shrink: 0; font-size: 12px; color: var(--ui-muted); }
+.ui-pal__empty { padding: 28px 16px; text-align: center; font-size: 14px; color: var(--ui-muted); }
+
+.ui-pal__foot {
+  display: flex; align-items: center; gap: 16px; flex-shrink: 0; padding: 8px 14px;
+  border-top: 1px solid var(--ui-border); background: var(--ui-pal-foot-bg); font-size: 12px; color: var(--ui-muted);
+}
+.ui-pal__foot > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ui-pal__foot-keys { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; border: 0; background: transparent; color: var(--ui-muted); font: inherit; cursor: pointer; padding: 0; }
+.ui-pal__foot-keys:hover { color: var(--ui-text); }
+.ui-pal__foot-open { margin-left: auto; }
+
+/* ── Шпаргалка «Быстрые клавиши» ── */
+.ui-pal__box--keys { max-width: 720px; }
+.ui-pal__khead { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px 20px; }
+.ui-pal__khead h2 { margin: 0; font-family: var(--ui-pal-title-font); font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.ui-pal__kx { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: var(--ui-pal-radius-row); background: transparent; color: var(--ui-muted); cursor: pointer; }
+.ui-pal__kx:hover { background: var(--ui-bg); color: var(--ui-text); }
+.ui-pal__ksearch { height: 44px; margin: 0 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-pal-radius-row); padding: 0 10px; }
+.ui-pal__ksearch .ui-pal__input { font-size: 14px; }
+.ui-pal__kbody { overflow-y: auto; padding: 8px 20px 20px; columns: 2 300px; column-gap: 32px; }
+.ui-pal__kgroup { break-inside: avoid; padding-top: 12px; }
+.ui-pal__kgroup h3 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-muted); }
+.ui-pal__krow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; font-size: 13px; border-bottom: 1px solid var(--ui-pal-sep); }
+.ui-pal__kkeys { display: inline-flex; gap: 3px; flex-shrink: 0; }
+
+/* ── Узкий экран: лупа в шапке, палитра на весь экран ── */
+@media (max-width: 900px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .ui-pal-trigger { min-width: 0; width: 44px; height: 44px; padding: 0; justify-content: center; border: 0; background: transparent; color: var(--ui-text); }
+  .ui-pal-trigger__text, .ui-pal-trigger kbd { display: none; }
+}
+@media (max-width: 640px) {
+  .ui-pal { padding: 0; align-items: stretch; background: var(--ui-surface); }
+  .ui-pal__box { max-width: none; max-height: none; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+  @supports (height: 100dvh) { .ui-pal__box { height: 100dvh; } }
+  .ui-pal__search { height: 56px; padding-top: env(safe-area-inset-top); }
+  .ui-pal__box .ui-pal__esc, .ui-pal__foot { display: none; }
+  .ui-pal__cancel { display: inline-block; }
+  .ui-pal__row { min-height: 52px; }
+  .ui-pal__main { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .ui-pal__title { max-width: 100%; font-size: 15px; }
+  .ui-pal__hint { max-width: 100%; }
+  .ui-pal__khead { padding-top: calc(12px + env(safe-area-inset-top)); }
+  .ui-pal__kbody { columns: 1; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+}
+
+/* src/controls/controls.css */
+/* Контролы: кнопка, сегменты, поле, селект, галочка, чип, подпись, панель, верхняя панель.
+   База — Steel ZP (байбл app.защитапленкой.рф/system; до 0.13.0 жили только в themes/zp-steel.css как rnp-*).
+   Размеры и цвета — токены --ui-ctl-*, --ui-btn-*, --ui-seg-*, --ui-panel-*; бренд продукта — в его теме.
+   Из этого файла сборка делает прокладку rnp-* для zp-steel.css (scripts/aliases.js): из @-правил допустимо только @media.
+   Наведение (0.37.0) — только там, где есть мышь: @media (hover: hover) стоит вокруг каждого правила :hover на его прежнем месте,
+   порядок и специфичность правил те же. На телефоне после касания кнопка не остаётся «наведённой».
+   --ui-btn-fill и --ui-btn-primary-fill/-ink — внутренние: через них нажатая и выключенная кнопка меняют фон, не поднимая специфичность. */
+.ui-btn {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--ui-btn-gap, 6px);
+  height: var(--ui-ctl-h); padding: 0 var(--ui-ctl-pad-x); border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius);
+  background: var(--ui-btn-fill, var(--ui-btn-bg, transparent)); color: var(--ui-text); font: inherit; font-size: var(--ui-btn-size); font-weight: var(--ui-btn-weight);
+  letter-spacing: var(--ui-btn-tracking, .02em); line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none;
+  transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease), color 150ms var(--ui-ease), transform 150ms var(--ui-ease);
+}
+@media (hover: hover) {
+  .ui-btn:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
+}
+.ui-btn:active { transform: scale(var(--ui-btn-press-scale, .96)); transition-duration: 80ms; }
+.ui-btn:focus-visible, .ui-seg > button:focus-visible, .ui-input:focus-visible, .ui-select:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-btn:disabled, .ui-btn[aria-disabled="true"] { opacity: var(--ui-btn-disabled-opacity, .4); cursor: not-allowed; transform: none; }
+.ui-btn[aria-pressed="true"] { --ui-btn-fill: var(--ui-btn-pressed-bg, var(--ui-btn-bg, transparent)); border-color: var(--ui-accent); color: var(--ui-btn-pressed-text, var(--ui-accent)); }
+.ui-btn svg, .ui-seg > button svg { width: 1.15em; height: 1.15em; flex: none; }
+.ui-btn--primary { border-color: transparent; background: var(--ui-btn-primary-fill, var(--ui-accent)); color: var(--ui-btn-primary-ink, var(--ui-accent-text)); box-shadow: var(--ui-btn-primary-shadow, none); }
+.ui-btn--primary:disabled, .ui-btn--primary[aria-disabled="true"] { --ui-btn-primary-fill: var(--ui-btn-primary-disabled-bg, var(--ui-accent)); --ui-btn-primary-ink: var(--ui-btn-primary-disabled-text, var(--ui-accent-text)); }
+@media (hover: hover) {
+  .ui-btn--primary:hover { border-color: transparent; background: var(--ui-accent-hover, var(--ui-accent)); color: var(--ui-accent-text); filter: brightness(var(--ui-btn-hover-brightness, 1.08)); transform: translateY(-1px); }
+}
+.ui-btn--danger { border-color: transparent; background: var(--ui-danger); color: var(--ui-accent-text); }
+@media (hover: hover) {
+  .ui-btn--danger:hover { border-color: transparent; color: var(--ui-accent-text); filter: brightness(1.08); }
+}
+.ui-btn--ghost { --ui-btn-bg: transparent; border-color: transparent; }
+@media (hover: hover) {
+  .ui-btn--ghost:hover { background: var(--ui-surface-2); }
+  /* Выключенная кнопка под мышью выглядит как без мыши (0.37.0): правила только для выключенных, включённые не задеты. */
+  .ui-btn:disabled:hover, .ui-btn[aria-disabled="true"]:hover { border-color: var(--ui-border); color: var(--ui-text); }
+  .ui-btn[aria-pressed="true"]:disabled:hover, .ui-btn[aria-pressed="true"][aria-disabled="true"]:hover { border-color: var(--ui-accent); color: var(--ui-btn-pressed-text, var(--ui-accent)); }
+  .ui-btn--primary:disabled:hover, .ui-btn--primary[aria-disabled="true"]:hover { border-color: transparent; background: var(--ui-btn-primary-fill, var(--ui-accent)); color: var(--ui-btn-primary-ink, var(--ui-accent-text)); filter: none; transform: none; }
+  .ui-btn--danger:disabled:hover, .ui-btn--danger[aria-disabled="true"]:hover { border-color: transparent; color: var(--ui-accent-text); filter: none; }
+  .ui-btn--ghost:disabled:hover, .ui-btn--ghost[aria-disabled="true"]:hover { border-color: transparent; background: var(--ui-btn-fill, var(--ui-btn-bg, transparent)); }
+}
+/* Кнопка на втором слое стекла (0.42.0): фон и рамка из --ui-glass2-*, как у .ui-glass2. Нажатая и выключенная меняют вид так же, как у обычной .ui-btn. */
+.ui-btn--glass2 { --ui-btn-bg: var(--ui-glass2-bg); border-color: var(--ui-glass2-border); box-shadow: var(--ui-glass2-shadow), inset 0 1px 0 var(--ui-glass2-highlight); }
+.ui-btn--sm { height: calc(var(--ui-ctl-h) - 8px); padding: 0 10px; font-size: calc(var(--ui-btn-size) - 1px); }
+
+.ui-seg { box-sizing: border-box; display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius); background: var(--ui-surface-2); }
+.ui-seg > button {
+  display: inline-flex; align-items: center; gap: 6px; height: calc(var(--ui-ctl-h) - 10px); padding: 0 10px; border: 0; border-radius: var(--ui-seg-radius);
+  background: transparent; color: var(--ui-seg-text, var(--ui-text)); font: inherit; font-size: var(--ui-btn-size); line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background 200ms var(--ui-ease), color 200ms var(--ui-ease);
+}
+@media (hover: hover) {
+  .ui-seg > button:hover:not(.is-active):not([aria-pressed="true"]) { background: var(--ui-seg-hover-bg); }
+}
+.ui-seg > button.is-active, .ui-seg > button[aria-pressed="true"] {
+  background: var(--ui-lift-bg, var(--ui-seg-active-bg)); color: var(--ui-seg-active-text);
+  box-shadow: inset 0 0 0 1px var(--ui-lift-border, transparent), var(--ui-lift-shadow, 0 0 0 0 transparent);
+}
+/* Раздельные сегменты (0.37.0): та же разметка и UI.seg.mount, но без дорожки — отдельные кнопки с рамкой, как .ui-btn.
+   Промежуток — margin соседа, не gap: страницы для клиентов открывают и в старых встроенных браузерах. Тон нажатой — --ui-lift-border / --ui-lift-bg. */
+.ui-seg--split { gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.ui-seg--split > button {
+  box-sizing: border-box; justify-content: center; height: var(--ui-ctl-h); padding: 0 var(--ui-ctl-pad-x);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius); background: var(--ui-btn-bg, transparent);
+  font-size: var(--ui-btn-size); font-weight: var(--ui-btn-weight); letter-spacing: var(--ui-btn-tracking, .02em);
+  transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease), color 150ms var(--ui-ease);
+}
+.ui-seg--split > button + button { margin-left: var(--ui-seg-gap, 8px); }
+@media (hover: hover) {
+  .ui-seg--split > button:hover:not(.is-active):not([aria-pressed="true"]) { border-color: var(--ui-accent); background: var(--ui-btn-bg, transparent); color: var(--ui-accent); }
+}
+.ui-seg--split > button.is-active, .ui-seg--split > button[aria-pressed="true"] {
+  /* Как нажатая .ui-btn, а не подъём дорожки: --ui-lift-* темы (в zp — прозрачная рамка и свечение) сюда не действуют. Тон — свои переменные. */
+  border-color: var(--ui-seg-split-on-border, var(--ui-accent)); background: var(--ui-seg-split-on-bg, var(--ui-btn-pressed-bg, var(--ui-btn-bg, transparent))); color: var(--ui-text);
+  box-shadow: none;
+}
+/* Во всю ширину ряда (0.37.0): кнопки поровну; для обычных и раздельных сегментов. */
+.ui-seg--fill { display: flex; width: 100%; }
+.ui-seg--fill > button { flex: 1 1 0; min-width: 0; justify-content: center; }
+
+.ui-input, .ui-select {
+  box-sizing: border-box; height: var(--ui-ctl-h); padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-ctl-radius);
+  background: var(--ui-surface-2); color: var(--ui-text); font: inherit; font-size: var(--ui-ctl-size); outline: none;
+  transition: border-color 200ms var(--ui-ease), box-shadow 200ms var(--ui-ease);
+}
+.ui-input::placeholder { color: var(--ui-muted); }
+.ui-input:focus, .ui-select:focus { border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-input:disabled, .ui-select:disabled { opacity: .5; cursor: not-allowed; }
+.ui-label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--ui-muted); }
+
+.ui-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ui-ctl-size); cursor: pointer; }
+.ui-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--ui-accent); cursor: pointer; }
+
+/* Выключатель (0.42.0): input[type=checkbox][role=switch].ui-switch, чистый CSS. Дорожка 52×30, вокруг неё 7px невидимого поля — касание 66×44 (цель 44px).
+   Цвет включённого — --ui-switch-on (по умолчанию --ui-accent), выключенной дорожки — --ui-switch-off, бегунка — --ui-switch-thumb / --ui-switch-thumb-on.
+   Бегунок нарисован фоном дорожки и сдвигается background-position, поэтому псевдоэлементы не нужны. */
+.ui-switch {
+  -webkit-appearance: none; appearance: none; box-sizing: content-box; flex: none; width: 52px; height: 30px; margin: 0; padding: 7px; border: 0; border-radius: 22px;
+  background-color: var(--ui-switch-off, color-mix(in srgb, var(--ui-text) 22%, transparent));
+  background-image: radial-gradient(circle 12px at center, var(--ui-switch-thumb, color-mix(in srgb, var(--ui-text) 65%, transparent)) 99%, transparent 100%);
+  background-size: 30px 30px; background-repeat: no-repeat; background-position: 0 50%; background-origin: content-box; background-clip: content-box;
+  cursor: pointer; transition: background-position 160ms var(--ui-ease), background-color 160ms var(--ui-ease);
+}
+.ui-switch:checked {
+  background-color: var(--ui-switch-on, var(--ui-accent));
+  background-image: radial-gradient(circle 12px at center, var(--ui-switch-thumb-on, var(--ui-accent-text)) 99%, transparent 100%);
+  background-position: 100% 50%;
+}
+.ui-switch:focus-visible { outline: 2px solid var(--ui-switch-on, var(--ui-accent)); outline-offset: -5px; }
+.ui-switch:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .ui-switch { transition: none; } }
+
+.ui-chip { box-sizing: border-box; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-chip-radius, var(--ui-ctl-radius)); color: var(--ui-muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+.ui-chip--accent { border-color: var(--ui-accent); color: var(--ui-accent); }
+.ui-chip--solid { border-color: transparent; background: var(--ui-accent); color: var(--ui-accent-text); }
+.ui-chip--success { border-color: var(--ui-success); color: var(--ui-success); }
+.ui-chip--warning { border-color: var(--ui-warning); color: var(--ui-warning); }
+.ui-chip--danger { border-color: var(--ui-danger); color: var(--ui-danger); }
+/* Мягкая пилюля (0.18.0): заливка цвета тона ~17 %, текст цвета тона, без рамки. Тон — второй класс: --success, --warning, --danger, --info, --muted; без него — акцент. */
+.ui-chip--soft { --ui-chip-tone: var(--ui-accent); height: 22px; padding: 0 9px; border-color: transparent; border-radius: 999px; background: color-mix(in srgb, var(--ui-chip-tone) 17%, transparent); color: var(--ui-chip-tone); }
+.ui-chip--soft.ui-chip--success { --ui-chip-tone: var(--ui-success); border-color: transparent; color: var(--ui-success); }
+.ui-chip--soft.ui-chip--warning { --ui-chip-tone: var(--ui-warning); border-color: transparent; color: var(--ui-warning); }
+.ui-chip--soft.ui-chip--danger { --ui-chip-tone: var(--ui-danger); border-color: transparent; color: var(--ui-danger); }
+.ui-chip--soft.ui-chip--info { --ui-chip-tone: var(--ui-link, var(--ui-accent)); border-color: transparent; color: var(--ui-link, var(--ui-accent)); }
+.ui-chip--soft.ui-chip--muted { --ui-chip-tone: var(--ui-muted); border-color: transparent; color: var(--ui-muted); }
+.ui-chip svg { width: 1.1em; height: 1.1em; flex: none; }
+
+.ui-panel { position: relative; box-sizing: border-box; background: var(--ui-panel-bg); border: 1px solid var(--ui-panel-border); border-radius: var(--ui-radius-lg); box-shadow: var(--ui-panel-shadow); }
+.ui-panel__pad { padding: var(--ui-panel-pad); }
+.ui-panel__title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 15px; font-weight: var(--ui-panel-title-weight); }
+.ui-panel__subtitle { margin: 0 0 10px; font-size: 12px; color: var(--ui-muted); }
+
+.ui-topbar { box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px; background: var(--ui-surface); border-bottom: 1px solid var(--ui-border); }
+.ui-topbar--sticky { position: sticky; top: 0; z-index: 5; }
+.ui-topbar__title { font-size: 14px; font-weight: 700; }
+.ui-topbar__muted { color: var(--ui-muted); }
+.ui-topbar__spacer { flex: 1 1 auto; }
+
+/* Крошки (0.33.0): путь одной строкой, шрифт --ui-font (в теме arc моноширинный), разделитель «/» цветом --ui-muted.
+   Средние части сворачиваются в «…» (UI.crumbs), последняя — текст, при нехватке ширины обрезается многоточием. */
+.ui-crumbs { position: relative; box-sizing: border-box; min-width: 0; font-family: var(--ui-font); font-size: 13px; line-height: 1.4; color: var(--ui-muted); }
+.ui-crumbs__list { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; overflow: hidden; list-style: none; white-space: nowrap; }
+.ui-crumbs__item { flex: none; display: inline-flex; align-items: center; min-width: 0; }
+.ui-crumbs__item + .ui-crumbs__item::before { content: "/"; padding: 0 6px; color: var(--ui-muted); }
+.ui-crumbs__item:last-child { flex: 0 1 auto; min-width: 6ch; }
+.ui-crumbs__link, .ui-crumbs__text, .ui-crumbs__more, .ui-crumbs__menu-item { color: var(--ui-muted); text-decoration: none; }
+.ui-crumbs__link, .ui-crumbs__more { border-radius: var(--ui-radius-sm); transition: color 120ms var(--ui-ease, ease); }
+.ui-crumbs__link:hover, .ui-crumbs__more:hover { color: var(--ui-text); }
+.ui-crumbs__link:focus-visible, .ui-crumbs__more:focus-visible, .ui-crumbs__menu-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-crumbs__cur { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ui-text); }
+.ui-crumbs__more { padding: 0 4px; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.ui-crumbs__menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--ui-z-pop, 100); display: flex; flex-direction: column; min-width: 160px; max-width: min(320px, 90vw); padding: 4px; }
+.ui-crumbs__menu[hidden] { display: none; }
+.ui-crumbs__menu-item { display: block; padding: 6px 10px; border-radius: var(--ui-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.ui-crumbs__menu-item:hover { background: var(--ui-surface-2); color: var(--ui-text); }
+
+/* src/reader/reader.css */
+/* Режим чтения (UI.reader, 0.32.0): типографика готового HTML из markdown (.ui-prose) и раскладка читалки (.ui-reader).
+   Только токены --ui-*. Абзацы и списки — --ui-font-text (пропорциональный, темы его не перекрывают), заголовки — --ui-font, код — --ui-font-mono.
+   Размер: --ui-prose-size, шаг — data-ui-reader-size="s|m|l" на корне (компьютер 15/17/19, контейнер до 600px — 15/16/18).
+   Ширина колонки: --ui-prose-measure, data-ui-reader-width="narrow|wide"; таблицы и код — ровно по колонке текста (0.32.1).
+   Колонка стоит строго по центру читалки, оглавление — слева от неё, в поле.
+   Страница вбок не едет: длинное переносится, таблица прокручивается внутри своей обёртки .ui-prose__table. */
+
+.ui-reader {
+  --ui-prose-measure: 720px;
+  --ui-prose-bleed: var(--ui-prose-measure);
+  --ui-prose-toc-gap: 40px;
+  --ui-prose-toc-w: 220px;
+  container-type: inline-size;
+  box-sizing: border-box; width: 100%; min-width: 0;
+}
+.ui-reader[data-ui-reader-width="wide"] { --ui-prose-measure: 960px; }
+
+/* ─── Панель управления ─── */
+.ui-reader__bar { display: flex; justify-content: flex-end; max-width: var(--ui-prose-bleed); margin: 0 auto; padding: 8px 0; }
+.ui-reader__ctl { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.ui-reader__ctl [hidden] { display: none; }
+.ui-reader__pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--ui-z-pop, 100); box-sizing: border-box;
+  width: max-content; min-width: 220px; max-width: min(340px, calc(100vw - 24px)); padding: 12px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text);
+  box-shadow: var(--ui-shadow); font-family: var(--ui-font); font-size: 13px;
+}
+.ui-reader__pop[hidden] { display: none; }
+.ui-reader__pop--toc { width: 300px; max-height: min(60vh, 420px); overflow-y: auto; padding: 8px; }
+.ui-reader__row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.ui-reader__row + .ui-reader__row { margin-top: 12px; }
+.ui-reader__label { color: var(--ui-muted); font-size: 12px; }
+.ui-reader__ctl[data-ui-reader-mode="narrow"] .ui-reader__row--width, .ui-reader__pop[data-ui-reader-mode="narrow"] .ui-reader__row--width { display: none; }
+/* openView(anchor): панель стоит сразу за элементом продукта, координаты задаёт модуль (0.33.0) */
+.ui-reader__pop--docked { right: auto; }
+
+/* ─── Раскладка: текст строго по центру, оглавление слева в поле ─── */
+.ui-reader__body { display: block; min-width: 0; max-width: var(--ui-prose-bleed); margin: 0 auto; }
+.ui-reader__toc { display: none; }
+/* toc: <элемент> — оглавление во внешнем контейнере, раскладку и заголовок задаёт продукт.
+   Стоит после общего правила: при равной специфичности побеждает последнее (0.34.1). */
+.ui-reader__toc--ext { display: block; }
+.ui-reader__toc--ext[hidden] { display: none; }
+.ui-reader__toc-title { padding: 0 8px 8px; color: var(--ui-muted); font-family: var(--ui-font); font-size: 12px; }
+.ui-reader__toc-list { margin: 0; padding: 0; list-style: none; }
+.ui-reader__toc-link {
+  display: block; padding: 5px 8px; border-left: 2px solid var(--ui-border); color: var(--ui-muted);
+  font-family: var(--ui-font); font-size: 13px; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere;
+  transition: color 120ms var(--ui-ease, ease), border-color 120ms var(--ui-ease, ease);
+}
+.ui-reader__toc-link.is-sub { padding-left: 20px; }
+.ui-reader__toc-link:hover { color: var(--ui-text); }
+.ui-reader__toc-link:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-reader__toc-link[aria-current] { border-left-color: var(--ui-accent); color: var(--ui-text); }
+.ui-reader__pop--toc .ui-reader__toc-link { border-left-width: 0; border-radius: var(--ui-radius-sm); }
+.ui-reader__pop--toc .ui-reader__toc-link[aria-current] { background: var(--ui-surface-2); }
+
+/* Оглавление сбоку — когда оба поля вмещают его: 720 + 2 × (220 + 40) = 1240, для широкой колонки 960 + 520 = 1480.
+   Три колонки: поле с оглавлением | текст | такое же поле. Текст остаётся по центру контейнера. */
+@container (min-width: 1240px) {
+  .ui-reader[data-ui-reader-toc="on"]:not([data-ui-reader-width="wide"]) .ui-reader__body {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, var(--ui-prose-measure)) minmax(0, 1fr); column-gap: var(--ui-prose-toc-gap); max-width: none;
+  }
+  .ui-reader[data-ui-reader-toc="on"]:not([data-ui-reader-width="wide"]) .ui-prose { grid-column: 2; grid-row: 1; }
+  .ui-reader[data-ui-reader-toc="on"]:not([data-ui-reader-width="wide"]) .ui-reader__toc {
+    display: block; grid-column: 1; grid-row: 1; justify-self: end; width: min(100%, var(--ui-prose-toc-w));
+    position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; padding-top: 4px;
+  }
+  .ui-reader[data-ui-reader-toc="on"] .ui-reader__toc[hidden] { display: none; }
+}
+@container (min-width: 1480px) {
+  .ui-reader[data-ui-reader-toc="on"][data-ui-reader-width="wide"] .ui-reader__body {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, var(--ui-prose-measure)) minmax(0, 1fr); column-gap: var(--ui-prose-toc-gap); max-width: none;
+  }
+  .ui-reader[data-ui-reader-toc="on"][data-ui-reader-width="wide"] .ui-prose { grid-column: 2; grid-row: 1; }
+  .ui-reader[data-ui-reader-toc="on"][data-ui-reader-width="wide"] .ui-reader__toc {
+    display: block; grid-column: 1; grid-row: 1; justify-self: end; width: min(100%, var(--ui-prose-toc-w));
+    position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; padding-top: 4px;
+  }
+}
+
+/* ─── Типографика ─── */
+.ui-prose {
+  --ui-prose-size: 17px;
+  box-sizing: border-box; min-width: 0; color: var(--ui-text); font-family: var(--ui-font-text); font-size: var(--ui-prose-size); line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) { .ui-prose { --ui-prose-size: 16px; } }
+.ui-reader[data-ui-reader-size="s"] .ui-prose { --ui-prose-size: 15px; }
+.ui-reader[data-ui-reader-size="m"] .ui-prose { --ui-prose-size: 17px; }
+.ui-reader[data-ui-reader-size="l"] .ui-prose { --ui-prose-size: 19px; }
+@container (max-width: 600px) {
+  .ui-reader[data-ui-reader-size="m"] .ui-prose { --ui-prose-size: 16px; }
+  .ui-reader[data-ui-reader-size="l"] .ui-prose { --ui-prose-size: 18px; }
+}
+
+/* Колонка: каждый прямой ребёнок по центру в пределах --ui-prose-measure */
+.ui-prose > * { box-sizing: border-box; max-width: var(--ui-prose-measure, 720px); margin-left: auto; margin-right: auto; }
+.ui-prose > :first-child { margin-top: 0; }
+.ui-prose > :last-child { margin-bottom: 0; }
+
+.ui-prose p { margin-top: 0; margin-bottom: 1em; text-wrap: pretty; }
+.ui-prose h1, .ui-prose h2, .ui-prose h3, .ui-prose h4, .ui-prose h5 {
+  margin-top: 1.8em; margin-bottom: .5em; font-family: var(--ui-font); font-weight: 700; line-height: 1.25; color: var(--ui-text);
+  scroll-margin-top: var(--ui-prose-scroll-margin, 20px); text-wrap: balance;
+}
+.ui-prose h1 { font-size: 1.6em; }
+.ui-prose h2 { font-size: 1.3em; }
+.ui-prose h3 { font-size: 1.1em; }
+.ui-prose h4, .ui-prose h5 { font-size: 1em; }
+.ui-prose h5 { color: var(--ui-muted); }
+
+.ui-prose ul, .ui-prose ol { margin-top: 0; margin-bottom: 1em; padding-left: 1.5em; }
+/* Маркеры заданы явно: сброс стилей продукта (Tailwind) снимает их у списков */
+.ui-prose ul { list-style: disc; }
+.ui-prose ul ul { list-style: circle; }
+.ui-prose ol { list-style: decimal; }
+.ui-prose li { margin-bottom: .3em; }
+.ui-prose li > ul, .ui-prose li > ol { margin-top: .3em; margin-bottom: 0; }
+.ui-prose li::marker { color: var(--ui-muted); }
+.ui-prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.5em; }
+.ui-prose input[type="checkbox"] { width: 1em; height: 1em; margin: 0 .5em 0 0; vertical-align: -.125em; accent-color: var(--ui-accent); }
+
+.ui-prose blockquote { margin-top: 0; margin-bottom: 1em; padding: .1em 0 .1em 1em; border-left: 3px solid var(--ui-border); color: var(--ui-muted); }
+.ui-prose blockquote > :last-child { margin-bottom: 0; }
+
+.ui-prose a { color: var(--ui-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .15em; }
+.ui-prose a:hover { text-decoration-thickness: 2px; }
+.ui-prose a:focus-visible { outline: none; border-radius: var(--ui-radius-sm); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-prose strong, .ui-prose b { font-weight: 700; }
+.ui-prose em, .ui-prose i { font-style: italic; }
+
+.ui-prose code { padding: .12em .35em; border-radius: var(--ui-radius-sm); background: var(--ui-surface-2); font-family: var(--ui-font-mono); font-size: .85em; }
+.ui-prose pre {
+  max-width: var(--ui-prose-bleed, 1100px); margin-top: 0; margin-bottom: 1em; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-2); font-family: var(--ui-font-mono); font-size: .85em; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.ui-prose pre code { padding: 0; border-radius: 0; background: none; font-size: inherit; }
+
+.ui-prose hr { margin-top: 2em; margin-bottom: 2em; border: 0; border-top: 1px solid var(--ui-border); }
+.ui-prose img { display: block; max-width: 100%; height: auto; border-radius: var(--ui-radius-sm); }
+
+/* Таблица ровно по колонке текста: ячейки переносят текст, обёртка прокручивается сама, только когда колонок слишком много. Страница не едет. */
+.ui-prose > .ui-prose__table, .ui-prose__table {
+  width: 100%; max-width: var(--ui-prose-measure, 720px);
+  margin: 0 auto 1em; overflow-x: auto; box-sizing: border-box; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+}
+.ui-prose__table:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-prose table { width: 100%; border-collapse: collapse; font-size: .88em; line-height: 1.45; }
+.ui-prose th, .ui-prose td {
+  min-width: 6.5em; padding: 8px 12px; border-top: 1px solid var(--ui-border); text-align: left; vertical-align: top;
+  overflow-wrap: break-word; word-break: normal;
+}
+.ui-prose thead th, .ui-prose tr:first-child > th { border-top: 0; }
+.ui-prose th { background: var(--ui-surface-2); color: var(--ui-muted); font-weight: 600; }
+.ui-prose td code, .ui-prose th code { font-size: .95em; }
+/* Длинный код и адреса в ячейке переносятся по знакам и не распирают таблицу; обычные слова не рвутся. */
+.ui-prose td code, .ui-prose td a, .ui-prose th code, .ui-prose th a { overflow-wrap: anywhere; }
+
+/* src/tree/tree.css */
+/* Дерево папок и файлов (UI.tree, 0.33.0). Только токены --ui-*. Строка 28px (на экранах до 600px — 36px), отступ вложенности 14px.
+   Длинное имя обрезается многоточием, полное — в title. Текущий пункт — акцентом и тихим фоном, фокус — кольцом внутри строки. */
+.ui-tree { --ui-tree-row: 28px; --ui-tree-indent: 14px; box-sizing: border-box; min-width: 0; font-family: var(--ui-font); font-size: 13px; color: var(--ui-text); }
+.ui-tree ul { margin: 0; padding: 0; list-style: none; }
+.ui-tree ul[hidden] { display: none; }
+.ui-tree__row {
+  box-sizing: border-box; display: flex; align-items: center; gap: 6px; min-width: 0; height: var(--ui-tree-row);
+  padding: 0 8px 0 calc(4px + (var(--ui-tree-level, 1) - 1) * var(--ui-tree-indent)); border-radius: var(--ui-radius-sm);
+  color: inherit; text-decoration: none; cursor: pointer; user-select: none;
+  transition: background 120ms var(--ui-ease, ease), color 120ms var(--ui-ease, ease);
+}
+.ui-tree__row:hover { background: var(--ui-surface-2); }
+.ui-tree__row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ui-focus-ring); }
+.ui-tree__row.is-current, .ui-tree__row.is-current:hover { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); color: var(--ui-accent); }
+.ui-tree__chev, .ui-tree__ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
+.ui-tree__chev { color: var(--ui-muted); }
+.ui-tree__chev svg { width: 14px; height: 14px; transition: transform 120ms var(--ui-ease, ease); }
+.ui-tree__row[aria-expanded="true"] > .ui-tree__chev svg { transform: rotate(90deg); }
+.ui-tree__ico { color: var(--ui-muted); }
+.ui-tree__ico svg { width: 16px; height: 16px; }
+.ui-tree__row.is-current .ui-tree__ico { color: inherit; }
+.ui-tree__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-tree__count { flex: none; color: var(--ui-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ui-tree__msg {
+  box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-height: var(--ui-tree-row); color: var(--ui-muted); font-size: 12px;
+  padding: 0 8px 0 calc(4px + 22px + (var(--ui-tree-level, 1) - 1) * var(--ui-tree-indent));
+}
+.ui-tree__msg.is-error { color: var(--ui-danger); }
+.ui-tree__retry {
+  padding: 0 6px; height: 22px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: transparent; color: var(--ui-text);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.ui-tree__retry:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
+.ui-tree__retry:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+@media (max-width: 600px) { .ui-tree { --ui-tree-row: 36px; } }
+
+/* src/capture/capture.css */
+/* Снимок с камеры телефона: кнопка, миниатюра с размером и «Переснять» / «Убрать». Цвета и радиусы — токены --ui-*. Кнопки не ниже 44px под палец. */
+.ui-capture { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--ui-text); font-family: var(--ui-font); }
+.ui-capture [hidden] { display: none !important; }
+.ui-capture .ui-btn { min-height: 44px; }
+.ui-capture__ic { display: inline-flex; flex: none; }
+.ui-capture__empty { display: grid; gap: 6px; }
+.ui-capture__take { width: 100%; }
+.ui-capture__hint { color: var(--ui-muted); font-size: 13px; line-height: 1.4; }
+.ui-capture__result { display: grid; gap: 8px; min-width: 0; transition: opacity 150ms var(--ui-ease); }
+.ui-capture[data-state="busy"] .ui-capture__result { opacity: .6; }
+.ui-capture__frame { box-sizing: border-box; width: 100%; max-width: 320px; overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-2); }
+.ui-capture__img { display: block; width: 100%; height: auto; }
+.ui-capture__meta { color: var(--ui-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ui-capture__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-capture__status { color: var(--ui-muted); font-size: 13px; }
+.ui-capture__status:empty { display: none; }
+.ui-capture__error { color: var(--ui-danger); font-size: 13px; line-height: 1.4; }
+
+/* src/compare/compare.css */
+/* Эталон рядом с результатом: два кадра одного размера всегда в ряд, даже на 320px. Кадр — кнопка. Картинки в реальных пикселях, cover. */
+.ui-compare { --ui-compare-ratio: 3 / 4; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-width: 0; color: var(--ui-text); font-family: var(--ui-font); }
+.ui-compare__cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; }
+.ui-compare__frame {
+  position: relative; box-sizing: border-box; display: block; width: 100%; aspect-ratio: var(--ui-compare-ratio); margin: 0; padding: 0; overflow: hidden;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-2); color: var(--ui-muted); font: inherit; cursor: pointer;
+  transition: border-color 150ms var(--ui-ease);
+}
+.ui-compare__frame:hover { border-color: var(--ui-accent); }
+.ui-compare__frame:focus-visible { outline: none; border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-compare__img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.ui-compare__img[hidden], .ui-compare__blank[hidden] { display: none; }
+.ui-compare__blank { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; text-align: center; font-size: 13px; line-height: 1.35; }
+.ui-compare__blank-ic { display: inline-flex; opacity: .7; }
+.ui-compare__label { overflow: hidden; color: var(--ui-muted); font-size: 13px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+
+/* src/task/task.css */
+/* Строка задачи для списков на телефоне. Только разметка и CSS, без JS. Цвета и радиусы — токены --ui-*.
+   Слоты слева направо: .ui-task__lead (кнопка-галочка, цель 44px), .ui-task__main (.ui-task__title до двух строк, .ui-task__meta одна строка),
+   .ui-task__trail (чип или шеврон), .ui-task__grip (ручка перетаскивания, по желанию). Модификаторы: --done, --returned, --pending, --disabled.
+   Список — .ui-tasklist: группы .ui-tasklist__group с заголовком .ui-tasklist__heading и рядами .ui-tasklist__items. */
+.ui-tasklist { box-sizing: border-box; display: grid; gap: 16px; min-width: 0; color: var(--ui-text); font-family: var(--ui-font); }
+.ui-tasklist__group { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; }
+.ui-tasklist__heading { margin: 0; padding: 0 4px; color: var(--ui-muted); font-size: 13px; font-weight: 600; line-height: 1.3; }
+.ui-tasklist__items { box-sizing: border-box; margin: 0; padding: 0; overflow: hidden; list-style: none; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+
+.ui-task { --ui-task-mark: var(--ui-muted); position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 56px; padding: 4px 4px 4px 2px; color: var(--ui-text); }
+.ui-task + .ui-task { border-top: 1px solid var(--ui-border); }
+.ui-task__lead { position: relative; box-sizing: border-box; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-accent-text); font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ui-task__lead::before { content: ''; box-sizing: border-box; position: absolute; inset: 9px; border: 2px solid var(--ui-task-mark); border-radius: 50%; background: transparent; transition: background 150ms var(--ui-ease), border-color 150ms var(--ui-ease); }
+.ui-task__lead > svg { position: relative; width: 16px; height: 16px; opacity: 0; transition: opacity 150ms var(--ui-ease); }
+.ui-task__lead:focus-visible, .ui-task__main:focus-visible, .ui-task__grip:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ui-focus-ring); }
+.ui-task__lead:focus-visible::before { border-color: var(--ui-accent); }
+.ui-task__main { box-sizing: border-box; display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; min-height: 44px; padding: 4px 6px; border-radius: var(--ui-radius-md); color: inherit; font: inherit; text-align: left; text-decoration: none; }
+a.ui-task__main, button.ui-task__main { border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ui-task__title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: 15px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.ui-task__meta { overflow: hidden; color: var(--ui-muted); font-size: 13px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.ui-task__trail { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--ui-muted); }
+.ui-task__trail > svg { width: 18px; height: 18px; }
+.ui-task__grip { box-sizing: border-box; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-muted); cursor: grab; touch-action: none; }
+.ui-task__grip > svg { width: 20px; height: 20px; }
+@media (hover: hover) {
+  .ui-task__lead:hover::before { border-color: var(--ui-accent); }
+  a.ui-task__main:hover, button.ui-task__main:hover { background: var(--ui-surface-2); }
+}
+
+/* Сделано: заполненный круг с галочкой, название спокойнее */
+.ui-task--done { --ui-task-mark: var(--ui-success); }
+.ui-task--done .ui-task__lead::before { border-color: var(--ui-success); background: var(--ui-success); }
+.ui-task--done .ui-task__lead > svg { opacity: 1; }
+.ui-task--done .ui-task__title { color: var(--ui-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+/* Возвращено на доработку: тёплая метка слева, круг цвета предупреждения */
+.ui-task--returned { --ui-task-mark: var(--ui-warning); box-shadow: inset 3px 0 0 var(--ui-warning); }
+/* Ждёт проверки: пунктирный круг цвета акцента */
+.ui-task--pending { --ui-task-mark: var(--ui-accent); }
+.ui-task--pending .ui-task__lead::before { border-style: dashed; }
+/* Недоступно: не нажимается */
+.ui-task--disabled { opacity: .5; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) { .ui-task__lead::before, .ui-task__lead > svg { transition: none; } }
+
+/* src/glass/glass.css */
+/* Жидкое стекло (UI.glass): тонировка и лёгкое размытие фона — содержимое под стеклом видно; у кромки фон преломляется
+   (Chromium), по кромке блик со стороны света, мягкая тень и толщина у края. Середина спокойная — стекло узнаётся по краю.
+   Файл в сборке идёт после компонентов: стекло, смонтированное на компонент (сайдбар, окно), заменяет его фон и размытие.
+   Токены: --ui-lglass-tint (заливка), --ui-lglass-blur, --ui-lglass-sat, --ui-lglass-bright, --ui-lglass-shadow, --ui-lglass-spec (яркость блика). */
+:root {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04));
+  --ui-lglass-blur: 6px;
+  --ui-lglass-sat: 160%;
+  --ui-lglass-bright: 1;
+  --ui-lglass-shadow: 0 18px 40px -14px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .10);
+  --ui-lglass-spec: .9;
+}
+:where(.ui-lglass) { position: relative; } /* нулевая значимость: позиция компонента (sticky у сайдбара, fixed у окна) важнее */
+.ui-lglass {
+  isolation: isolate;
+  background: var(--ui-lglass-tint);
+  -webkit-backdrop-filter: blur(var(--ui-lglass-blur)) saturate(var(--ui-lglass-sat)) brightness(var(--ui-lglass-bright));
+  backdrop-filter: var(--ui-lglass-lens,) blur(var(--ui-lglass-blur)) saturate(var(--ui-lglass-sat)) brightness(var(--ui-lglass-bright));
+  box-shadow: var(--ui-lglass-shadow);
+}
+.ui-lglass__spec {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background-size: 100% 100%; background-repeat: no-repeat; mix-blend-mode: screen; opacity: var(--ui-lglass-spec);
+}
+.ui-lglass > :not(.ui-lglass__spec):not(svg) { position: relative; z-index: 1; }
+@media (prefers-reduced-transparency: reduce) {
+  .ui-lglass { backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%); }
+}
+
+/* src/doc/doc.css */
+/* Документ дизайн-системы: обложка, главы, рамка LIVE, свотчи, сниппеты.
+   Формат — страница Design System дашбордов ZP (app.защитапленкой.рф/system): обложка с крупным заголовком,
+   нумерованные главы с вводным абзацем, живой пример в рамке с меткой, чипы классов под примером.
+   Слева — UI.sidenav как оглавление. Цвета, шрифты и радиусы — токены темы; документ перекрашивается целиком. */
+.ui-doc { position: relative; z-index: 1; display: flex; min-height: 100dvh; } /* на всю ширину, как оболочка продукта: сайдбар у левого края, без пустых полей */
+.ui-doc > .ui-sidenav, .ui-doc > * > .ui-sidenav { position: sticky; top: 0; flex: none; --ui-sidenav-w: 272px; } /* шире сайдбара продукта: названия глав в Montserrat не обрезаются; сайдбар может лежать в обёртке (#toc) */
+.ui-doc > :has(> .ui-sidenav) { flex: none; }
+.ui-doc__content { flex: 1 1 auto; min-width: 0; padding: 0 48px 120px; }
+
+.ui-doc__cover { display: flex; flex-direction: column; justify-content: center; min-height: 70vh; padding: 80px 0 56px; border-bottom: 1px solid var(--ui-border); }
+.ui-doc__cover-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; font-size: 22px; font-weight: 500; letter-spacing: -.01em; }
+.ui-doc__cover-brand svg { width: 36px; height: 36px; color: var(--ui-accent); }
+.ui-doc__cover h1 { margin: 0 0 24px; font-size: 68px; font-weight: 500; letter-spacing: -.035em; line-height: .95; }
+.ui-doc__cover h1 em { font-style: normal; color: var(--ui-accent); }
+.ui-doc__cover-lead { max-width: 640px; margin: 0; font-size: 15px; line-height: 1.6; color: var(--ui-muted); }
+.ui-doc__meta { display: flex; flex-wrap: wrap; gap: 32px 60px; margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--ui-border); }
+.ui-doc__meta-k { margin-bottom: 6px; font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ui-muted); }
+.ui-doc__meta-v { font-size: 14px; font-family: var(--ui-font-num, var(--ui-font-mono)); }
+
+.ui-doc__section { padding: 60px 0; border-bottom: 1px solid var(--ui-border); scroll-margin-top: 20px; }
+.ui-doc__section:last-child { border-bottom: 0; }
+.ui-doc__eyebrow { margin: 0 0 12px; font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__section > h2 { margin: 0 0 8px; font-size: 32px; font-weight: 500; letter-spacing: -.02em; line-height: 1.1; }
+.ui-doc__lead { max-width: 640px; margin: 0 0 40px; font-size: 14px; line-height: 1.55; color: var(--ui-muted); }
+.ui-doc__lead a, .ui-doc__sublead a { color: var(--ui-accent); text-decoration: none; }
+.ui-doc__lead a:hover, .ui-doc__sublead a:hover { text-decoration: underline; }
+
+.ui-doc__sub { margin-bottom: 48px; }
+.ui-doc__sub:last-child { margin-bottom: 0; }
+.ui-doc__sub > h3 { margin: 0 0 6px; font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
+.ui-doc__sublead { max-width: 640px; margin: 0 0 20px; font-size: 13px; line-height: 1.55; color: var(--ui-muted); }
+
+/* Рамка живого примера: метка в правом верхнем углу (LIVE, имя класса) */
+.ui-doc__stage { position: relative; margin-bottom: 16px; padding: 32px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.ui-doc__stage--bg { background: var(--ui-bg); }
+/* Рамка без отступов: для шапки, таблицы, сайдбара; метка уходит в полосу сверху */
+.ui-doc__stage--flush { padding: 0; overflow: hidden; }
+.ui-doc__stage--flush > .ui-doc__stage-label { position: static; display: block; padding: 10px 12px 8px; text-align: right; border-bottom: 1px solid var(--ui-border); }
+.ui-doc__stage-label { position: absolute; top: 10px; right: 12px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.ui-doc__row--start { align-items: flex-start; }
+.ui-doc__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.ui-doc__tags .ui-chip { font-family: var(--ui-font-num, var(--ui-font-mono)); text-transform: none; letter-spacing: 0; }
+.ui-doc__grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Свотчи: цвет, имя токена, значение, назначение */
+.ui-doc__swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.ui-doc__swatch { overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.ui-doc__swatch-chip { height: 80px; border-bottom: 1px solid var(--ui-border); }
+.ui-doc__swatch-meta { padding: 10px 12px; font-size: 12px; }
+.ui-doc__swatch-name { margin-bottom: 2px; font-weight: 600; font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__swatch-hex { color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); font-variant-numeric: tabular-nums; }
+.ui-doc__swatch-use { margin-top: 4px; font-size: 11px; color: var(--ui-muted); }
+
+/* Код: имя класса в тексте и сниппет подключения */
+.ui-doc__code { padding: 1px 6px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface-2); color: var(--ui-accent); font-family: var(--ui-font-num, var(--ui-font-mono)); font-size: 11px; }
+.ui-doc__snippet { margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface-2); color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); font-size: 11px; line-height: 1.7; white-space: pre; overflow-x: auto; }
+.ui-doc__snippet b { color: var(--ui-text); font-weight: 500; }
+
+/* Правила: нумерованный список «что делаем / чего не делаем» */
+.ui-doc__rules { margin: 0; padding: 0; list-style: none; }
+.ui-doc__rules li { display: flex; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--ui-border); }
+.ui-doc__rules li:last-child { border-bottom: 0; }
+.ui-doc__rules .n { flex: none; width: 36px; padding-top: 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--ui-accent); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__rules b { display: block; margin-bottom: 3px; font-size: 13px; font-weight: 600; }
+.ui-doc__rules p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--ui-muted); }
+
+/* Типографика: строка «роль → образец» */
+.ui-doc__type { display: flex; align-items: baseline; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--ui-border); }
+.ui-doc__type:last-child { border-bottom: 0; }
+.ui-doc__type-meta { flex: none; min-width: 200px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-muted); }
+.ui-doc__type-meta span { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ui-text); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__type-sample { flex: 1 1 auto; min-width: 0; margin: 0; }
+
+/* Отступы и радиусы */
+.ui-doc__space { display: flex; align-items: center; gap: 20px; padding: 8px 0; }
+.ui-doc__space .lbl { min-width: 140px; font-size: 12px; color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+.ui-doc__space .bar { height: 16px; border-radius: 2px; background: var(--ui-accent); }
+.ui-doc__space .val { font-size: 12px; color: var(--ui-muted); font-variant-numeric: tabular-nums; }
+.ui-doc__radii { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+.ui-doc__radius { text-align: center; font-size: 11px; color: var(--ui-muted); }
+.ui-doc__radius i { display: block; width: 80px; height: 80px; margin-bottom: 10px; background: var(--ui-accent); }
+.ui-doc__radius b { display: block; margin-bottom: 2px; font-size: 13px; font-weight: 500; color: var(--ui-text); font-family: var(--ui-font-num, var(--ui-font-mono)); }
+
+/* Сетки примеров: иконки, карточки, скелетоны */
+.ui-doc__grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(var(--ui-doc-col, 220px), 1fr)); }
+.ui-doc__icons { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); }
+.ui-doc__icons div { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 2px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); font-size: 10px; color: var(--ui-muted); text-align: center; overflow-wrap: anywhere; }
+.ui-doc__icons svg { color: var(--ui-text); }
+.ui-doc__field { display: grid; gap: 2px; min-width: 180px; }
+.ui-doc__out { margin-top: 8px; font-size: 11px; color: var(--ui-muted); font-family: var(--ui-font-num, var(--ui-font-mono)); min-height: 1.4em; }
+
+/* Кадр: пример с собственной высотой и прокруткой (сайдбар, страница целиком) */
+.ui-doc__frame { position: relative; display: flex; height: 520px; overflow: hidden; }
+.ui-doc__frame .ui-sidenav { position: static; height: 100%; }
+.ui-doc__frame .ui-sidenav-panel { position: static; height: 100%; }
+.ui-doc__frame .ui-sidenav-bottom, .ui-doc__frame .ui-sidenav-more { position: absolute; }
+.ui-doc__frame-pane { flex: 1 1 auto; padding: 20px; font-size: 13px; color: var(--ui-muted); }
+
+@media (max-width: 900px) {
+  .ui-doc { display: block; }
+  .ui-doc > .ui-sidenav, .ui-doc > * > .ui-sidenav { position: static; width: auto; height: auto; border-bottom: 1px solid var(--ui-border); }
+  .ui-doc__content { padding: 0 16px 80px; }
+  .ui-doc__cover { min-height: 0; padding: 40px 0 32px; }
+  .ui-doc__cover h1 { font-size: 44px; }
+  .ui-doc__section > h2 { font-size: 26px; }
+  .ui-doc__stage { padding: 20px 16px; }
+  .ui-doc__grid-2 { grid-template-columns: 1fr; }
+  .ui-doc__type { flex-direction: column; gap: 8px; }
+  .ui-doc__frame { height: 420px; }
+}
+
+/* Рамка-телефон (0.22.0): нижняя панель UI.sidenav показывается внутри блока на любой ширине экрана — для живого примера. */
+.ui-doc__phone {
+  position: relative; box-sizing: border-box; width: 360px; max-width: 100%; height: 150px; overflow: hidden;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-bg);
+}
+.ui-doc__phone .ui-sidenav { display: none; }
+.ui-doc__phone .ui-sidenav-bottom { display: grid; position: absolute; }
+.ui-doc__phone .ui-sidenav-more { position: absolute; }
+.ui-doc__phone .ui-doc__frame-pane { padding: 14px 16px; }

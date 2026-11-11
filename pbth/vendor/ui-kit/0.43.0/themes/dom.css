@@ -1,0 +1,64 @@
+/* Тема «Дом»: приложение домашнего ухода для частного дома, телефон в первую очередь. Хозяин сравнивает снимок работы с эталоном.
+   Направление: спокойный уважительный рабочий инструмент; снимки комнат — главный материал, интерфейс вокруг них тихий.
+   Светлая по умолчанию (тёплая бумага, белые поверхности), тёмная — [data-ui-theme="dark"]. Один акцент — приглушённый сине-серый;
+   зелёный, жёлтый и красный только сигналы «сделано / внимание / плохо». Без градиентов, свечений и стекла.
+   Контраст текста и приглушённого текста к фонам и поверхностям не ниже 4,5:1 в обоих режимах (проверяет tests/theme-dom.test.js).
+   Родных переменных у продукта нет: значения заданы здесь, шрифт системный (без загрузки с чужих CDN). */
+:root {
+  --ui-bg: #F5F1E9;
+  --ui-surface: #FFFCF7;
+  --ui-surface-2: #EDE7DB;
+  --ui-text: #231F1A;
+  --ui-muted: #655C50;
+  --ui-border: #DDD5C6;
+  --ui-accent: #35567F;
+  --ui-accent-text: #FFFFFF;
+  --ui-danger: #A8321F;
+  --ui-success: #226B43;
+  --ui-warning: #7A5200;
+  --ui-overlay: rgba(35, 31, 26, .45);
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 10px;
+  --ui-radius-lg: 14px;
+  --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ui-font-num: var(--ui-font);
+  --ui-shadow: 0 12px 32px rgba(35, 31, 26, .16), 0 2px 6px rgba(35, 31, 26, .08);
+  --ui-icon-stroke: 1.75;
+
+  /* Под палец: контролы 44px, кольцо фокуса того же тона, что акцент */
+  --ui-ctl-h: 44px;
+  --ui-ctl-pad-x: 16px;
+  --ui-ctl-size: 15px;
+  --ui-btn-size: 15px;
+  --ui-focus-ring: rgba(53, 86, 127, .22);
+  --ui-glass-bg: var(--ui-surface);
+  --ui-glass-border: var(--ui-border);
+  --ui-glass-highlight: transparent;
+  --ui-glass-shadow: none;
+  --ui-glow: transparent;
+  --ui-backdrop: none;
+  --ui-violet: var(--ui-accent);
+}
+[data-ui-theme="dark"] {
+  --ui-bg: #171512;
+  --ui-surface: #211E1A;
+  --ui-surface-2: #2B2723;
+  --ui-text: #EFEAE1;
+  --ui-muted: #AAA194;
+  --ui-border: #3D3731;
+  --ui-accent: #8FB0DC;
+  --ui-accent-text: #14181F;
+  --ui-danger: #EF8B7A;
+  --ui-success: #6CC38F;
+  --ui-warning: #E3B45A;
+  --ui-overlay: rgba(0, 0, 0, .62);
+  --ui-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  --ui-focus-ring: rgba(143, 176, 220, .28);
+  --ui-glass-bg: var(--ui-surface);
+  --ui-glass-border: var(--ui-border);
+  --ui-glass-highlight: transparent;
+  --ui-glass-shadow: none;
+  --ui-glow: transparent;
+  --ui-backdrop: none;
+  --ui-violet: var(--ui-accent);
+}

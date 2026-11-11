@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ru" data-ui-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ui-kit: витрина</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./ui-kit.css">
+<link rel="stylesheet" href="./themes/pbth-fonts.css"> <!-- шрифт темы pbth, лениво: качается, только если тема её просит -->
+<link rel="stylesheet" id="theme-css" href="./themes/zp.css">
+<style>
+  /* Страница собрана на ui-kit: оглавление UI.sidenav, документ .ui-doc, контролы .ui-btn / UI.seg / .ui-chip. Своего вида у неё нет. */
+  body { margin: 0; background: var(--ui-bg); color: var(--ui-text); font-family: var(--ui-font); font-size: 14px; line-height: 1.5; }
+  .bar { margin: 0 -48px; padding-left: 48px; padding-right: 48px; }
+  .bar .ui-topbar__muted { margin-left: 8px; }
+  .ui-doc__cover-lead b { color: var(--ui-text); font-weight: 500; }
+  .charts { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .charts > div { min-width: 0; padding: 10px 12px 6px; }
+  .sparks > div { height: 26px; border: 1px dashed var(--ui-border); border-radius: var(--ui-radius-sm); color: var(--ui-success); }
+  .num { font-family: var(--ui-font-num, var(--ui-font-mono)); font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) { .bar { margin: 0 -16px; padding-left: 16px; padding-right: 16px; } .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="ui-doc">
+  <div id="toc"></div>
+  <div class="ui-doc__content">
+    <div class="ui-topbar ui-topbar--sticky bar">
+      <span class="ui-topbar__muted">Тема</span><span id="themes"></span>
+      <span class="ui-topbar__muted">Режим</span><span id="modes"></span>
+      <span class="ui-topbar__spacer"></span>
+      <a class="ui-btn ui-btn--ghost ui-btn--sm" href="https://github.com/vslgvrlv/ui-kit" target="_blank" rel="noopener">vslgvrlv/ui-kit</a>
+    </div>
+
+    <section class="ui-doc__cover" id="cover">
+      <div class="ui-doc__cover-brand" id="cover-brand"><span>ui-kit</span></div>
+      <h1>Библиотека интерфейса<br><em>ui-kit <span id="ver"></span></em></h1>
+      <p class="ui-doc__cover-lead">Одно ядро для всех продуктов: <b>Сметник</b>, дашборды <b>Защитаплёнкой.рф</b>, <b>ARC</b>, <b>ZP Studio</b>, хаб <b>Агатоса</b>. База вида — Steel ZP; у каждого продукта своя тема, которая перекрашивает тот же набор токенов и компонентов. Без фреймворков, закреплённая копия версии в продукте.</p>
+      <div class="ui-doc__meta">
+        <div><div class="ui-doc__meta-k">Версия</div><div class="ui-doc__meta-v" id="meta-ver"></div></div>
+        <div><div class="ui-doc__meta-k">Тема на экране</div><div class="ui-doc__meta-v" id="meta-theme"></div></div>
+        <div><div class="ui-doc__meta-k">Иконки</div><div class="ui-doc__meta-v" id="meta-icons">Lucide</div></div>
+        <div><div class="ui-doc__meta-k">Источник правды</div><div class="ui-doc__meta-v">vslgvrlv/ui-kit · src/</div></div>
+      </div>
+    </section>
+
+    <!-- 01 · Обзор -->
+    <section class="ui-doc__section" id="about">
+      <p class="ui-doc__eyebrow">— 01 · Обзор</p>
+      <h2>О системе</h2>
+      <p class="ui-doc__lead">ui-kit больше, чем одна дизайн-система: он держит несколько систем темами. Ядро задаёт поведение и размеры, тема — цвет, шрифт и радиусы. Элемент, нужный второму продукту, переезжает сюда, а не копируется.</p>
+      <div class="ui-doc__grid-2">
+        <div class="ui-panel ui-panel__pad">
+          <div class="ui-panel__title">Что внутри</div>
+          <p class="ui-doc__sublead" style="margin:0">Токены <span class="ui-doc__code">--ui-*</span> и четыре темы, иконки Lucide, стекло, контролы (кнопка, сегменты, чип, поле, селект, панель, шапка), тост, окно, период, окно «из чего цифра», карточка показателя, скелетоны, сайдбар, клавиши и палитра ⌘K, графики.</p>
+        </div>
+        <div class="ui-panel ui-panel__pad">
+          <div class="ui-panel__title">Как подключить</div>
+          <p class="ui-doc__sublead" style="margin:0">Закреплённая копия версии в <span class="ui-doc__code">vendor/ui-kit/&lt;версия&gt;</span>, дальше обычный PR. Перед PR с правкой интерфейса — проверка <span class="ui-doc__code">guard</span>: она ловит самописный тост, окно, иконку или кнопку.</p>
+          <pre class="ui-doc__snippet"><b>bun ~/Git/ui-kit/scripts/sync.js</b> 0.15.0 ~/Git/smetnik --theme agatos</pre>
+        </div>
+      </div>
+      <ul class="ui-doc__rules" style="margin-top:24px">
+        <li><span class="n">01</span><div><b>Сначала ui-kit, потом каталог, потом чужое готовое</b><p>С нуля — только когда ничего не подходит, и тогда сделанное сразу переиспользуемо.</p></div></li>
+        <li><span class="n">02</span><div><b>Фирменное живёт в теме</b><p>Анимации zp-motion, вид Александра в Агатосе — в теме продукта, не в ядре.</p></div></li>
+        <li><span class="n">03</span><div><b>Один источник вида</b><p>Старые классы rnp-* в теме zp — прокладка на правила ядра, сборка генерирует её сама.</p></div></li>
+      </ul>
+    </section>
+
+    <!-- 02 · Основы -->
+    <section class="ui-doc__section" id="colors">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Цвета</h2>
+      <p class="ui-doc__lead">Нейтральный тёмный фон без синего подтона, steel-blue как акцент, приглушённая пастель для данных. Значения ниже читаются из выбранной темы: переключи тему сверху, и свотчи покажут её палитру.</p>
+      <div class="ui-doc__sub">
+        <h3>Поверхности и текст</h3>
+        <p class="ui-doc__sublead">Шкала глубины: bg → surface → surface-2. Граница отделяет плоскости, muted — подписи и метки.</p>
+        <div class="ui-doc__swatches" id="sw-surface"></div>
+      </div>
+      <div class="ui-doc__sub">
+        <h3>Акцент</h3>
+        <p class="ui-doc__sublead">Один цвет бренда: кнопка-primary, активный сегмент, ссылки, рамка в фокусе. accent-text — текст поверх акцента.</p>
+        <div class="ui-doc__swatches" id="sw-accent"></div>
+      </div>
+      <div class="ui-doc__sub">
+        <h3>Функциональные цвета данных</h3>
+        <p class="ui-doc__sublead">Постоянны независимо от бренда: зелёный — хорошо, красный — плохо, жёлтый — предупреждение, фиолетовый — дополнительная серия.</p>
+        <div class="ui-doc__swatches" id="sw-data"></div>
+      </div>
+    </section>
+
+    <section class="ui-doc__section" id="type">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Типографика</h2>
+      <p class="ui-doc__lead">Два шрифта: текст <span class="ui-doc__code">--ui-font</span> и числа <span class="ui-doc__code">--ui-font-num</span> с табличными цифрами, чтобы колонки сумм не плясали. Тема задаёт гарнитуру, ядро — роли и размеры.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · шрифты темы</span>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Заголовок экрана<span>32 / 500 / −0.02em</span></div><p class="ui-doc__type-sample" style="font-size:32px;font-weight:500;letter-spacing:-.02em;line-height:1.1">Аналитика продаж</p></div>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Заголовок блока<span>18 / 500</span></div><p class="ui-doc__type-sample" style="font-size:18px;font-weight:500">Выручка за месяц</p></div>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Текст<span>14 / 400 / 1.5</span></div><p class="ui-doc__type-sample">Три студии закрыли месяц с перевыполнением плана, Казань отстаёт на двенадцать процентов.</p></div>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Подпись<span>12 / muted</span></div><p class="ui-doc__type-sample" style="font-size:12px;color:var(--ui-muted)">по всем студиям, без НДС · обновлено 5 минут назад</p></div>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Число<span id="type-num-font">--ui-font-num</span></div><p class="ui-doc__type-sample num" style="font-size:28px;font-weight:600">1 284 500 ₽ <span style="font-size:14px;color:var(--ui-success)">+12,4%</span></p></div>
+        <div class="ui-doc__type"><div class="ui-doc__type-meta">Метка<span>10 / 600 / 0.14em / caps</span></div><p class="ui-doc__type-sample" style="font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ui-muted)">Сегодня · Деньги · Маркетинг</p></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip" id="type-font"></span><span class="ui-chip" id="type-num"></span></div>
+    </section>
+
+    <section class="ui-doc__section" id="spacing">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Отступы и радиусы</h2>
+      <p class="ui-doc__lead">Шаг сетки <span class="ui-doc__code">--ui-space</span> = 8px, все отступы кратны ему. Радиусы три: sm для чипов и полей, md для карточек и кнопок, lg для окон и стекла. Steel держит их почти прямыми, weshow и agatos скругляют сильнее.</p>
+      <div class="ui-doc__grid-2">
+        <div class="ui-doc__stage">
+          <span class="ui-doc__stage-label">шкала отступов</span>
+          <div id="spaces"></div>
+        </div>
+        <div class="ui-doc__stage">
+          <span class="ui-doc__stage-label">радиусы темы</span>
+          <div class="ui-doc__radii" id="radii"></div>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">--ui-space</span><span class="ui-chip">--ui-radius-sm</span><span class="ui-chip">--ui-radius-md</span><span class="ui-chip">--ui-radius-lg</span><span class="ui-chip">--ui-ctl-radius</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="icons">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Иконки</h2>
+      <p class="ui-doc__lead">Только Lucide, только через <span class="ui-doc__code">UI.icon(name)</span>: спрайт собирается из <span class="ui-doc__code">icons.list</span>, свой SVG рисовать нельзя. Толщина линии — <span class="ui-doc__code">--ui-icon-stroke</span> темы, здесь <b class="num" id="stroke"></b>. Нет нужной — имя добавляется в список.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">спрайт · <span id="icnt"></span></span>
+        <div class="ui-doc__icons" id="icon-grid"></div>
+      </div>
+      <pre class="ui-doc__snippet">await <b>UI.icons.load</b>('./icons.svg');
+btn.insertAdjacentHTML('afterbegin', <b>UI.icon</b>('download', { size: 14 }));</pre>
+    </section>
+
+    <section class="ui-doc__section" id="glass">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Стекло</h2>
+      <p class="ui-doc__lead">Класс <span class="ui-doc__code">.ui-glass</span> на токенах <span class="ui-doc__code">--ui-glass-*</span>: размытие, тонкая граница и блик сверху. Под слоем нужен <span class="ui-doc__code">.ui-backdrop</span> с цветными пятнами темы, иначе размытию нечего размывать.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · .ui-glass</span>
+        <div class="ui-doc__grid-2">
+          <div class="ui-glass" style="padding:18px"><div class="ui-panel__title">Стеклянная карточка</div><p class="ui-doc__sublead" style="margin:6px 0 0">Подсказка графика, карточка показателя в zp, палитра ⌘K.</p></div>
+          <div style="display:flex;align-items:center"><label class="ui-check"><input type="checkbox" id="g-backdrop" checked> пятна под слоем</label></div>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-glass</span><span class="ui-chip">.ui-backdrop</span><span class="ui-chip">--ui-glass-bg</span><span class="ui-chip">--ui-glass-blur</span><span class="ui-chip">--ui-glass-highlight</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="glass2">
+      <p class="ui-doc__eyebrow">— 02 · Основы</p>
+      <h2>Второй слой стекла</h2>
+      <p class="ui-doc__lead">Карточка внутри стеклянной панели: <span class="ui-doc__code">.ui-glass2</span> на токенах <span class="ui-doc__code">--ui-glass2-*</span>. В ядре это обычная поверхность панели; в теме zp она светлее панели, с бликом сверху и тонированной тенью. Показатель внутри панели — <span class="ui-doc__code">UI.stat.mount(el, { layer: 2 })</span>.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · .ui-glass2</span>
+        <div class="ui-glass" style="padding:16px">
+          <div class="ui-panel__title">Панель первого слоя</div>
+          <div class="ui-doc__grid" style="--ui-doc-col:220px;margin-top:10px">
+            <div class="ui-glass2" style="padding:14px"><div class="ui-panel__title">Карточка второго слоя</div><p class="ui-doc__sublead" style="margin:6px 0 0">Светлее панели, блик и цветная тень.</p></div>
+            <div id="g2-stat"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-glass2</span><span class="ui-chip">--ui-glass2-bg</span><span class="ui-chip">--ui-glass2-border</span><span class="ui-chip">--ui-glass2-highlight</span><span class="ui-chip">--ui-glass2-shadow</span><span class="ui-chip">UI.stat layer: 2</span></div>
+      <pre class="ui-doc__snippet">&lt;div class="ui-glass"&gt;&lt;div class="ui-glass2"&gt;…&lt;/div&gt;&lt;/div&gt;
+<b>UI.stat.mount</b>(el, { label: 'Выручка', value: 4120000, format: 'moneyShort', layer: 2 });</pre>
+    </section>
+
+    <!-- 03 · Контролы -->
+    <section class="ui-doc__section" id="button">
+      <p class="ui-doc__eyebrow">— 03 · Контролы</p>
+      <h2>Кнопка</h2>
+      <p class="ui-doc__lead">Одна кнопка на все продукты: <span class="ui-doc__code">.ui-btn</span>. Primary — одно главное действие на экране, обычная — остальные, danger — необратимое, ghost — в строке или в шапке. Hover подсвечивает рамку акцентом, нажатие сжимает до 0,96, недоступная тускнеет.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · .ui-btn</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn ui-btn--primary" type="button">Сохранить</button>
+          <button class="ui-btn" type="button">Отмена</button>
+          <button class="ui-btn ui-btn--danger" type="button">Удалить</button>
+          <button class="ui-btn ui-btn--ghost" type="button">Ещё</button>
+          <button class="ui-btn ui-btn--primary" type="button" disabled>Недоступна</button>
+        </div>
+      </div>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">с иконкой · маленькая</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn" type="button" id="b-export">Экспорт CSV</button>
+          <button class="ui-btn ui-btn--primary" type="button" id="b-add">Добавить сделку</button>
+          <button class="ui-btn ui-btn--sm" type="button">Маленькая</button>
+          <button class="ui-btn ui-btn--sm ui-btn--ghost" type="button" id="b-settings">Настроить</button>
+        </div>
+      </div>
+      <div class="ui-doc__tags">
+        <span class="ui-chip">.ui-btn</span><span class="ui-chip">.ui-btn--primary</span><span class="ui-chip">.ui-btn--danger</span><span class="ui-chip">.ui-btn--ghost</span><span class="ui-chip">.ui-btn--sm</span><span class="ui-chip ui-chip--accent">zp: .rnp-button → прокладка</span>
+      </div>
+      <pre class="ui-doc__snippet">&lt;button class="<b>ui-btn ui-btn--primary</b>"&gt;Сохранить&lt;/button&gt;
+&lt;button class="<b>ui-btn</b>"&gt;${<b>UI.icon('download', { size: 14 })</b>} Экспорт CSV&lt;/button&gt;   // в шаблонной строке</pre>
+      <ul class="ui-doc__rules" style="margin-top:24px">
+        <li><span class="n">01</span><div><b>Одна primary на экран</b><p>Две синих кнопки рядом — нет главного действия. Второе становится обычным или ghost.</p></div></li>
+        <li><span class="n">02</span><div><b>Размер — токенами, не стилями</b><p>Высота и радиус берутся из <span class="ui-doc__code">--ui-ctl-h</span> и <span class="ui-doc__code">--ui-ctl-radius</span> темы. Инлайновый padding на кнопке запрещён.</p></div></li>
+        <li><span class="n">03</span><div><b>Иконка — только Lucide через UI.icon</b><p>Своих SVG в кнопке нет; имя добавляется в icons.list, если его не хватает.</p></div></li>
+      </ul>
+    </section>
+
+    <section class="ui-doc__section" id="seg">
+      <p class="ui-doc__eyebrow">— 03 · Контролы</p>
+      <h2>Сегменты и чипы</h2>
+      <p class="ui-doc__lead">Сегменты — переключатель режима из двух-четырёх вариантов: PNL/ДДС, факт/прогноз, день/неделя/месяц. Один активный, <span class="ui-doc__code">aria-pressed</span>, клавиатура. Чип — статус или метка рядом с текстом, не кнопка.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.seg</span>
+        <div class="ui-doc__row"><span id="c-seg"></span><span id="c-seg2"></span></div>
+        <div class="ui-doc__out" id="c-seg-out">выбрано: w</div>
+      </div>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · .ui-chip</span>
+        <div class="ui-doc__row"><span class="ui-chip">черновик</span><span class="ui-chip ui-chip--accent">новое</span><span class="ui-chip ui-chip--solid">+3</span><span class="ui-chip ui-chip--success">оплачено</span><span class="ui-chip ui-chip--warning">ждёт оплаты</span><span class="ui-chip ui-chip--danger">просрочено</span></div>
+      </div>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · .ui-chip--soft</span>
+        <div class="ui-doc__row"><span class="ui-chip ui-chip--soft">новое</span><span class="ui-chip ui-chip--soft ui-chip--success">оплачено</span><span class="ui-chip ui-chip--soft ui-chip--warning">ждёт ответа</span><span class="ui-chip ui-chip--soft ui-chip--danger">просрочено</span><span class="ui-chip ui-chip--soft ui-chip--info">в работе</span><span class="ui-chip ui-chip--soft ui-chip--muted">архив</span></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-chip--soft</span><span class="ui-chip">--success · --warning · --danger · --info · --muted</span></div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-seg</span><span class="ui-chip">UI.seg.mount</span><span class="ui-chip">.ui-chip</span><span class="ui-chip">.ui-chip--accent</span><span class="ui-chip">.ui-chip--solid</span><span class="ui-chip">.ui-chip--success</span><span class="ui-chip">.ui-chip--warning</span><span class="ui-chip">.ui-chip--danger</span></div>
+      <pre class="ui-doc__snippet">const seg = <b>UI.seg.mount</b>(el, { label: 'Период', items: [{ value: 'd', label: 'День' }, { value: 'w', label: 'Неделя' }], value: 'w', onChange: (v) =&gt; load(v) });
+seg.set('d');</pre>
+      <div class="ui-doc__sub" id="seg-phone" style="margin-top:48px">
+        <h3>Под телефон</h3>
+        <p class="ui-doc__sublead">Клиентские страницы под палец: раздельные сегменты <span class="ui-doc__code">.ui-seg--split</span> вместо дорожки, крупные кнопки с фоном, выключенная главная — спокойная плашка, а не прозрачная. Всё — токенами на контейнере; без них вид прежний. Наведение работает только там, где есть мышь.</p>
+        <div class="ui-doc__stage">
+          <span class="ui-doc__stage-label">live · .ui-seg--split · токены кнопки</span>
+          <div style="max-width:360px;--ui-ctl-h:52px;--ui-ctl-pad-x:16px;--ui-btn-size:15px;--ui-btn-bg:var(--ui-surface-2);--ui-btn-pressed-bg:var(--ui-surface-2);--ui-btn-disabled-opacity:1;--ui-btn-primary-disabled-bg:var(--ui-surface-2);--ui-btn-primary-disabled-text:var(--ui-muted)">
+            <div id="ph-seg"></div>
+            <div class="ui-doc__out" id="ph-out">выбрано: front</div>
+            <div class="ui-doc__row" style="margin-top:12px;gap:8px"><button class="ui-btn" type="button">Назад</button><button class="ui-btn ui-btn--primary" type="button" disabled>Далее</button></div>
+            <button class="ui-btn ui-btn--ghost" type="button" style="margin-top:8px">Пропустить вопрос</button>
+          </div>
+        </div>
+        <div class="ui-doc__tags"><span class="ui-chip">.ui-seg--split</span><span class="ui-chip">.ui-seg--fill</span><span class="ui-chip">--ui-btn-bg</span><span class="ui-chip">--ui-btn-pressed-bg</span><span class="ui-chip">--ui-btn-disabled-opacity</span><span class="ui-chip">--ui-btn-primary-disabled-bg · -text</span><span class="ui-chip">--ui-btn-tracking</span><span class="ui-chip">--ui-btn-press-scale</span><span class="ui-chip">--ui-seg-gap</span><span class="ui-chip ui-chip--accent">ui-kit-controls.css</span></div>
+        <pre class="ui-doc__snippet">const s = <b>UI.seg.mount</b>(el, { label: 'Комплекс', items: [{ value: 'full', label: 'Полный' }, { value: 'front', label: 'Перед' }, { value: 'lights', label: 'Фары' }], value: 'front' });
+s.el.classList.add(<b>'ui-seg--split'</b>, <b>'ui-seg--fill'</b>);   // отдельные кнопки во всю ширину, промежуток --ui-seg-gap
+// размер и фон — токенами на контейнере страницы: --ui-ctl-h: 52px; --ui-btn-bg: var(--ui-surface-2); --ui-btn-disabled-opacity: 1;</pre>
+      </div>
+      <div class="ui-doc__sub" id="switch-glass2" style="margin-top:48px">
+        <h3>Выключатель и кнопка второго слоя (0.42.0)</h3>
+        <p class="ui-doc__sublead"><span class="ui-doc__code">input[type=checkbox][role=switch].ui-switch</span> — чистый CSS: дорожка 52×30, цель касания 44px, состояния вкл, выкл, выключен и фокус с клавиатуры. Цвет включённого — <span class="ui-doc__code">--ui-switch-on</span> (по умолчанию акцент). <span class="ui-doc__code">.ui-btn--glass2</span> берёт фон и рамку у второго слоя стекла.</p>
+        <div class="ui-doc__stage ui-doc__stage--bg">
+          <span class="ui-doc__stage-label">live · .ui-switch · .ui-btn--glass2</span>
+          <div class="ui-glass" style="max-width:380px;padding:14px 16px;display:grid;gap:6px">
+            <label class="ui-doc__row" style="justify-content:space-between;flex-wrap:nowrap"><span>Напоминать о тренировках</span><input class="ui-switch" type="checkbox" role="switch" checked></label>
+            <label class="ui-doc__row" style="justify-content:space-between;flex-wrap:nowrap"><span>Только мои команды</span><input class="ui-switch" type="checkbox" role="switch"></label>
+            <label class="ui-doc__row" style="justify-content:space-between;flex-wrap:nowrap"><span>Выключен</span><input class="ui-switch" type="checkbox" role="switch" checked disabled></label>
+            <label class="ui-doc__row" style="justify-content:space-between;flex-wrap:nowrap"><span>Свой цвет включённого</span><input class="ui-switch" type="checkbox" role="switch" checked style="--ui-switch-on:var(--ui-success)"></label>
+            <div class="ui-doc__row" style="margin-top:6px"><button class="ui-btn ui-btn--glass2" type="button">Не иду</button><button class="ui-btn ui-btn--glass2" type="button" aria-pressed="true">Иду</button><button class="ui-btn ui-btn--glass2" type="button" disabled>Недоступно</button></div>
+          </div>
+        </div>
+        <div class="ui-doc__tags"><span class="ui-chip">.ui-switch</span><span class="ui-chip">role="switch"</span><span class="ui-chip">--ui-switch-on</span><span class="ui-chip">--ui-switch-off</span><span class="ui-chip">--ui-switch-thumb</span><span class="ui-chip">.ui-btn--glass2</span><span class="ui-chip">--ui-glass2-*</span></div>
+        <pre class="ui-doc__snippet">&lt;label&gt;Напоминать &lt;input <b>class="ui-switch"</b> type="checkbox" <b>role="switch"</b> checked&gt;&lt;/label&gt;
+&lt;button class="ui-btn <b>ui-btn--glass2</b>"&gt;Не иду&lt;/button&gt;</pre>
+      </div>
+    </section>
+
+    <section class="ui-doc__section" id="input">
+      <p class="ui-doc__eyebrow">— 03 · Контролы</p>
+      <h2>Поле, селект, галочка</h2>
+      <p class="ui-doc__lead">Поле и селект одной высоты с кнопкой, подпись над ними — <span class="ui-doc__code">.ui-label</span>. Фокус — рамка акцента и мягкое кольцо <span class="ui-doc__code">--ui-focus-ring</span>. Галочка — нативный чекбокс в <span class="ui-doc__code">.ui-check</span>.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · .ui-input · .ui-select · .ui-check</span>
+        <div class="ui-doc__row ui-doc__row--start">
+          <label class="ui-doc__field"><span class="ui-label">Клиент</span><input class="ui-input" placeholder="Название или телефон"></label>
+          <label class="ui-doc__field"><span class="ui-label">Студия</span><select class="ui-select"><option>Все студии</option><option>Москва, Юг</option><option>Казань</option></select></label>
+          <label class="ui-doc__field"><span class="ui-label">Сумма</span><input class="ui-input num" value="48 500" style="width:120px"></label>
+          <label class="ui-check" style="align-self:end;height:var(--ui-ctl-h)"><input type="checkbox" checked> только с оплатой</label>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-input</span><span class="ui-chip">.ui-select</span><span class="ui-chip">.ui-label</span><span class="ui-chip">.ui-check</span><span class="ui-chip">--ui-ctl-h</span><span class="ui-chip">--ui-focus-ring</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="panel">
+      <p class="ui-doc__eyebrow">— 03 · Контролы</p>
+      <h2>Панель и шапка</h2>
+      <p class="ui-doc__lead">Панель <span class="ui-doc__code">.ui-panel</span> — поверхность с заголовком и подзаголовком, в zp со стеклом и бликом сверху. Шапка <span class="ui-doc__code">.ui-topbar</span> — заголовок экрана слева, контролы справа, может прилипать к верху.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · .ui-panel</span>
+        <div class="ui-doc__grid" style="--ui-doc-col:260px">
+          <div class="ui-panel ui-panel__pad"><div class="ui-panel__title">Выручка за неделю</div><div class="ui-panel__subtitle">по всем студиям, без НДС</div><div class="ui-doc__row" style="margin-top:10px"><b class="num" style="font-size:22px">1 284 500 ₽</b><span class="ui-chip ui-chip--success">+12%</span></div></div>
+          <div class="ui-panel ui-panel__pad"><div class="ui-panel__title">Записи</div><div class="ui-panel__subtitle">живые, накопительно за месяц</div><div class="ui-doc__row" style="margin-top:10px"><b class="num" style="font-size:22px">57</b><span class="ui-chip ui-chip--accent">north star</span></div></div>
+        </div>
+      </div>
+      <div class="ui-doc__stage ui-doc__stage--flush">
+        <span class="ui-doc__stage-label">live · .ui-topbar</span>
+        <div class="ui-topbar" style="border-bottom:0">
+          <b class="ui-topbar__title">Сделки</b><span class="ui-topbar__muted">128 за месяц</span>
+          <span class="ui-topbar__spacer"></span>
+          <span id="tb-seg"></span>
+          <button class="ui-btn ui-btn--sm" type="button">Фильтр</button>
+          <button class="ui-btn ui-btn--sm ui-btn--primary" type="button">Новая</button>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-panel</span><span class="ui-chip">.ui-panel__pad</span><span class="ui-chip">.ui-panel__title</span><span class="ui-chip">.ui-panel__subtitle</span><span class="ui-chip">.ui-topbar</span><span class="ui-chip">.ui-topbar--sticky</span><span class="ui-chip">.ui-topbar__spacer</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="lift">
+      <p class="ui-doc__eyebrow">— 03 · Контролы</p>
+      <h2>Подъём активного</h2>
+      <p class="ui-doc__lead">Активный пункт сайдбара и активный сегмент светлеют и получают тень цвета акцента с верхней кромкой, главная кнопка светится. Токены <span class="ui-doc__code">--ui-lift-bg</span>, <span class="ui-doc__code">--ui-lift-border</span>, <span class="ui-doc__code">--ui-lift-shadow</span> и <span class="ui-doc__code">--ui-btn-primary-shadow</span> в ядре не заданы, вид прежний; тема включает подъём сама. Переключи тему сверху: в zp тёмной он виден, в остальных нет.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · lift</span>
+        <div class="ui-doc__row"><span id="lf-seg"></span><button class="ui-btn ui-btn--primary" type="button">Главная кнопка</button></div>
+        <div class="ui-doc__frame" id="lf-frame" style="height:260px;margin-top:16px"></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">--ui-lift-bg</span><span class="ui-chip">--ui-lift-border</span><span class="ui-chip">--ui-lift-shadow</span><span class="ui-chip">--ui-btn-primary-shadow</span></div>
+      <pre class="ui-doc__snippet">:root { <b>--ui-lift-bg</b>: rgba(255,255,255,.12); <b>--ui-lift-shadow</b>: 0 4px 14px rgba(122,167,194,.28), inset 0 1px 0 rgba(255,255,255,.18);
+        <b>--ui-btn-primary-shadow</b>: 0 8px 22px rgba(122,167,194,.45); }</pre>
+    </section>
+
+    <!-- 04 · Компоненты -->
+    <section class="ui-doc__section" id="toast">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Тост</h2>
+      <p class="ui-doc__lead">Уведомление внизу: стек до четырёх, пауза по наведению, «Отменить» вместо «Вы уверены?». Тост с кнопкой живёт десять секунд, обычный — четыре. В ARC — до трёх, очередь, полоска времени и крестик.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.toast</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn" type="button" id="t-info">Информация</button>
+          <button class="ui-btn" type="button" id="t-ok">Успех</button>
+          <button class="ui-btn" type="button" id="t-err">Ошибка</button>
+          <button class="ui-btn ui-btn--primary" type="button" id="t-undo">С кнопкой «Отменить»</button>
+          <button class="ui-btn ui-btn--ghost" type="button" id="t-stack">Пять подряд</button>
+          <label class="ui-check"><input type="checkbox" id="t-arc"> как в ARC</label>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.toast.show</span><span class="ui-chip">UI.toast.configure</span><span class="ui-chip">kind: info · success · error</span></div>
+      <pre class="ui-doc__snippet"><b>UI.toast.show</b>({ text: 'Телефон изменён', action: { label: 'Отменить', onClick: () =&gt; restore() } });</pre>
+      <ul class="ui-doc__rules" style="margin-top:24px">
+        <li><span class="n">01</span><div><b>«Отменить» вместо «Вы уверены?»</b><p>Обратимое действие делается сразу, тост даёт десять секунд вернуть. Подтверждение — только для необратимого.</p></div></li>
+      </ul>
+    </section>
+
+    <section class="ui-doc__section" id="dialog">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Окно</h2>
+      <p class="ui-doc__lead">Нативный <span class="ui-doc__code">&lt;dialog&gt;</span>: Esc закрывает верхний слой, фокус возвращается на кнопку, клик по подложке закрывает. Размеры md, lg, xl; на узком экране окно становится шторкой снизу.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.dialog</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn" type="button" id="d-simple">Простое</button>
+          <button class="ui-btn ui-btn--danger" type="button" id="d-confirm">Удаление с действиями</button>
+          <button class="ui-btn" type="button" id="d-stack">Окно в окне</button>
+          <button class="ui-btn" type="button" id="d-modal">Без Esc и подложки</button>
+          <button class="ui-btn" type="button" id="d-wide">Широкое (xl) с шапкой</button>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.dialog.open</span><span class="ui-chip">size: md · lg · xl</span><span class="ui-chip">actions[].kind</span><span class="ui-chip">esc · backdrop</span></div>
+      <pre class="ui-doc__snippet"><b>UI.dialog.open</b>({ title: 'Удалить позицию?', content: 'Строку можно вернуть кнопкой «Отменить».',
+  actions: [{ label: 'Отмена' }, { label: 'Удалить', kind: 'danger', onClick: remove }] });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="period">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Период</h2>
+      <p class="ui-doc__lead">Чипы пресетов, стрелки сдвига на длину периода и свой диапазон. Выбор запоминается в браузере по ключу. Набор <span class="ui-doc__code">back</span> для отчётов, <span class="ui-doc__code">forward</span> для планирования. Сегодня в витрине зафиксировано: 29.10.2026.</p>
+      <div class="ui-doc__stage"><span class="ui-doc__stage-label">back · nav</span><div id="p-back"></div><div class="ui-doc__out" id="p-back-out"></div></div>
+      <div class="ui-doc__stage"><span class="ui-doc__stage-label">forward</span><div id="p-fwd"></div><div class="ui-doc__out" id="p-fwd-out"></div></div>
+      <div class="ui-doc__stage"><span class="ui-doc__stage-label">validate · до 31 дня, без будущего</span><div id="p-val"></div><div class="ui-doc__out" id="p-val-out"></div></div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.period.mount</span><span class="ui-chip">presets: back · forward</span><span class="ui-chip">nav</span><span class="ui-chip">validate</span><span class="ui-chip">UI.period.core</span></div>
+      <pre class="ui-doc__snippet"><b>UI.period.mount</b>(el, { key: 'pnl', presets: 'back', nav: true, onChange: ({ from, to }) =&gt; load(from, to) });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="drill">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Окно «из чего цифра»</h2>
+      <p class="ui-doc__lead">Клик по показателю открывает таблицу строк, из которых он сложился: ссылка, бейдж, дата, сумма, число, текст с обрезкой, вторая строка, итоги. Заголовок сортирует, пустые внизу, загрузка и ошибка показаны в самом окне.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.drill</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn ui-btn--primary" type="button" id="dr-open">Открыть окно</button>
+          <button class="ui-btn" type="button" id="dr-fetch">Загрузка с задержкой</button>
+          <button class="ui-btn" type="button" id="dr-err">Ошибка загрузки</button>
+          <button class="ui-btn" type="button" id="dr-nest">Вложенные строки</button>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.drill.open</span><span class="ui-chip">columns[].type</span><span class="ui-chip">total: sum · avg · count</span><span class="ui-chip">fetch · map</span><span class="ui-chip">children · expandAll</span></div>
+      <pre class="ui-doc__snippet"><b>UI.drill.open</b>({ title: 'Оформлено заказов', columns, fetch: '/api/orders?from=…', map: (j) =&gt; ({ rows: j.items, subtitle: `${j.items.length} заказов` }) });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="stat">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Карточка показателя</h2>
+      <p class="ui-doc__lead">Подпись, число, дельта к прошлому периоду, иконка в цветной плитке, спарклайн. Для CPL и других «меньше = лучше» дельта красится наоборот. Кнопка «?» зовёт <span class="ui-doc__code">onInfo</span>, число умеет tween в теме.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.stat</span>
+        <div class="ui-doc__grid" id="stats" style="--ui-doc-col:250px"></div>
+        <div class="ui-doc__row" style="margin-top:14px"><button class="ui-btn" type="button" id="st-next">Следующий период</button><button class="ui-btn" type="button" id="st-skel">Скелетоны и вернуть</button><label class="ui-check"><input type="checkbox" id="st-narrow"> узкие</label></div>
+      </div>
+      <div class="ui-doc__sub" style="margin-top:32px">
+        <h3>Спарклайн отдельно</h3>
+        <p class="ui-doc__sublead"><span class="ui-doc__code">UI.stat.spark(el, values)</span> рисуется 1:1 под ширину блока: точка остаётся кругом, линия — сплайн. Растягивать viewBox нельзя, guard ловит это как находку stretch.</p>
+        <div class="ui-doc__stage"><span class="ui-doc__stage-label">три ширины</span><div class="ui-doc__row sparks" id="sparks"><div style="width:90px"></div><div style="width:180px"></div><div style="width:420px"></div></div></div>
+      </div>
+      <div class="ui-doc__sub" style="margin-top:32px">
+        <h3>Подписи периодов и наведение</h3>
+        <p class="ui-doc__sublead"><span class="ui-doc__code">sparkLabels</span> ставит подпись под каждой точкой по X, последняя подсвечена; не влезают по ширине — через одну. Наведение ведёт кружок и тонкую линию к ближайшей точке и показывает общую подсказку <span class="ui-doc__code">UI.tip</span>: по умолчанию заголовок — подпись, строка — значение; свой вид — <span class="ui-doc__code">sparkTip(i)</span> (строка или <span class="ui-doc__code">{ title, rows }</span>).</p>
+        <div class="ui-doc__stage"><span class="ui-doc__stage-label">live · UI.stat sparkLabels</span><div class="ui-doc__grid" id="spark-labeled" style="--ui-doc-col:250px"></div>
+        <div class="ui-doc__row sparks" id="sparks-labeled" style="margin-top:14px;align-items:flex-start"><div style="width:120px"></div><div style="width:240px"></div><div style="width:420px"></div></div></div>
+<pre class="ui-doc__snippet"><b>UI.stat.mount</b>(el, { label: 'Заявки', value: 237, spark: weeks, sparkLabels: ['W33', …, 'W40'], sparkTip: (i) =&gt; ({ title: labels[i], rows: [{ label: 'заявок', value: weeks[i] }] }) });
+<b>UI.stat.spark</b>(el, values, { labels, tip: (i) =&gt; string | { title, rows } | null });</pre>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.stat.mount</span><span class="ui-chip">UI.stat.spark</span><span class="ui-chip">sparkLabels · sparkTip</span><span class="ui-chip">format: int · money · moneyShort</span><span class="ui-chip">lower</span><span class="ui-chip">tone</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="barlist">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Рейтинг с полосой</h2>
+      <p class="ui-doc__lead">Список «кто сколько» для топа студий, менеджеров, источников: значок (инициалы или Lucide), название и подпись, число справа, под строкой полоса доли. Показывает пять, остальное уходит в «Все N»; клик по строке открывает дрилл.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.barlist</span>
+        <div class="ui-doc__grid" style="--ui-doc-col:min(340px,100%)"><div id="bl-a"></div><div id="bl-b"></div><div id="bl-c"></div></div>
+        <div class="ui-doc__row" style="margin-top:14px"><button class="ui-btn" type="button" id="bl-next">Обновить данные</button><button class="ui-btn" type="button" id="bl-empty">Пусто и обратно</button><span class="ui-doc__out" id="bl-out">клик по строке</span></div>
+      </div>
+      <pre class="ui-doc__snippet"><b>UI.barlist.mount</b>(el, { title: 'Студии по выручке', items, fmt, max: 5, more: { label: 'Все 9', onClick }, onSelect: (item) =&gt; UI.drill.open({ title: item.label, … }) });</pre>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.barlist.mount</span><span class="ui-chip">badge · icon</span><span class="ui-chip">share · value</span><span class="ui-chip">max · more</span><span class="ui-chip">onSelect</span><span class="ui-chip">tone</span><span class="ui-chip">ghost</span></div>
+      <pre class="ui-doc__snippet">// факт и план в одной полосе: ghost — второй слой под заливкой
+{ label: 'Выручка клиентов', display: '4,2 млн ₽', sub: 'pipeline 6,1 млн', share: 0.69, <b>ghost</b>: 1, tone: 'green' }</pre>
+    </section>
+
+    <section class="ui-doc__section" id="feed">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Лента событий</h2>
+      <p class="ui-doc__lead">Что происходило в бизнесе: запись на оклейку, консультация, исполненный заказ с суммой. Тип описан один раз в словаре <span class="ui-doc__code">types</span>. Пачка однотипных событий в пределах минуты сворачивается в одну строку с общей суммой.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.feed</span>
+        <div class="ui-doc__grid" style="--ui-doc-col:min(380px,100%)"><div id="fd-a"></div><div id="fd-b"></div></div>
+        <div class="ui-doc__row" style="margin-top:14px"><label class="ui-check"><input type="checkbox" id="fd-group" checked> свёртка пачек</label><button class="ui-btn" type="button" id="fd-empty">Пустая лента и обратно</button></div>
+      </div>
+      <pre class="ui-doc__snippet"><b>UI.feed.mount</b>(el, { title: 'Последние события', types: { order: { icon: 'circle-check', tone: 'green', label: 'Заказ исполнен', plural: ['заказ', 'заказа', 'заказов'], verb: ['исполнен', 'исполнены', 'исполнены'] } }, items, limit: 8, group: { windowSec: 60 } });</pre>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.feed.mount</span><span class="ui-chip">types</span><span class="ui-chip">group.windowSec</span><span class="ui-chip">limit · more</span><span class="ui-chip">amount · href</span></div>
+      <h3 class="ui-doc__sub">Под телефон (0.42.0)</h3>
+      <p class="ui-doc__lead">Строка с <span class="ui-doc__code">lead</span> (знак продукта вместо значка типа; разметку даёт продукт, не пользователь), отметкой <span class="ui-doc__code">status</span> под временем, кнопками <span class="ui-doc__code">actions</span> для уведомлений и готовым <span class="ui-doc__code">timeDisplay</span>. <span class="ui-doc__code">order: 'asc'</span> ставит ближайшие сверху. Размеры текста — <span class="ui-doc__code">--ui-feed-name-size</span>, <span class="ui-doc__code">-sub-size</span>, <span class="ui-doc__code">-time-size</span>, знака — <span class="ui-doc__code">--ui-feed-lead-size</span>.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.feed lead · status · actions · order</span>
+        <div id="fd-c" style="max-width:380px;--ui-feed-name-size:14px;--ui-feed-sub-size:12px;--ui-feed-time-size:18px;--ui-feed-lead-size:40px"></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">lead</span><span class="ui-chip">status</span><span class="ui-chip">actions</span><span class="ui-chip">timeDisplay</span><span class="ui-chip">order: 'asc' | 'desc' | 'given'</span><span class="ui-chip">--ui-feed-lead-size</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="month">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Сетка месяца</h2>
+      <p class="ui-doc__lead">Календарь для телефона: стрелки и заголовок месяца, подписи дней по-русски, дни соседних месяцев приглушены. Сегодня — число на плашке, выбранный день — рамка. Под числом цветные точки команд (до трёх и «+»). Клавиатура: стрелки, PageUp и PageDown, Enter и пробел.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.month</span>
+        <div class="ui-glass" style="max-width:380px;padding:10px"><div id="mo-a"></div></div>
+        <div class="ui-doc__out" id="mo-out">выбрано: 14 ноября</div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.month.mount</span><span class="ui-chip">marks</span><span class="ui-chip">weekStart</span><span class="ui-chip">onSelect · onNav</span><span class="ui-chip">update · destroy</span><span class="ui-chip">--ui-month-day-h</span></div>
+      <pre class="ui-doc__snippet"><b>UI.month.mount</b>(el, { year: 2026, month: 11, today: '2026-11-11', selected: '2026-11-14', marks: { '2026-11-14': ['#ff8a1f', '#4fc3f7'] }, weekStart: 1, onSelect: (iso) =&gt; …, onNav: ({ year, month }) =&gt; … });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="pbth">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Экран телефона на теме pbth</h2>
+      <p class="ui-doc__lead">Тема <span class="ui-doc__code">pbth</span> (0.43.0) — Paintball TeamHub: тёмная, стекло в два слоя, один зелёный акцент. Включи её переключателем темы сверху. Краски команд экран отдаёт фону переменными <span class="ui-doc__code">--ui-paint-1..3</span>; плавающая нижняя панель и выключатель берут вид из токенов темы.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · .ui-glass, UI.feed lead, .ui-switch, UI.month, UI.sidenav floating</span>
+        <div class="ui-doc__phone" id="pb-phone" style="height:640px;overflow:auto">
+          <div class="ui-doc__frame-pane" style="display:flex;flex-direction:column;gap:12px;padding:12px 12px 96px">
+            <section class="ui-glass" style="padding:14px"><div style="font-size:28px;font-weight:800;line-height:1.15">Моё</div><div style="font-size:14px;color:var(--ui-muted)">ср, 11 ноября</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><span style="font-size:14px">Напоминать за час</span><input class="ui-switch" type="checkbox" role="switch" checked aria-label="Напоминать за час"></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><button class="ui-btn ui-btn--primary" type="button">Иду</button><button class="ui-btn ui-btn--glass2" type="button">Не иду</button></div></section>
+            <section class="ui-glass"><div id="pb-feed"></div></section>
+            <section class="ui-glass" style="padding:10px"><div id="pb-month"></div></section>
+          </div>
+        </div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">themes/pbth.css</span><span class="ui-chip">themes/pbth-fonts.css</span><span class="ui-chip">--ui-paint-1..3</span><span class="ui-chip">--ui-paint-1-at..3-at</span><span class="ui-chip">--ui-sidenav-action-glow</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="skeleton">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Скелетоны</h2>
+      <p class="ui-doc__lead">Заглушки по форме будущего содержимого, чтобы экран не прыгал: stat, chart, donut, list, table, text. <span class="ui-doc__code">UI.skeleton.swap</span> подменяет содержимым и запускает каскад появления <span class="ui-doc__code">.ui-enter</span>.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.skeleton · все виды</span>
+        <div class="ui-doc__grid" id="skels" style="--ui-doc-col:210px"></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.skeleton.show</span><span class="ui-chip">UI.skeleton.el</span><span class="ui-chip">UI.skeleton.swap</span><span class="ui-chip">.ui-enter</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="sidenav">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Сайдбар</h2>
+      <p class="ui-doc__lead">Группы, активный пункт по пути, бейдж и точка алерта, поиск с клавишей, подвал. До 768px сайдбар прячется, снизу появляется панель из четырёх пунктов и «Ещё». Это же оглавление слева от тебя.</p>
+      <div class="ui-doc__stage ui-doc__stage--flush">
+        <span class="ui-doc__stage-label">live · UI.sidenav</span>
+        <div class="ui-doc__frame" id="sn-frame"></div>
+      </div>
+      <div class="ui-doc__row"><button class="ui-btn" type="button" id="sn-rnp">Активный: РНП</button><button class="ui-btn" type="button" id="sn-badge">Бейдж у «Звонки»: 7</button></div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.sidenav.mount</span><span class="ui-chip">groups[].items[]</span><span class="ui-chip">setActive</span><span class="ui-chip">setBadge</span><span class="ui-chip">--ui-sidenav-w</span></div>
+      <h3 class="ui-doc__sub">Жидкое стекло (0.21.0)</h3>
+      <p class="ui-doc__lead">По Apple Liquid Glass стекло — весь навигационный слой: панель плавает, содержимое под её краем видно и преломляется кромкой (в Chromium), по кромке блик со стороны света. Выбранный пункт — тихая капсула, свет из-под курсора только у наведённого пункта, при нажатии пункт на миг поднимается в стекло. Включается <span class="ui-doc__code">glass: true</span>; вид — токены <span class="ui-doc__code">--ui-lglass-*</span> темы. Само стекло — <span class="ui-doc__code">UI.glass.mount(el)</span> для любого элемента.</p>
+      <div class="ui-doc__stage ui-doc__stage--flush">
+        <span class="ui-doc__stage-label">live · UI.sidenav glass</span>
+        <div class="ui-doc__frame" id="sg-frame"></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">glass: true</span><span class="ui-chip">UI.glass.mount</span><span class="ui-chip">--ui-lglass-tint</span><span class="ui-chip">--ui-sidenav-sel</span><span class="ui-chip">--ui-sidenav-glow</span></div>
+      <h3 class="ui-doc__sub">Кнопка действия «＋» (0.22.0)</h3>
+      <p class="ui-doc__lead">Слот <span class="ui-doc__code">action: { icon, label, caption, onClick }</span>: на телефоне кнопка встаёт по центру нижней панели между пунктами («Ещё» — тоже пункт: при четырёх слотах 2 | 2), крупнее их и чуть приподнята; в сайдбаре — первой под брендом. Иконка — Lucide через <span class="ui-doc__code">UI.icon</span> (по умолчанию <span class="ui-doc__code">plus</span>), <span class="ui-doc__code">label</span> — обязательный aria-label, подпись под иконкой — по <span class="ui-doc__code">caption</span>. Меню действий sidenav не рисует: продукт открывает <span class="ui-doc__code">UI.dialog</span> в <span class="ui-doc__code">onClick</span>. Показать, заменить или убрать после монтирования — <span class="ui-doc__code">api.setAction(cfg | null)</span>. Без <span class="ui-doc__code">action</span> разметка прежняя.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.sidenav action, mobile: 'bottom'</span>
+        <div class="ui-doc__phone" id="sa-phone"><div class="ui-doc__frame-pane">Экран приложения. Нажми «＋» внизу.</div></div>
+      </div>
+      <div class="ui-doc__row"><button class="ui-btn" type="button" id="sa-caption">Подпись «Добавить»</button><button class="ui-btn" type="button" id="sa-off">Убрать кнопку</button><button class="ui-btn" type="button" id="sa-on">Вернуть</button></div>
+      <div class="ui-doc__tags"><span class="ui-chip">action: { icon, label, caption, onClick }</span><span class="ui-chip">setAction</span><span class="ui-chip">.ui-sidenav-bottom__action</span><span class="ui-chip">.ui-sidenav__action</span><span class="ui-chip">--ui-sidenav-action-size</span></div>
+      <h3 class="ui-doc__sub">Парящая нижняя панель со стеклом (0.42.0)</h3>
+      <p class="ui-doc__lead"><span class="ui-doc__code">floating: true</span> — панель на телефоне парит капсулой с отступами от краёв (safe-area учтена), <span class="ui-doc__code">glass: true</span> теперь делает стеклом и её. Токены: <span class="ui-doc__code">--ui-sidenav-bottom-label-size</span>, <span class="ui-doc__code">--ui-sidenav-action-ring</span>, <span class="ui-doc__code">--ui-sidenav-bottom-active</span>, <span class="ui-doc__code">--ui-sidenav-bottom-gap</span>.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.sidenav floating, glass, mobile: 'bottom'</span>
+        <div class="ui-doc__phone" id="sf-phone" style="--ui-sidenav-bottom-label-size:12px;--ui-sidenav-bottom-active:var(--ui-text);--ui-sidenav-action-ring:0 0 0 0 transparent"><div class="ui-doc__frame-pane">Экран приложения под парящей панелью.</div></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">floating</span><span class="ui-chip">glass</span><span class="ui-chip">--ui-sidenav-bottom-label-size</span><span class="ui-chip">--ui-sidenav-action-ring</span><span class="ui-chip">--ui-sidenav-bottom-active</span></div>
+      <h3 class="ui-doc__sub">Содержимое продукта и свёрнутый вид (0.40.0)</h3>
+      <p class="ui-doc__lead"><span class="ui-doc__code">body</span> кладёт узел продукта под группы, <span class="ui-doc__code">collapsible</span> добавляет кнопку «Свернуть панель». Свёрнутый сайдбар — полоса из иконок (<span class="ui-doc__code">--ui-sidenav-rail-w</span>) с <span class="ui-doc__code">title</span> у каждого пункта. С <span class="ui-doc__code">bodyCollapsed: 'side'</span> содержимое переезжает в колонку рядом с полосой (<span class="ui-doc__code">--ui-sidenav-panel-w</span>), с <span class="ui-doc__code">'hide'</span> скрывается. Состояние хранит продукт: <span class="ui-doc__code">onCollapse</span> получает новое значение.</p>
+      <div class="ui-doc__stage ui-doc__stage--flush">
+        <span class="ui-doc__stage-label">live · UI.sidenav collapsible, body, bodyCollapsed: 'side'</span>
+        <div class="ui-doc__frame" id="sc-frame"></div>
+      </div>
+      <div class="ui-doc__row"><button class="ui-btn" type="button" id="sc-toggle">Свернуть / развернуть</button><button class="ui-btn" type="button" id="sc-mode">Режим: колонка рядом</button></div>
+      <div class="ui-doc__tags"><span class="ui-chip">body</span><span class="ui-chip">collapsible</span><span class="ui-chip">collapsed</span><span class="ui-chip">onCollapse</span><span class="ui-chip">bodyCollapsed: 'hide' | 'side'</span><span class="ui-chip">setCollapsed</span><span class="ui-chip">setBody</span><span class="ui-chip">more / side</span><span class="ui-chip">--ui-sidenav-rail-w</span><span class="ui-chip">--ui-sidenav-panel-w</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="palette">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Клавиши и палитра</h2>
+      <p class="ui-doc__lead">Cmd/Ctrl+K открывает палитру: люди, события, команды. Поиск терпит опечатки, раскладку EN↔RU и ё=е. «?» — шпаргалка клавиш, «g p» и «g e» — переходы в две клавиши, «j» и «k» — следующий и предыдущий.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.palette · UI.keys</span>
+        <div class="ui-doc__row">
+          <button class="ui-btn ui-btn--primary" type="button" id="pal-open">Открыть палитру</button>
+          <button class="ui-btn" type="button" id="pal-keys">Шпаргалка клавиш</button>
+        </div>
+        <div class="ui-doc__out" id="pal-out">нажми ⌘K или «?»</div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.palette.mount</span><span class="ui-chip">UI.palette.register</span><span class="ui-chip">UI.keys.add</span><span class="ui-chip">sources · openers</span></div>
+      <pre class="ui-doc__snippet"><b>UI.keys.add</b>({ keys: 'g p', title: 'Люди', group: 'Перейти', run: () =&gt; go('/people') });
+<b>UI.palette.register</b>({ id: 'add.person', title: 'Добавить человека', group: 'Действия', icon: 'plus', run: openForm });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="chart">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Графики</h2>
+      <p class="ui-doc__lead">Пресеты <span class="ui-doc__code">UI.chart</span> для Chart.js 4: сетка 6% цвета текста, подписи шрифтом чисел, без легенды, подсказка в стеклянной карточке, клик по дню. Первый рендер дорисовывает линию слева направо, обновление — 400 мс без каскада. Chart.js — зависимость продукта, здесь с CDN только для витрины.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.chart</span>
+        <div class="charts">
+          <div class="ui-glass"><div class="ui-doc__out" style="margin:0 0 6px">линия: факт накопительно, прогноз run-rate, план</div><div class="ui-chart" style="--ui-chart-h:230px"><canvas id="ch-line" aria-label="Записи по дням"></canvas></div></div>
+          <div class="ui-glass"><div class="ui-doc__out" style="margin:0 0 6px">донат: число в центре</div><div class="ui-chart" style="--ui-chart-h:230px"><canvas id="ch-donut" aria-label="Открытые записи по срокам"></canvas></div></div>
+          <div class="ui-glass"><div class="ui-doc__out" style="margin:0 0 6px">столбики «всего / часть»</div><div class="ui-chart" style="--ui-chart-h:130px"><canvas id="ch-bars" aria-label="Заявки по дням"></canvas></div></div>
+          <div class="ui-glass"><div class="ui-doc__out" style="margin:0 0 6px">по дням с нормой</div><div class="ui-chart" style="--ui-chart-h:130px"><canvas id="ch-daily" aria-label="Записи за день"></canvas></div></div>
+        </div>
+        <div class="ui-doc__row" style="margin-top:14px"><button class="ui-btn" type="button" id="ch-next">Обновить данные</button><button class="ui-btn" type="button" id="ch-first">Первый рендер заново</button><span class="ui-doc__out" id="ch-out" style="margin:0"></span></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.chart.base</span><span class="ui-chip">UI.chart.draw</span><span class="ui-chip">UI.chart.donut</span><span class="ui-chip">UI.chart.overlayBars</span><span class="ui-chip">presets: line · forecast · plan · bars · norm</span><span class="ui-chip">UI.chart.colors</span></div>
+    </section>
+
+    <section class="ui-doc__section" id="callout">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Выноска, итог, точки</h2>
+      <p class="ui-doc__lead">Итог в шапке графика <span class="ui-doc__code">UI.chart.head</span>, закреплённая выноска у последней точки <span class="ui-doc__code">UI.chart.callout</span>, кружки на всех точках короткого ряда (до 16) и перекрестие под курсором. Наведи курсор: выноска уступает обычной подсказке и возвращается.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.chart.callout · head · points</span>
+        <div class="ui-glass" style="padding:14px 16px 8px">
+          <div id="co-head"></div>
+          <div class="ui-chart" style="--ui-chart-h:240px"><canvas id="ch-co" aria-label="Выручка по месяцам"></canvas></div>
+        </div>
+        <div class="ui-doc__row" style="margin-top:14px"><button class="ui-btn" type="button" id="co-next">Следующий месяц</button></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.chart.callout</span><span class="ui-chip">UI.chart.head</span><span class="ui-chip">presets.line(color, { points: true })</span><span class="ui-chip">base({ crosshair: true })</span></div>
+      <pre class="ui-doc__snippet"><b>UI.chart.callout</b>(chart, { index: 'last', key: '29 окт · сегодня', value: 4.12, unit: 'млн ₽', delta: 13.5 });
+<b>UI.chart.head</b>(el, { title: 'Выручка', value: 4.12, unit: 'млн ₽', delta: 13.5, deltaLabel: 'к сентябрю · 3,63 млн' });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="tip">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Подсказка при наведении</h2>
+      <p class="ui-doc__lead">Одна подсказка на весь ui-kit: стеклянная карточка с заголовком и строками, плавно скользит за точкой. Её же рисуют графики и спарклайн, поэтому они выглядят и двигаются одинаково. Первый показ появляется на месте, у края карточка переворачивается, «уменьшить движение» выключает ход. Свою подсказку в продукте не заводят: guard ловит её находкой <span class="ui-doc__code">tip</span>.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.tip.create</span>
+        <div class="ui-glass" style="position:relative;height:150px;cursor:crosshair;display:grid;place-items:center" id="tip-area"><span class="ui-doc__out" style="margin:0;pointer-events:none">проведи курсором по блоку</span></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.tip.create</span><span class="ui-chip">show({ title, rows }, x, y)</span><span class="ui-chip">rows[].cls: good · bad</span><span class="ui-chip">UI.tip.glide</span><span class="ui-chip">UI.tip.core.place</span></div>
+      <pre class="ui-doc__snippet"><b>const tip = UI.tip.create</b>(host); // host с position: relative
+host.onpointermove = (e) =&gt; tip.show({ title: '29 окт', rows: [{ label: 'записи', value: '57', color: C.accent }, { label: 'к плану', value: '−3', cls: 'bad' }] }, e.offsetX, e.offsetY);
+host.onpointerleave = () =&gt; tip.hide();</pre>
+    </section>
+
+    <section class="ui-doc__section" id="ring">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Кольцо плана</h2>
+      <p class="ui-doc__lead">Выполнение плана по сегментам: дуги от 12 часов по порядку, зазор и круглые концы, остаток «Не хватает» в легенде. Сумма больше плана замыкает кольцо. Нет плана — состояние с кнопкой. SVG в реальных пикселях, дуги прорисовываются при первом показе.</p>
+      <div class="ui-doc__stage ui-doc__stage--bg">
+        <span class="ui-doc__stage-label">live · UI.ring</span>
+        <div class="ui-doc__grid" style="--ui-doc-col:300px">
+          <div class="ui-glass" style="padding:16px"><div id="rg-a"></div></div>
+          <div class="ui-glass" style="padding:16px"><div id="rg-b"></div></div>
+          <div class="ui-glass" style="padding:16px"><div id="rg-c"></div></div>
+        </div>
+        <div class="ui-doc__row" style="margin-top:14px"><button class="ui-btn" type="button" id="rg-next">Обновить данные</button><span class="ui-doc__out" id="rg-out" style="margin:0"></span></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">UI.ring.mount</span><span class="ui-chip">segments[].tone</span><span class="ui-chip">total</span><span class="ui-chip">center</span><span class="ui-chip">empty</span><span class="ui-chip">UI.ring.core.ringArcs</span></div>
+      <pre class="ui-doc__snippet"><b>UI.ring.mount</b>(el, { segments: [{ label: 'Продано', value: 620, tone: 'success' }, { label: 'В резерве', value: 140, tone: 'warning' }], total: 1000,
+  empty: { text: 'План не задан', actionLabel: 'Задать план', onAction: openPlan } });</pre>
+    </section>
+
+    <section class="ui-doc__section" id="reader">
+      <p class="ui-doc__eyebrow">— 04 · Компоненты</p>
+      <h2>Режим чтения</h2>
+      <p class="ui-doc__lead">Документ из markdown читается как документ: абзацы пропорциональным шрифтом <span class="ui-doc__code">--ui-font-text</span>, заголовки шрифтом темы, колонка 720 или 960 px. Таблица в своей рамке прокручивается сама, страница вбок не едет; длинные адреса и строки кода переносятся. Колонка стоит по центру, таблицы и код ровно по её ширине. Оглавление из h2 и h3 стоит слева в поле, когда оно там помещается (от 1240 px), иначе открывается кнопкой. «Аа» меняет размер и ширину, выбор помнится на устройстве.</p>
+      <div class="ui-doc__stage">
+        <span class="ui-doc__stage-label">live · UI.reader · рамка 560 px, прокручивается</span>
+        <div class="ui-doc__frame" id="rd-frame" style="height:560px;overflow:auto;padding:0 20px 24px"></div>
+      </div>
+      <div class="ui-doc__tags"><span class="ui-chip">.ui-prose</span><span class="ui-chip">.ui-reader</span><span class="ui-chip">UI.reader.mount</span><span class="ui-chip">data-ui-reader-size</span><span class="ui-chip">data-ui-reader-width</span><span class="ui-chip">--ui-font-text</span><span class="ui-chip">--ui-prose-measure</span></div>
+      <pre class="ui-doc__snippet">const reader = <b>UI.reader.mount</b>(el, { content, scroller, controls, key: 'ui-reader' });
+content.innerHTML = html;
+reader.<b>refresh</b>(); // таблицы в обёртки, id заголовкам, оглавление заново</pre>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script> <!-- только для витрины: Chart.js — зависимость продукта, в ui-kit его нет -->
+<script src="./ui-kit.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+  const THEMES = ['zp', 'weshow', 'arc', 'agatos', 'dom', 'pbth'], MODES = [['dark', 'Тёмная'], ['light', 'Светлая']];
+  const q = new URLSearchParams(location.search);
+  let theme = THEMES.includes(q.get('theme')) ? q.get('theme') : 'zp';
+  let mode = q.get('mode') === 'light' ? 'light' : 'dark';
+  let drawCharts = null;
+
+  $('ver').textContent = UI.VERSION;
+  $('meta-ver').textContent = UI.VERSION;
+
+  const themeSeg = UI.seg.mount($('themes'), { label: 'Тема', items: THEMES.map((n) => ({ value: n, label: n })), value: theme, onChange: (v) => { theme = v; apply(); } });
+  const modeSeg = UI.seg.mount($('modes'), { label: 'Режим', items: MODES.map(([v, label]) => ({ value: v, label, icon: v === 'dark' ? 'moon' : 'sun' })), value: mode, onChange: (v) => { mode = v; apply(); } });
+
+  // Основы читают реальные значения токенов выбранной темы
+  const SWATCHES = {
+    'sw-surface': [['bg', 'фон страницы'], ['surface', 'панели, карточки'], ['surface-2', 'hover, поля ввода'], ['border', 'границы, разделители'], ['text', 'основной текст'], ['muted', 'подписи, метки']],
+    'sw-accent': [['accent', 'кнопка, активный сегмент, ссылки'], ['accent-text', 'текст поверх акцента']],
+    'sw-data': [['success', 'рост, прибыль'], ['danger', 'падение, убыток'], ['warning', 'предупреждение'], ['violet', 'дополнительная серия данных']],
+  };
+  const probe = document.createElement('i'); probe.style.display = 'none'; document.body.appendChild(probe);
+  const hex = (token) => {
+    probe.style.color = ''; probe.style.color = `var(--ui-${token})`;
+    const m = getComputedStyle(probe).color.match(/\d+(\.\d+)?/g) || [];
+    if (m.length < 3) return '';
+    const h = m.slice(0, 3).map((n) => Math.round(+n).toString(16).padStart(2, '0')).join('');
+    return '#' + h + (m[3] !== undefined && +m[3] < 1 ? ` · ${Math.round(+m[3] * 100)}%` : '');
+  };
+  const tok = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+  const firstFont = (v) => (v.split(',')[0] || '').replace(/var\([^)]*\)/g, '').replace(/['"]/g, '').trim() || v;
+  function drawBasics() {
+    for (const [id, list] of Object.entries(SWATCHES)) {
+      $(id).innerHTML = list.map(([t, use]) => `<div class="ui-doc__swatch"><div class="ui-doc__swatch-chip" style="background:var(--ui-${t})"></div><div class="ui-doc__swatch-meta"><div class="ui-doc__swatch-name">--ui-${t}</div><div class="ui-doc__swatch-hex">${hex(t)}</div><div class="ui-doc__swatch-use">${use}</div></div></div>`).join('');
+    }
+    const f = getComputedStyle(document.body).fontFamily, fn = getComputedStyle($('type-num-font')).fontFamily;
+    $('type-font').textContent = `--ui-font: ${firstFont(f)}`;
+    $('type-num').textContent = `--ui-font-num: ${firstFont(fn)}`;
+    $('type-num-font').textContent = `${firstFont(fn)} · tabular`;
+    const sp = parseInt(tok('--ui-space')) || 8;
+    $('spaces').innerHTML = [1, 2, 3, 4, 6, 8].map((k) => `<div class="ui-doc__space"><span class="lbl">${k} × --ui-space</span><span class="bar" style="width:${k * sp * 3}px"></span><span class="val">${k * sp}px</span></div>`).join('');
+    $('radii').innerHTML = ['sm', 'md', 'lg'].map((r) => `<div class="ui-doc__radius"><i style="border-radius:var(--ui-radius-${r})"></i><b>${tok('--ui-radius-' + r)}</b>--ui-radius-${r}</div>`).join('')
+      + `<div class="ui-doc__radius"><i style="border-radius:var(--ui-ctl-radius);background:var(--ui-surface-2);border:1px solid var(--ui-border);box-sizing:border-box"></i><b>${tok('--ui-ctl-radius')}</b>--ui-ctl-radius</div>`;
+    $('stroke').textContent = tok('--ui-icon-stroke');
+  }
+  function apply() {
+    if (theme === 'pbth') mode = 'dark';  // у pbth светлой нет
+    $('theme-css').href = `./themes/${theme}.css`;
+    // краски экрана задаёт продукт; здесь — как на экране «Моё»
+    for (const [k, v] of Object.entries({ '--ui-paint-1': '#FF8A1F', '--ui-paint-2': '#4FC3F7', '--ui-paint-3': '#A58BFF' })) root.style.setProperty(k, v);
+    root.setAttribute('data-ui-theme', mode);
+    themeSeg.set(theme); modeSeg.set(mode);
+    $('meta-theme').textContent = `${theme} · ${mode === 'dark' ? 'тёмная' : 'светлая'}`;
+    setTimeout(() => { drawBasics(); if (drawCharts) drawCharts(false); }, 60);
+  }
+  $('theme-css').addEventListener('load', apply);
+  apply();
+
+  // Стекло: пятна под слоем
+  const backdrop = document.createElement('div'); backdrop.className = 'ui-backdrop'; document.body.prepend(backdrop);
+  $('g-backdrop').onchange = (e) => { backdrop.style.display = e.target.checked ? '' : 'none'; };
+
+  // Иконки
+  await UI.icons.load('./icons.svg');
+  const list = (await (await fetch('./icons.list')).text()).split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean);
+  $('meta-icons').textContent = `${list.length} · Lucide`;
+  $('icnt').textContent = `${list.length} имён`;
+  $('icon-grid').innerHTML = list.map((n) => `<div>${UI.icon(n, { size: 22 })}<span>${n}</span></div>`).join('');
+  $('cover-brand').insertAdjacentHTML('afterbegin', UI.icon('component', { size: 36 }));
+  $('b-export').insertAdjacentHTML('afterbegin', UI.icon('download', { size: 14 }));
+  $('b-add').insertAdjacentHTML('afterbegin', UI.icon('plus', { size: 14 }));
+  $('b-settings').insertAdjacentHTML('afterbegin', UI.icon('settings', { size: 13 }));
+
+  // Контролы
+  UI.seg.mount($('c-seg'), { label: 'Период', items: [{ value: 'd', label: 'День' }, { value: 'w', label: 'Неделя' }, { value: 'm', label: 'Месяц' }], value: 'w', onChange: (v) => { $('c-seg-out').textContent = `выбрано: ${v}`; } });
+  UI.seg.mount($('c-seg2'), { label: 'Вид', items: [{ value: 'fact', label: 'Факт', icon: 'check' }, { value: 'plan', label: 'Прогноз', icon: 'trending-up' }], value: 'fact', onChange: (v) => { $('c-seg-out').textContent = `выбрано: ${v}`; } });
+  // Под телефон (0.37.0): раздельные сегменты во всю ширину, крупные кнопки с фоном — токенами на контейнере
+  const phSeg = UI.seg.mount($('ph-seg'), { label: 'Комплекс', items: [{ value: 'full', label: 'Полный' }, { value: 'front', label: 'Перед' }, { value: 'lights', label: 'Фары' }], value: 'front', onChange: (v) => { $('ph-out').textContent = `выбрано: ${v}`; } });
+  phSeg.el.classList.add('ui-seg--split', 'ui-seg--fill');
+  UI.seg.mount($('tb-seg'), { label: 'Период', items: [{ value: 'w', label: 'Неделя' }, { value: 'm', label: 'Месяц' }], value: 'm' });
+
+  // Тост
+  $('t-info').onclick = () => UI.toast.show({ text: 'Данные синхронизированы' });
+  $('t-ok').onclick = () => UI.toast.show({ text: 'Сохранено', kind: 'success' });
+  $('t-err').onclick = () => UI.toast.show({ text: 'Не удалось сохранить: нет связи', kind: 'error' });
+  $('t-undo').onclick = () => UI.toast.show({ text: 'Телефон изменён', action: { label: 'Отменить', onClick: () => UI.toast.show({ text: 'Отменено', kind: 'success' }) } });
+  $('t-arc').onchange = (e) => UI.toast.configure(e.target.checked ? { limit: 3, overflow: 'queue', progress: true, closable: true } : { limit: 4, overflow: 'drop', progress: false, closable: false });
+  $('t-stack').onclick = () => { for (let i = 1; i <= 5; i++) UI.toast.show({ text: `Уведомление ${i}`, kind: i % 2 ? 'info' : 'success' }); };
+
+  // Окно
+  $('d-simple').onclick = () => UI.dialog.open({ title: 'Заметка', content: 'Простое окно: текст вставляется как текст, <b>без разметки</b>.' });
+  $('d-confirm').onclick = () => UI.dialog.open({
+    title: 'Удалить позицию?', content: 'Строка уйдёт из сметы. Её можно вернуть кнопкой «Отменить» в уведомлении.',
+    actions: [{ label: 'Отмена' }, { label: 'Удалить', kind: 'danger', onClick: () => UI.toast.show({ text: 'Позиция удалена', action: { label: 'Отменить', onClick() {} } }) }],
+  });
+  $('d-stack').onclick = () => UI.dialog.open({
+    title: 'Первое окно', content: 'Esc закроет только верхнее.',
+    actions: [{ label: 'Открыть второе', kind: 'primary', close: false, onClick: () => UI.dialog.open({ title: 'Второе окно', content: 'Закроется по Esc, фокус вернётся на «Открыть второе».', actions: [{ label: 'Понятно', kind: 'primary' }] }) }, { label: 'Закрыть' }],
+  });
+  $('d-modal').onclick = () => UI.dialog.open({ title: 'Только кнопкой', content: 'Esc и клик по подложке не работают.', esc: false, backdrop: false, actions: [{ label: 'Закрыть', kind: 'primary' }] });
+  $('d-wide').onclick = () => {
+    const staff = [['Анна Верес', 'Менеджер по продажам', [38, 41, 29]], ['Игорь Лавров', 'Старший оператор', [52, 47, 60]], ['Мира Солт', 'Координатор смены', [21, 33, 27]], ['Тимур Окунев', 'Стажёр', [12, 18, 24]]];
+    const periods = ['Неделя', 'Месяц', 'Квартал'];
+    let i = 0, p = 1;
+    const mk = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+    const sel = mk('select', null, 'ui-select'); sel.setAttribute('aria-label', 'Период');
+    periods.forEach((n, k) => { const o = mk('option', n); o.value = k; sel.appendChild(o); });
+    sel.value = p;
+    const prev = mk('button', '‹', 'ui-btn ui-btn--sm'); prev.setAttribute('aria-label', 'Предыдущий');
+    const next = mk('button', '›', 'ui-btn ui-btn--sm'); next.setAttribute('aria-label', 'Следующий');
+    const head = mk('div'); head.style.cssText = 'display:flex;gap:8px;align-items:center';
+    head.append(sel, prev, next);
+    const roleEl = mk('span', staff[0][1]);
+    const w = UI.dialog.open({ size: 'xl', title: staff[0][0], subtitle: roleEl, head, content: '' });
+    function render() {
+      const [name, role, base] = staff[i];
+      w.setTitle(name);
+      const k = p + 1, grid = mk('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding-top:8px';
+      [['Звонков', base[0] * k], ['Сделок', base[1] * k / 3 | 0], ['Конверсия, %', base[2]]].forEach(([l, v]) => {
+        const c = mk('div', null, 'ui-panel ui-panel__pad');
+        const n = mk('div', String(v), 'num'); n.style.cssText = 'font-size:28px;font-weight:600';
+        c.append(n, mk('div', `${l} · ${periods[p].toLowerCase()}`, 'ui-panel__subtitle')); grid.appendChild(c);
+      });
+      const note = mk('p', `${role}. Данные вымышленные, ${i + 1} из ${staff.length}.`, 'ui-doc__sublead');
+      w.body.textContent = ''; w.body.append(grid, note);
+      roleEl.textContent = role;
+    }
+    prev.onclick = () => { i = (i + staff.length - 1) % staff.length; render(); };
+    next.onclick = () => { i = (i + 1) % staff.length; render(); };
+    sel.onchange = () => { p = +sel.value; render(); };
+    render();
+  };
+
+  // Период
+  const TODAY = '2026-10-29';
+  const showRange = (id) => (r) => { $(id).textContent = `${r.from} — ${r.to} · ${r.days} дн. · ${r.preset}`; };
+  UI.period.mount($('p-back'), { key: 'demo-back', presets: 'back', nav: true, today: TODAY, onChange: showRange('p-back-out') });
+  UI.period.mount($('p-fwd'), { key: 'demo-fwd', presets: 'forward', defaultPreset: 'current-month', nav: true, today: TODAY, onChange: showRange('p-fwd-out') });
+  UI.period.mount($('p-val'), { key: 'demo-val', presets: 'back', today: TODAY, validate: { maxDays: 31, noFuture: true }, onChange: showRange('p-val-out') });
+
+  // Из чего цифра: данные вымышленные
+  const stages = [['Оклеена', 'alive', '#8ca79d'], ['Откат', 'rollback', '#9e8ab0'], ['Потеряна', 'lost', '#c97b63'], ['В работе', 'work', '#8eadc4']];
+  const people = ['Анна Верес', 'Игорь Лавров', 'Мира Солт', 'Тимур Окунев', 'Лина Фрай'];
+  const cities = ['Москва, ЮАО, Варшавское шоссе, 12', 'Тверь', 'Казань, Вахитовский район, ул. Баумана', 'Сочи'];
+  const demoRows = Array.from({ length: 30 }, (_, i) => {
+    const st = stages[i % stages.length];
+    return {
+      id: 1000 + i, title: `Заказ ${1000 + i}`, url: `https://example.com/orders/${1000 + i}`, date: `2026-10-${String(1 + (i * 7) % 28).padStart(2, '0')}`,
+      stage: st[0], state: st[1], color: st[2], manager: i % 7 === 3 ? null : people[i % people.length], city: cities[i % cities.length],
+      gmv: i % 6 === 5 ? 0 : 40000 + (i * 7919) % 90000, days: i % 5 === 4 ? null : 2 + (i * 3) % 14,
+    };
+  });
+  const demoCols = [
+    { key: 'title', label: 'Заказ', type: 'link', sub: (r) => '#' + r.id, subTitle: 'Номер заказа', total: 'count', title: 'Число заказов в выборке' },
+    { key: 'stage', label: 'Стадия', type: 'badge', cls: (r) => r.state, color: 'color' },
+    { key: 'date', label: 'Дата', type: 'date' },
+    { key: 'manager', label: 'Менеджер', type: 'text' },
+    { key: 'city', label: 'Адрес', type: 'text', maxChars: 22 },
+    { key: 'gmv', label: 'Сумма', type: 'money', total: 'sum' },
+    { key: 'days', label: 'Дней', type: 'num', suffix: ' д', total: 'avg' },
+  ];
+  $('dr-open').onclick = () => UI.drill.open({ title: 'Оформлено заказов', subtitle: '30 заказов', columns: demoCols, rows: demoRows });
+  $('dr-fetch').onclick = () => UI.drill.open({
+    title: 'Заказы за период', columns: demoCols, fetch: 'data:application/json,[]',
+    fetchFn: () => new Promise((res) => setTimeout(() => res({ ok: true, json: async () => ({ items: demoRows.slice(0, 12) }) }), 900)),
+    map: (j) => ({ rows: j.items, subtitle: `${j.items.length} заказов` }),
+  });
+  $('dr-err').onclick = () => UI.drill.open({ title: 'Заказы за период', columns: demoCols, fetch: '/нет-такого', fetchFn: () => Promise.reject(new Error('нет связи')) });
+  const parts = [['Плёнка, капот и бампер', 0.55], ['Плёнка, фары', 0.12], ['Работа мастера', 0.33]];
+  const nestRows = demoRows.slice(0, 8).map((r) => ({
+    ...r,
+    children: r.gmv ? parts.map(([t, k], j) => ({ id: r.id + '-' + j, title: t, url: r.url, stage: r.stage, state: r.state, color: r.color, date: r.date, manager: r.manager, gmv: Math.round(r.gmv * k) })) : [],
+  }));
+  $('dr-nest').onclick = () => UI.drill.open({ title: 'P&L построчно', subtitle: '8 заказов, у заказа — позиции', columns: demoCols, rows: nestRows });
+
+  // Карточки показателей
+  const statDefs = [
+    { label: 'Живые записи', tag: 'NORTH STAR', icon: 'calendar', tone: 'accent', format: 'int', value: 57, prev: 52.7, hint: 'к прошлому месяцу · 2,04/день', spark: [38, 41, 40, 44, 47, 45, 49, 52, 51, 55, 57], info: 'Записи минус отвал, накопительно за месяц' },
+    { label: 'Заявки за месяц', icon: 'message-circle', tone: 'blue', format: 'int', value: 237, prev: 211, hint: 'качественных 162 · сегодня 8', spark: [150, 162, 171, 180, 186, 195, 201, 210, 219, 228, 237] },
+    { label: 'CPL Директа', icon: 'trending-up', tone: 'green', format: 'money', value: 2230, prev: 2655, lower: true, hint: 'за 3 дня · спенд 361 тыс ₽', spark: [2980, 2910, 2840, 2760, 2700, 2650, 2655, 2500, 2410, 2300, 2230] },
+    { label: 'Прогноз прибыли', icon: 'wallet', tone: 'violet', format: 'moneyShort', value: 1180000, prev: 1120000, hint: 'факт 0,84 · дожитие 72,6%', spark: [0.92, 0.95, 0.99, 1.02, 1.05, 1.04, 1.08, 1.11, 1.12, 1.16, 1.18] },
+  ];
+  const statApis = statDefs.map((d) => { const h = document.createElement('div'); $('stats').appendChild(h); return UI.stat.mount(h, { ...d, onInfo: (btn, info) => UI.toast.show({ text: info }) }); });
+  $('st-next').onclick = () => statApis.forEach((a, i) => { const d = statDefs[i]; const k = 1 + (Math.random() - 0.4) * 0.3; a.set({ prev: d.value, value: Math.round(d.value * k * 100) / 100, spark: d.spark.concat([d.spark[d.spark.length - 1] * k]).slice(-11) }); });
+  $('st-narrow').onchange = (e) => { $('stats').style.setProperty('--ui-doc-col', e.target.checked ? '150px' : '250px'); };
+  for (const box of $('sparks').children) UI.stat.spark(box, statDefs[1].spark);
+  const weekLabels = ['W33', 'W34', 'W35', 'W36', 'W37', 'W38', 'W39', 'W40'], weekVals = [150, 162, 171, 168, 186, 201, 219, 237];
+  const hs = document.createElement('div'); $('spark-labeled').appendChild(hs);
+  UI.stat.mount(hs, { label: 'Заявки за неделю', icon: 'message-circle', tone: 'blue', format: 'int', value: 237, prev: 219, hint: '8 последних недель', spark: weekVals, sparkLabels: weekLabels, sparkTip: (i) => ({ title: weekLabels[i], rows: [{ label: 'заявок', value: String(weekVals[i]), color: 'var(--ui-accent)' }, { label: 'к прошлой неделе', value: i ? (weekVals[i] - weekVals[i - 1] >= 0 ? '+' : '−') + Math.abs(weekVals[i] - weekVals[i - 1]) : '—', cls: i && weekVals[i] < weekVals[i - 1] ? 'bad' : 'good' }] }) });
+  for (const box of $('sparks-labeled').children) UI.stat.spark(box, weekVals, { h: 30, labels: weekLabels });
+  $('st-skel').onclick = () => {
+    const host = $('stats'); const keep = [...host.children];
+    UI.skeleton.show(host, 'stat'); for (let i = 1; i < 4; i++) host.appendChild(UI.skeleton.el('stat'));
+    setTimeout(() => UI.skeleton.swap(host, keep), 1400);
+  };
+
+  // Рейтинг с полосой и лента событий
+  const studios = [
+    { id: 'nn', label: 'Автозавод · Нижний', sub: '41 заказ', value: 1840000, badge: true, tone: 'green' },
+    { id: 'sv', label: 'Север', sub: '28 заказов', value: 1210000, badge: true, tone: 'green' },
+    { id: 'ct', label: 'Центр · Тверская', sub: '19 заказов', value: 960000, badge: true },
+    { id: 'ug', label: 'Юг', sub: '17 заказов', value: 720000, badge: true },
+    { id: 'vo', label: 'Восток', sub: '11 заказов', value: 440000, badge: true, tone: 'warn' },
+    { id: 'zp', label: 'Запад', sub: '6 заказов', value: 260000, badge: true, tone: 'warn' },
+    { id: 'pr', label: 'Приморская', sub: '4 заказа', value: 150000, badge: true, tone: 'danger' },
+    { id: 'lm', label: 'Ленинский', sub: '3 заказа', value: 90000, badge: true, tone: 'danger' },
+    { id: 'sh', label: 'Шоссе', sub: '1 заказ', value: 30000, badge: true, tone: 'danger' },
+  ];
+  const money = (v) => UI.stat.fmt(v, 'moneyShort');
+  const blA = UI.barlist.mount($('bl-a'), { title: 'Студии по выручке', sub: 'за месяц · топ 5', items: studios, fmt: money, max: 5, more: { label: 'Все 9', onClick: () => UI.toast.show({ text: 'Все 9 студий' }) }, onSelect: (it) => { $('bl-out').textContent = 'выбрано: ' + it.label; } });
+  const mgr = [
+    { label: 'Анна К.', sub: '34 лида', value: 0.42, display: '42%', icon: 'phone', tone: 'blue', share: 0.42 },
+    { label: 'Игорь С.', sub: '29 лидов', value: 0.37, display: '37%', icon: 'phone', tone: 'blue', share: 0.37 },
+    { label: 'Мария Т.', sub: '18 лидов', value: 0.21, display: '21%', icon: 'phone', tone: 'violet', share: 0.21 },
+  ];
+  const blB = UI.barlist.mount($('bl-b'), { title: 'Конверсия менеджеров', sub: 'иконки вместо инициалов, готовые доли', items: mgr });
+  const pnl = [
+    { label: 'Выручка клиентов', sub: 'pipeline 6,1 млн', value: 4200000, display: '4,2 млн ₽', share: 4.2 / 6.1, ghost: 1, tone: 'green', icon: 'trending-up' },
+    { label: 'Транзит партнёру', sub: 'pipeline 3,4 млн', value: 2300000, display: '−2,3 млн ₽', share: 2.3 / 6.1, ghost: 3.4 / 6.1, tone: 'blue', icon: 'arrow-right' },
+    { label: 'Реклама', sub: 'план 0,9 млн', value: 610000, display: '−610 тыс ₽', share: 0.61 / 6.1, ghost: 0.9 / 6.1, tone: 'danger', icon: 'trending-down' },
+    { label: 'Налог', value: 180000, display: '−180 тыс ₽', share: 0.18 / 6.1, tone: 'warn', icon: 'trending-down' },
+  ];
+  const blC = UI.barlist.mount($('bl-c'), { title: 'P&L построчно', sub: 'факт и pipeline: второй слой ghost', items: pnl, sorted: false, max: 0 });
+  $('bl-next').onclick = () => blA.set({ items: studios.map((s) => ({ ...s, value: Math.round(s.value * (0.6 + Math.random() * 0.8)) })) });
+  let blOn = true;
+  $('bl-empty').onclick = () => { blOn = !blOn; blA.set({ items: blOn ? studios : [], empty: 'Нет студий за период' }); blB.set({ items: blOn ? mgr : [], empty: 'Нет данных' }); blC.set({ items: blOn ? pnl : [], empty: 'Нет данных за период' }); };
+
+  const nowMs = Date.now(), ago = (sec) => new Date(nowMs - sec * 1000).toISOString();
+  const feedTypes = {
+    visit: { icon: 'calendar', tone: 'blue', label: 'Записан на оклейку', plural: ['запись', 'записи', 'записей'], verb: ['создана', 'созданы', 'созданы'] },
+    consult: { icon: 'phone', tone: 'violet', label: 'Записан на консультацию' },
+    order: { icon: 'circle-check', tone: 'green', label: 'Заказ исполнен', plural: ['заказ', 'заказа', 'заказов'], verb: ['исполнен', 'исполнены', 'исполнены'] },
+    pay: { icon: 'banknote', tone: 'green', label: 'Оплата получена' },
+  };
+  const cars = ['BMW X5', 'Kia K5', 'Tesla Y', 'Haval Jolion', 'Audi Q7', 'Lada Vesta'];
+  const batch = cars.map((c, i) => ({ id: 'o' + i, type: 'order', at: ago(1500 + i * 8), sub: c + ' · ' + ['Север', 'Центр'][i % 2], amount: 46100 - i * 3000 }));
+  const feedItems = [
+    { id: 1, type: 'visit', at: ago(95), title: 'Записан на оклейку', sub: 'Иван П. · BMW X5 · Север', href: '#feed' },
+    { id: 2, type: 'consult', at: ago(840), sub: 'Ольга М. · Центр · завтра 12:00' },
+    { id: 3, type: 'pay', at: ago(1100), sub: 'Заказ 4812 · Автозавод · Нижний', amount: 46100 },
+    ...batch,
+    { id: 4, type: 'visit', at: ago(3 * 3600 + 400), sub: 'Сергей Л. · Kia K5 · Юг' },
+    { id: 5, type: 'consult', at: ago(27 * 3600), sub: 'Дмитрий Р. · Восток' },
+    { id: 6, type: 'order', at: ago(30 * 3600), sub: 'Audi A6 · Центр', amount: 52800 },
+  ];
+  const fdA = UI.feed.mount($('fd-a'), { title: 'Последние события', sub: 'сегодня', types: feedTypes, items: feedItems, limit: 8, more: { label: 'Вся лента', onClick: () => UI.toast.show({ text: 'Вся лента' }) } });
+  const fdB = UI.feed.mount($('fd-b'), { title: 'Без свёртки и с коротким лимитом', sub: 'group: false, limit: 5', types: feedTypes, items: feedItems, limit: 5, group: false });
+  $('fd-group').onchange = (e) => fdA.set({ group: e.target.checked ? { windowSec: 60 } : false });
+  let fdOn = true;
+  $('fd-empty').onclick = () => { fdOn = !fdOn; fdA.set({ items: fdOn ? feedItems : [], empty: { text: 'Сегодня тихо' } }); fdB.set({ items: fdOn ? feedItems : [], empty: { text: 'Сегодня тихо' } }); };
+
+  // Лента под телефон (0.42.0): lead, status, actions, timeDisplay, order
+  const fdLead = (c) => `<span style="display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:${c};color:var(--ui-bg)">${UI.icon('trophy', { size: 22 })}</span>`;
+  UI.feed.mount($('fd-c'), { title: 'Ближайшее', sub: 'order: asc', order: 'asc', group: false, limit: 6, items: [
+    { id: 'c3', at: ago(-3 * 86400), title: 'Кубок Москвы, 3 этап', sub: 'Турнир · «Гвардеец»', lead: fdLead('#ff8a1f'), timeDisplay: 'сб 10:00', status: { text: 'иду', tone: 'success', icon: 'check' } },
+    { id: 'c1', at: ago(-86400), title: 'Дневной Дозор', sub: 'Тренировка · «Арена»', lead: fdLead('#4fc3f7'), timeDisplay: 'чт 19:00', status: { text: 'не иду', tone: 'muted' } },
+    { id: 'c2', at: ago(-2 * 86400), title: 'Ураган зовёт тебя в состав', sub: 'Приглашение в команду', lead: fdLead('#d9b98a'), timeDisplay: 'пт', actions: [{ label: 'Принять', primary: true, onClick: () => UI.toast.show({ text: 'Принято' }) }, { label: 'Отклонить', onClick: () => UI.toast.show({ text: 'Отклонено' }) }] },
+  ] });
+
+  // Сетка месяца
+  const moNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  UI.month.mount($('mo-a'), { year: 2026, month: 11, today: '2026-11-11', selected: '2026-11-14', weekStart: 1,
+    marks: { '2026-11-03': ['#ff8a1f'], '2026-11-12': ['#4fc3f7'], '2026-11-14': ['#ff8a1f', '#ff6b57'], '2026-11-19': ['#4fc3f7', '#ffd23f'], '2026-11-22': ['#4fc3f7', '#ff8a1f', '#ff6b57', '#a58bfa'] },
+    onSelect: (iso) => { $('mo-out').textContent = 'выбрано: ' + Number(iso.slice(8)) + ' ' + moNames[Number(iso.slice(5, 7)) - 1]; } });
+
+  // Парящая нижняя панель со стеклом
+  UI.sidenav.mount($('sf-phone'), { label: 'Разделы', path: '/a', mobile: true, floating: true, glass: true, action: { icon: 'plus', label: 'Создать событие' },
+    groups: [{ items: [{ label: 'Моё', icon: 'house', href: '/a' }, { label: 'Календарь', icon: 'calendar', href: '/b' }, { label: 'Команды', icon: 'users', href: '/c' }, { label: 'Профиль', icon: 'user', href: '/d' }] }] });
+
+  // Экран телефона на теме pbth
+  const pbLead = (c) => `<span style="display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:${c};color:var(--ui-bg)">${UI.icon('hexagon', { size: 22 })}</span>`;
+  UI.feed.mount($('pb-feed'), { title: 'Ближайшее', sub: 'order: asc', order: 'asc', group: false, limit: 3, items: [
+    { id: 'p1', at: ago(-86400), title: 'Дневной Дозор', sub: 'Тренировка · «Арена»', lead: pbLead('#4fc3f7'), timeDisplay: '19:00', status: { text: 'иду', tone: 'success', icon: 'check' } },
+    { id: 'p2', at: ago(-3 * 86400), title: 'Кубок Москвы, 3 этап', sub: 'Турнир · «Гвардеец»', lead: pbLead('#ff8a1f'), timeDisplay: '10:00', status: { text: 'не иду', tone: 'muted' } },
+  ] });
+  UI.month.mount($('pb-month'), { year: 2026, month: 11, today: '2026-11-11', selected: '2026-11-14', weekStart: 1, marks: { '2026-11-12': ['#4fc3f7'], '2026-11-14': ['#ff8a1f', '#ff6b57'] } });
+  UI.sidenav.mount($('pb-phone'), { label: 'Разделы', path: '/a', mobile: true, floating: true, glass: true, action: { icon: 'plus', label: 'Создать событие' },
+    groups: [{ items: [{ label: 'Моё', icon: 'house', href: '/a' }, { label: 'Календарь', icon: 'calendar', href: '/b' }, { label: 'Команды', icon: 'users', href: '/c' }, { label: 'Профиль', icon: 'user', href: '/d' }] }] });
+
+  // Скелетоны по видам
+  for (const kind of UI.skeleton.KINDS) {
+    const box = document.createElement('div'); box.className = 'ui-panel'; const cap = document.createElement('div'); cap.className = 'ui-doc__out'; cap.style.cssText = 'margin:0;padding:8px 12px 0'; cap.textContent = kind;
+    box.appendChild(cap); box.appendChild(UI.skeleton.el(kind, { rows: 3, cols: 3, height: 90 })); $('skels').appendChild(box);
+  }
+
+  // Сайдбар
+  const snGroups = [
+    { title: 'Сегодня', items: [{ href: '/pulse', label: 'Пульс', icon: 'activity' }, { href: '/calls', label: 'Звонки', icon: 'phone', badge: 3 }] },
+    { title: 'Деньги', items: [{ href: '/pnl', label: 'P&L', icon: 'chart-line' }, { href: '/cashflow', label: 'Cash Flow', icon: 'wallet' }, { href: '/calculator', label: 'Калькулятор', icon: 'calculator' }] },
+    { title: 'Маркетинг', items: [{ href: '/rnp', label: 'РНП', icon: 'target', dot: 'есть алерт' }, { href: '/strategy/seo', label: 'Поиск', icon: 'search' }, { href: '/strategy', label: 'Стратегия', icon: 'compass' }] },
+    { title: 'Студии', items: [{ href: '/compare/admin', label: 'Сравнение', icon: 'chart-column' }, { href: '/zp/process', label: 'Процесс', icon: 'layout-grid' }] },
+  ];
+  const snFoot = document.createElement('div'); snFoot.className = 'ui-topbar__muted'; snFoot.textContent = 'Василий · Октябрь 2026';
+  const snBrand = document.createElement('b'); snBrand.textContent = 'Защитаплёнкой.рф';
+  const sn = UI.sidenav.mount($('sn-frame'), { brand: snBrand, brandHref: '#sidenav', search: { label: 'Поиск', hint: '⌘K', onOpen: () => UI.palette.open() }, groups: snGroups, path: '/pulse', footer: snFoot });
+  const pane = document.createElement('div'); pane.className = 'ui-doc__frame-pane'; pane.textContent = 'Содержимое страницы. Ссылки в витрине никуда не ведут.'; $('sn-frame').appendChild(pane);
+  const sg = UI.sidenav.mount($('sg-frame'), { brand: snBrand.cloneNode(true), groups: snGroups, path: '/pulse', mobile: false, glass: true });
+  const sgPane = document.createElement('div'); sgPane.className = 'ui-doc__frame-pane'; sgPane.style.marginLeft = '-36px';
+  for (const t of ['Живые записи · 61', 'Заявки за месяц · 260', 'CPL Директа · 2 203 ₽']) { const c = document.createElement('div'); c.className = 'ui-panel'; c.style.marginBottom = '10px'; c.textContent = t; sgPane.appendChild(c); }
+  $('sg-frame').appendChild(sgPane);
+  $('sg-frame').addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="/"]'); if (a) { e.preventDefault(); sg.setActive(a.getAttribute('href')); } });
+  // Свёрнутый сайдбар с содержимым продукта (0.40.0): body, колонка рядом, служебные пункты нижней панели
+  const scBody = document.createElement('div');
+  scBody.innerHTML = '<div class="ui-sidenav__title">Проекты</div>';
+  for (const [h, l, i] of [['/p/zp', 'Защитапленкой', 'folder'], ['/p/smetnik', 'Сметник', 'folder'], ['/p/arc', 'ARC', 'folder']]) {
+    const a = document.createElement('a'); a.className = 'ui-sidenav__item'; a.href = h; a.innerHTML = `<span class="ui-sidenav__ico">${UI.icon(i, { size: 16 })}</span><span class="ui-sidenav__text"></span>`; a.querySelector('.ui-sidenav__text').textContent = l; scBody.appendChild(a);
+  }
+  let scMode = 'side';
+  const sc = UI.sidenav.mount($('sc-frame'), { brandHtml: '<b>ARC</b>', groups: snGroups.slice(0, 2), path: '/pulse', mobile: false, collapsible: true, collapsed: true, bodyCollapsed: scMode, body: scBody, search: { label: 'Поиск', hint: '⌘K', onOpen: () => UI.palette.open() } });
+  const scPane = document.createElement('div'); scPane.className = 'ui-doc__frame-pane'; scPane.textContent = 'Содержимое страницы. Узел с проектами один и тот же в полосе и в колонке.'; $('sc-frame').appendChild(scPane);
+  $('sc-frame').addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="/"]'); if (a) { e.preventDefault(); sc.setActive(a.getAttribute('href')); } });
+  $('sc-toggle').onclick = () => sc.setCollapsed(!sc.isCollapsed());
+  $('sc-mode').onclick = () => { scMode = scMode === 'side' ? 'hide' : 'side'; sc.setBodyCollapsed(scMode); $('sc-mode').textContent = 'Режим: ' + (scMode === 'side' ? 'колонка рядом' : 'скрыт'); };
+  // Кнопка действия на нижней панели (телефон); меню действий — UI.dialog продукта
+  const saGroups = [{ title: 'Кабинет', items: [{ href: '/app', label: 'Главная', icon: 'house' }, { href: '/app/money', label: 'Деньги', icon: 'wallet', badge: 2 }, { href: '/app/events', label: 'События', icon: 'calendar' }, { href: '/app/profile', label: 'Профиль', icon: 'user' }] }];
+  const saAction = { icon: 'plus', label: 'Добавить', onClick: () => UI.dialog.open({ title: 'Что добавить?', content: 'Расход, передача денег или событие — меню рисует продукт, не sidenav.' }) };
+  const sa = UI.sidenav.mount($('sa-phone'), { brandHtml: '<b>Сметник</b>', groups: saGroups, path: '/app', mobileMax: 4, action: saAction });
+  $('sa-phone').addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="/"]'); if (a) { e.preventDefault(); sa.setActive(a.getAttribute('href')); } });
+  $('sa-caption').addEventListener('click', () => sa.setAction({ ...saAction, caption: true }));
+  $('sa-off').addEventListener('click', () => sa.setAction(null));
+  $('sa-on').addEventListener('click', () => sa.setAction(saAction));
+  $('sn-frame').addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="/"]'); if (a) { e.preventDefault(); sn.setActive(a.getAttribute('href')); sn.toggleMore(false); } });
+  $('sn-rnp').onclick = () => sn.setActive('/rnp');
+  $('sn-badge').onclick = () => sn.setBadge('/calls', 7);
+
+  // Клавиши и палитра: данные витрины — вымышленные
+  const palData = {
+    person: [['Марина Северная', 'Генеральный продюсер · Продюсирование', '+7 916 123-45-67'], ['Марк Орлов', 'Звукорежиссёр · Техническое обеспечение', '8 920 555-11-22'], ['Анна Маринина', 'Арт-директор · Креатив', ''], ['Фёдор Громов', 'Светотехник · Техническое обеспечение', '']],
+    event: [['Новогодний корпоратив', '25–26 дек 2026 · Причал', ''], ['Форум «Полюс»', '12–14 окт 2026 · Экспоцентр', '']],
+  };
+  const palItems = (type) => palData[type].map(([title, hint, phone], i) => ({ type, id: type + i, title, hint, phone, extra: hint.split(' · ') }));
+  UI.keys.add({ keys: 'g p', title: 'Люди', group: 'Перейти', run: () => { $('pal-out').textContent = 'g p: переход «Люди»'; } });
+  UI.keys.add({ keys: 'g e', title: 'Мероприятия', group: 'Перейти', run: () => { $('pal-out').textContent = 'g e: переход «Мероприятия»'; } });
+  UI.keys.add({ keys: 'j', title: 'Следующая запись', group: 'Список', run: () => { $('pal-out').textContent = 'j: следующая запись'; } });
+  UI.keys.add({ keys: 'k', title: 'Предыдущая запись', group: 'Список', run: () => { $('pal-out').textContent = 'k: предыдущая запись'; } });
+  UI.palette.register({ id: 'go.people', title: 'Перейти: Люди', group: 'Перейти', icon: 'users', keys: 'g p', run: () => { $('pal-out').textContent = 'команда: переход «Люди»'; } });
+  UI.palette.register({ id: 'go.events', title: 'Перейти: Мероприятия', group: 'Перейти', icon: 'calendar', keys: 'g e', run: () => { $('pal-out').textContent = 'команда: переход «Мероприятия»'; } });
+  UI.palette.register({ id: 'add.person', title: 'Добавить человека', group: 'Действия', icon: 'plus', keywords: ['новый сотрудник', 'создать'], run: () => UI.toast.show({ text: 'Здесь откроется форма человека' }) });
+  UI.palette.register({ id: 'keys.help', title: 'Быстрые клавиши', group: 'Действия', icon: 'info', keys: '?', keywords: ['шпаргалка', 'сочетания'], run: () => UI.palette.openKeys() });
+  for (const t of THEMES) UI.palette.register({ id: 'theme.' + t, title: `Тема ${t}`, group: 'Витрина', icon: 'palette', run: () => { theme = t; apply(); } });
+  UI.palette.mount({
+    types: { person: { order: 0, label: 'Человек', icon: 'user' }, event: { order: 1, label: 'Мероприятие', icon: 'calendar' } },
+    sources: [{ id: 'person', title: 'Люди', items: async () => palItems('person') }, { id: 'event', title: 'Мероприятия', items: async () => palItems('event') }],
+    openers: { person: (r) => { $('pal-out').textContent = 'открыт человек: ' + r.title; }, event: (r) => { $('pal-out').textContent = 'открыто мероприятие: ' + r.title; } },
+    recentKey: 'ui-demo.palette.recent',
+    text: { placeholder: 'Люди, мероприятия, команды' },
+    trigger: false,
+  });
+  $('pal-open').onclick = () => UI.palette.open();
+  $('pal-keys').onclick = () => UI.palette.openKeys();
+
+  // Второй слой, подъём, кольцо плана
+  UI.stat.mount($('g2-stat'), { label: 'Выручка за месяц', value: 4120000, prev: 3630000, format: 'moneyShort', icon: 'wallet', spark: [2.1, 2.4, 2.2, 3.1, 3.6, 3.9, 4.1], layer: 2 });
+  UI.seg.mount($('lf-seg'), { label: 'Вид', items: [{ value: 'a', label: 'Факт' }, { value: 'b', label: 'План' }, { value: 'c', label: 'Прогноз' }], value: 'a' });
+  const lf = UI.sidenav.mount($('lf-frame'), { brandHtml: '<b>Дашборды</b>', groups: [{ title: 'Деньги', items: [{ href: '/pnl', label: 'P&L', icon: 'chart-line' }, { href: '/cash', label: 'Cash Flow', icon: 'wallet' }, { href: '/calc', label: 'Калькулятор', icon: 'calculator' }] }], path: '/cash', mobile: false });
+  $('lf-frame').addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="/"]'); if (a) { e.preventDefault(); lf.setActive(a.getAttribute('href')); } });
+  const rgA = UI.ring.mount($('rg-a'), { segments: [{ label: 'Продано', value: 620, tone: 'success' }, { label: 'В резерве', value: 140, tone: 'warning' }], total: 1000, center: { label: 'выполнено' } });
+  UI.ring.mount($('rg-b'), { segments: [{ label: 'Студия А', value: 540 }, { label: 'Студия Б', value: 380 }, { label: 'Студия В', value: 210 }], total: 1000, legend: 'bottom', size: 140, center: { value: '113%', label: 'сверх плана' } });
+  UI.ring.mount($('rg-c'), { segments: [], total: 0, empty: { text: 'План на месяц не задан', actionLabel: 'Задать план', onAction: () => { $('rg-out').textContent = 'нажато: Задать план'; } } });
+  $('rg-next').onclick = () => { const v = 400 + Math.round(Math.random() * 500); rgA.set({ segments: [{ label: 'Продано', value: v, tone: 'success' }, { label: 'В резерве', value: 120, tone: 'warning' }] }); };
+
+  // Графики: данные вымышленные, Chart.js с CDN только здесь
+  if (window.Chart) {
+    const CH = {};
+    const N = 31, today = 19;
+    const labels = Array.from({ length: N }, (_, i) => String(i + 1));
+    let seed = 7;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    const mkDaily = () => Array.from({ length: N }, (_, i) => (i < today ? Math.round(1 + rnd() * 3.4) : null));
+    let daily = mkDaily();
+    const dateTitle = (i) => `${i + 1} октября`;
+    drawCharts = (first) => {
+      const C = UI.chart.colors();
+      const cum = []; daily.forEach((v, i) => { cum.push(v == null ? null : (cum[i - 1] || 0) + v); });
+      const last = cum[today - 1], forecast = Math.round(last / today * N), target = 70;
+      const plan = labels.map((_, i) => Math.round(target * (i + 1) / N * 10) / 10);
+      const fc = labels.map((_, i) => (i < today - 1 ? null : last + (forecast - last) * (i - today + 1) / (N - today)));
+      CH.line = UI.chart.draw(CH.line, $('ch-line'), {
+        type: 'line',
+        data: { labels, datasets: [
+          { label: 'факт (накопит.)', data: cum, ...UI.chart.presets.line(C.accent) },
+          { label: 'прогноз run-rate', data: fc, ...UI.chart.presets.forecast(C.accent) },
+          { label: 'план записей', data: plan, ...UI.chart.presets.plan(C.muted) },
+        ] },
+        options: UI.chart.base({ first, progressive: true, points: N, onClick: (i) => { $('ch-out').textContent = `клик: ${dateTitle(i)}`; },
+          tooltip: { title: dateTitle, rows: (i) => {
+            const rows = [];
+            if (cum[i] != null) rows.push({ label: 'факт', value: String(cum[i]), color: C.accent });
+            rows.push({ label: 'план', value: String(plan[i]), color: C.muted });
+            if (cum[i] != null) { const dev = cum[i] - plan[i]; rows.push({ label: dev < 0 ? 'отставание' : 'опережение', value: (dev < 0 ? '−' : '+') + Math.abs(dev).toFixed(1), cls: dev < 0 ? 'bad' : 'good' }); }
+            else rows.push({ label: 'прогноз', value: String(Math.round(fc[i])), color: C.accent });
+            return rows;
+          } } }),
+      });
+      const items = [['0–3 дня', 12, C.accent], ['4–7 дней', 7, C.blue], ['8–14 дней', 4, C.violet], ['дольше', 2, C.red]].map(([label, value, color]) => ({ label, value: Math.max(0, Math.round(value * (first ? 1 : .7 + rnd() * .6))), color }));
+      CH.donut = UI.chart.donut(CH.donut, $('ch-donut'), { items, centerLabel: 'открытых', unit: 'машин', first, onClick: () => { $('ch-out').textContent = 'клик по донату'; } });
+      const days = labels.slice(0, today);
+      const total = days.map(() => Math.round(4 + rnd() * 9)), part = total.map((t) => Math.round(t * (.45 + rnd() * .35)));
+      CH.bars = UI.chart.overlayBars(CH.bars, $('ch-bars'), { labels: days, first, title: dateTitle, total: { label: 'всего', data: total, color: C.blue }, part: { label: 'качественные', data: part, color: C.green }, onClick: (i) => { $('ch-out').textContent = `клик: заявки ${dateTitle(i)}`; } });
+      CH.daily = UI.chart.draw(CH.daily, $('ch-daily'), {
+        type: 'bar',
+        data: { labels: days, datasets: [{ label: 'за день', data: daily.slice(0, today), ...UI.chart.presets.bars(C.accent) }, { label: 'дневная норма', data: days.map(() => 2.3), ...UI.chart.presets.norm(C.yellow) }] },
+        options: UI.chart.base({ first, xMax: 7, tooltip: { title: dateTitle } }),
+      });
+      // Выноска, итог и точки: короткий ряд из 12 месяцев
+      const rev = coData, lastV = rev[rev.length - 1], prevV = rev[rev.length - 2];
+      const months = ['ноя', 'дек', 'янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт'].slice(-rev.length);
+      const pct = (lastV - prevV) / prevV * 100;
+      if (coCallout) { coCallout.destroy(); coCallout = null; }
+      CH.co = UI.chart.draw(CH.co, $('ch-co'), {
+        type: 'line',
+        data: { labels: months, datasets: [{ label: 'выручка', data: rev, ...UI.chart.presets.line(C.accent, { points: true, bg: C.bg }) }] },
+        options: UI.chart.base({ first, crosshair: true, fmtY: (v) => v + ' млн', tooltip: { title: (i) => months[i], rows: (i) => [{ label: 'выручка', value: rev[i].toFixed(2) + ' млн ₽', color: C.accent }] } }),
+      });
+      coCallout = UI.chart.callout(CH.co, { index: 'last', key: '29 окт · сегодня', value: lastV, unit: 'млн ₽', delta: pct });
+      const headSpec = { title: 'Выручка', sub: 'октябрь 2026', value: lastV, unit: 'млн ₽', delta: pct, deltaLabel: `к сентябрю · ${prevV.toFixed(2).replace('.', ',')} млн` };
+      if (coHead) coHead.set(headSpec); else coHead = UI.chart.head($('co-head'), headSpec);
+    };
+    let coData = [2.1, 2.4, 2.2, 2.9, 3.1, 3.4, 3.2, 3.6, 3.9, 3.7, 3.63, 4.12], coCallout = null, coHead = null;
+    $('co-next').onclick = () => { coData = [...coData.slice(1), +(coData[coData.length - 1] * (.9 + Math.random() * .3)).toFixed(2)]; drawCharts(false); };
+    drawCharts(true);
+    $('ch-next').onclick = () => { daily = mkDaily(); drawCharts(false); };
+    $('ch-first').onclick = () => { coCallout = null; Object.keys(CH).forEach((k) => { CH[k].destroy(); CH[k] = null; }); drawCharts(true); };
+  } else {
+    $('ch-out').textContent = 'Chart.js не загрузился (нет сети) — графики витрины пропущены.';
+  }
+
+  // Подсказка: UI.tip.create в блоке, следует за курсором
+  {
+    const area = $('tip-area'), tip = UI.tip.create(area);
+    area.addEventListener('pointermove', (e) => {
+      const r = area.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, day = 1 + Math.round(x / r.width * 28);
+      tip.show({ title: day + ' окт', rows: [{ label: 'записи', value: String(20 + (day * 7) % 40), color: 'var(--ui-accent)' }, { label: 'к плану', value: (day % 3 ? '+' : '−') + (day % 5 + 1), cls: day % 3 ? 'good' : 'bad' }] }, x, y);
+    });
+    area.addEventListener('pointerleave', () => tip.hide());
+  }
+
+  // Режим чтения: документ-образец в прокручиваемой рамке
+  {
+    const { SAMPLE_HTML } = await import('./reader-sample.js');
+    const frame = $('rd-frame');
+    frame.innerHTML = SAMPLE_HTML;
+    UI.reader.mount(frame, { key: 'ui-kit-demo-reader' });
+  }
+
+  // Оглавление: UI.sidenav, активная глава по прокрутке
+  const groups = [
+    { title: 'Обзор', items: [{ href: '#cover', label: 'Обложка', icon: 'house' }, { href: '#about', label: 'О системе', icon: 'info' }] },
+    { title: 'Основы', items: [{ href: '#colors', label: 'Цвета', icon: 'palette' }, { href: '#type', label: 'Типографика', icon: 'file-text' }, { href: '#spacing', label: 'Отступы и радиусы', icon: 'layout-grid' }, { href: '#icons', label: 'Иконки', icon: 'sparkles' }, { href: '#glass', label: 'Стекло', icon: 'blend' }, { href: '#glass2', label: 'Второй слой стекла', icon: 'blend' }] },
+    { title: 'Контролы', items: [{ href: '#button', label: 'Кнопка', icon: 'component' }, { href: '#seg', label: 'Сегменты и чипы', icon: 'sliders-horizontal' }, { href: '#input', label: 'Поле и селект', icon: 'pencil' }, { href: '#panel', label: 'Панель и шапка', icon: 'presentation' }, { href: '#lift', label: 'Подъём активного', icon: 'arrow-up' }] },
+    { title: 'Компоненты', items: [{ href: '#toast', label: 'Тост', icon: 'bell' }, { href: '#dialog', label: 'Окно', icon: 'maximize' }, { href: '#period', label: 'Период', icon: 'calendar' }, { href: '#drill', label: 'Из чего цифра', icon: 'table' }, { href: '#stat', label: 'Показатель', icon: 'activity' }, { href: '#barlist', label: 'Рейтинг с полосой', icon: 'chart-column' }, { href: '#feed', label: 'Лента событий', icon: 'list' }, { href: '#month', label: 'Сетка месяца', icon: 'calendar-days' }, { href: '#pbth', label: 'Экран на теме pbth', icon: 'hexagon' }, { href: '#skeleton', label: 'Скелетоны', icon: 'loader-circle' }, { href: '#sidenav', label: 'Сайдбар', icon: 'menu' }, { href: '#palette', label: 'Клавиши и палитра', icon: 'search' }, { href: '#chart', label: 'Графики', icon: 'chart-line' }, { href: '#callout', label: 'Выноска, итог, точки', icon: 'chart-line' }, { href: '#tip', label: 'Подсказка', icon: 'message-circle' }, { href: '#ring', label: 'Кольцо плана', icon: 'target' }, { href: '#reader', label: 'Режим чтения', icon: 'a-large-small' }] },
+  ];
+  const foot = document.createElement('div'); foot.className = 'ui-topbar__muted'; foot.textContent = 'Документ ui-kit · формат Design System ZP';
+  const toc = UI.sidenav.mount($('toc'), { brandHtml: `${UI.icon('component', { size: 20 })}<span><b>ui-kit</b> <span class="ui-topbar__muted">${UI.VERSION}</span></span>`, brandHref: '#cover', search: { label: 'Поиск', hint: '⌘K', onOpen: () => UI.palette.open() }, groups, path: location.hash || '#cover', footer: foot, mobile: false });
+  const ids = groups.flatMap((g) => g.items.map((it) => it.href.slice(1)));
+  for (const id of ids) UI.palette.register({ id: 'go.' + id, title: 'Глава: ' + groups.flatMap((g) => g.items).find((it) => it.href === '#' + id).label, group: 'Витрина', icon: 'arrow-right', run: () => { location.hash = id; } });
+  const seen = new Map();
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) seen.set(e.target.id, e.isIntersecting ? e.boundingClientRect.top : Infinity);
+    const top = ids.filter((id) => seen.has(id) && seen.get(id) !== Infinity).sort((a, b) => Math.abs(seen.get(a)) - Math.abs(seen.get(b)))[0];
+    if (top) toc.setActive('#' + top);
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+  ids.forEach((id) => io.observe($(id)));
+})();
+</script>
+</body>
+</html>

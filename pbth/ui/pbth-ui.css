@@ -1,0 +1,59 @@
+/* Раскладка нового слоя. Вид (цвет, стекло, шрифт) даёт тема ui-kit через токены --ui-*. */
+
+.pbth-ui {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.pbth-ui__content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(var(--pb-safe-top, 0px) + 16px) 16px calc(var(--pb-safe-bottom, 0px) + 96px);
+}
+
+.pbth-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.pbth-row:first-child { border-top: 0; }
+button.pbth-row, a.pbth-row { cursor: pointer; }
+.pbth-row__lead { display: inline-flex; flex: none; }
+.pbth-row__main { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-row__title { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.pbth-row__sub { font-size: 12px; color: var(--ui-muted); }
+.pbth-row__trail { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 14px; font-weight: 700; }
+.pbth-row__chev { flex: none; color: var(--ui-muted); }
+
+.pbth-screenbar { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-bottom: 8px; }
+.pbth-screenbar__mark { display: inline-flex; flex: none; }
+.pbth-screenbar__titles { flex: 1 1 auto; min-width: 0; }
+.pbth-screenbar__title { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.2; }
+.pbth-screenbar__sub { font-size: 12px; color: var(--ui-muted); }
+.pbth-screenbar__actions { display: flex; flex: none; gap: 4px; }
+
+/* Нижняя панель на планшете и десктопе: пункты остаются внизу, боковая колонка не нужна. */
+.pbth-bottomnav > .ui-sidenav { display: none; }
+@media (min-width: 768px) {
+  .pbth-bottomnav .ui-sidenav-bottom { display: grid; }
+}

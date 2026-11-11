@@ -1,0 +1,40 @@
+/* Тема хаба Агатоса (agency-growth, src/agcy-service/web/static). Родные переменные .team-workspace из team.css:
+   --bg, --card, --raised, --text, --hint, --accent, --accent-text, --separator, --danger, --green, --warning-border, --radius.
+   Светлая — родной .team-workspace[data-team-theme="light"] (значения берутся из тех же переменных, их меняет сам продукт).
+   Вид темы пришёл от Александра (team-theme.js): здесь только соответствия токенов, общего ядра они не касаются.
+   Запасные значения — палитра team.css, чтобы тема работала в витрине. Атрибут [data-ui-theme] — для страниц без .team-workspace. */
+:root, .team-workspace {
+  --ui-bg: var(--bg, #0E0E0D);
+  --ui-surface: var(--card, #181716);
+  --ui-surface-2: var(--raised, #211F1D);
+  --ui-text: var(--text, #EDE9E3);
+  --ui-muted: var(--hint, #A8A29B);
+  --ui-border: var(--separator, #3A3835);
+  --ui-accent: var(--accent, #F8784D);
+  --ui-accent-text: var(--accent-text, #FFFFFF);
+  --ui-danger: var(--danger, #E0AE44);
+  --ui-success: var(--green, #50C58E);
+  --ui-warning: var(--warning-border, #796139);
+  --ui-overlay: rgba(10, 10, 9, .6);
+  --ui-radius-sm: 6px;
+  --ui-radius-md: var(--radius, 10px);
+  --ui-radius-lg: 12px;
+  --ui-font: 'Inter', system-ui, sans-serif;
+  --ui-shadow: 0 24px 80px rgba(0, 0, 0, .5), 0 2px 8px rgba(0, 0, 0, .25);
+  --ui-icon-stroke: 2;
+}
+/* color-scheme — только у рабочего пространства руководителя: Mini App агентов живёт без .team-workspace
+   и берёт светлую или тёмную схему у Telegram, :root остаётся продукту. */
+.team-workspace { color-scheme: dark; }
+.team-workspace[data-team-theme="light"] {
+  --ui-overlay: rgba(26, 24, 22, .42);
+  --ui-shadow: 0 24px 80px rgba(26, 24, 22, .22), 0 2px 8px rgba(26, 24, 22, .08);
+  color-scheme: light;
+}
+[data-ui-theme="light"] {
+  --ui-bg: #F2F0EC; --ui-surface: #FFFFFF; --ui-surface-2: #F7F5F2; --ui-text: #1A1816; --ui-muted: #655F58;
+  --ui-border: #E4E1DC; --ui-accent: #AE320A; --ui-accent-text: #FFFFFF; --ui-danger: #7E5004; --ui-success: #09683F;
+  --ui-warning: #7E5004; --ui-overlay: rgba(26, 24, 22, .42);
+  --ui-shadow: 0 24px 80px rgba(26, 24, 22, .22), 0 2px 8px rgba(26, 24, 22, .08);
+  color-scheme: light;
+}

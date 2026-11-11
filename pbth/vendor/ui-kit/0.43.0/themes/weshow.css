@@ -1,0 +1,61 @@
+/* Тема Сметника/CRM WeShow. Родные переменные: public/shell.css (:root) — --bg, --ink, --muted, --border, --white,
+   --accent, --danger, --warn-ink, --font-ui. Своих тёмных у WeShow нет, поэтому dark собран из той же тёплой палитры.
+   Запасные значения в var() — палитра shell.css: тема работает и без родных переменных (витрина). */
+:root {
+  --ui-bg: var(--bg, #f5f3ef);
+  --ui-surface: var(--white, #ffffff);
+  --ui-surface-2: #ece9e3;
+  --ui-text: var(--ink, #1a1814);
+  --ui-muted: var(--muted, #6f6a63);
+  --ui-border: var(--border, #dedad4);
+  --ui-accent: var(--accent, #e8420a);
+  --ui-accent-text: #ffffff;
+  --ui-danger: var(--danger, #c0362a);
+  --ui-success: #0a7a55;
+  --ui-warning: var(--warn-ink, #8a5a00);
+  --ui-overlay: rgba(26, 24, 20, .45);
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 10px;
+  --ui-radius-lg: 14px;
+  --ui-font: var(--font-ui, 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+  --ui-icon-stroke: 1.75;
+}
+[data-ui-theme="dark"] {
+  --ui-bg: #17150f;
+  --ui-surface: #1f1c17;
+  --ui-surface-2: #29251f;
+  --ui-text: #f1ede6;
+  --ui-muted: #a8a196;
+  --ui-border: #3b362e;
+  --ui-accent: #f4673a;
+  --ui-accent-text: #1a1814;
+  --ui-danger: #f08a7c;
+  --ui-success: #4fc79a;
+  --ui-warning: #e3b24f;
+  --ui-overlay: rgba(0, 0, 0, .62);
+}
+
+/* Палитра Cmd/Ctrl+K: вид Сметника (бывший palette.css) — радиусы, подложка, тень, тёплые оттенки, цвета значков типов записей. */
+:root {
+  --ui-pal-overlay: rgba(20, 18, 14, .28);
+  --ui-pal-shadow: 0 24px 64px rgba(20, 18, 14, .22), 0 2px 8px rgba(20, 18, 14, .08);
+  --ui-pal-radius: 12px;
+  --ui-pal-radius-row: 8px;
+  --ui-pal-radius-ic: 7px;
+  --ui-pal-radius-kbd: 5px;
+  --ui-pal-foot-bg: #fbfaf8;
+  --ui-pal-sep: #f0ede8;
+  --ui-pal-trigger-hover-border: #c9c4bc;
+  --ui-pal-title-font: var(--font-display, 'Unbounded', 'Onest', system-ui, sans-serif);
+}
+[data-ui-theme="dark"] {
+  --ui-pal-overlay: rgba(0, 0, 0, .55);
+  --ui-pal-shadow: var(--ui-shadow);
+  --ui-pal-foot-bg: var(--ui-bg);
+  --ui-pal-sep: var(--ui-border);
+  --ui-pal-trigger-hover-border: var(--ui-muted);
+}
+:root:not([data-ui-theme="dark"]) .ui-pal__row:not(.is-active) .ui-pal__ic--person { color: #0068b5; }
+:root:not([data-ui-theme="dark"]) .ui-pal__row:not(.is-active) .ui-pal__ic--event { color: #0a7a55; }
+:root:not([data-ui-theme="dark"]) .ui-pal__row:not(.is-active) .ui-pal__ic--estimate { color: #b87800; }
+:root:not([data-ui-theme="dark"]) .ui-pal__row:not(.is-active) .ui-pal__ic--dept { color: #6b3fa0; }

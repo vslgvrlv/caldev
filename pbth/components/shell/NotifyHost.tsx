@@ -1,103 +1,83 @@
-// ui-kit-allow-file: решение Василия 10.11.2026 — в ревизии PBTH ui-kit не подключаем, вид меняет отдельная сессия; тост и окно в нынешнем виде приложения
 import React from 'react';
-import { CheckCircle, AlertTriangle, Info, X } from 'lucide-react';
-import { dismissToast, subscribeNotify, type NotifyState } from '../../lib/notify';
+import { subscribeNotify, type ConfirmRequest, type NotifyState } from '../../lib/notify';
+import type { UiKitModule } from '../../ui/uikit';
+import './notify-host.css';
 
-// Показывает сообщения из pbth/lib/notify.ts: короткие плашки сверху и окно
-// подтверждения. Монтируется один раз в корне приложения.
+const TOAST_MS = 4000;
+const ERROR_TOAST_MS = 6000;
+
+type Kit = UiKitModule;
+
+// ui-kit тяжёлый (250 КБ), а сообщения нужны не сразу: модуль подгружается при первом сообщении,
+// в основную связку он не входит.
+let kitPromise: Promise<Kit> | null = null;
+const loadKit = () => (kitPromise ||= import('../../ui/uikit').then((kit) => (kit.toast.configure({ closable: true }), kit)));
+
+// Показывает сообщения из pbth/lib/notify.ts через ui-kit: плашки — UI.toast,
+// подтверждение — UI.dialog. Сам ничего не рисует. Монтируется один раз в корне.
 export const NotifyHost: React.FC = () => {
   const [state, setState] = React.useState<NotifyState>({ toasts: [], confirm: null });
+  const [kit, setKit] = React.useState<Kit | null>(null);
 
   React.useEffect(() => subscribeNotify(setState), []);
 
-  const { toasts, confirm } = state;
-
+  const needKit = state.toasts.length > 0 || state.confirm !== null;
   React.useEffect(() => {
-    if (!confirm) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') confirm.resolve(false);
+    if (!needKit || kit) return;
+    let alive = true;
+    loadKit().then((loaded) => alive && setKit(loaded));
+    return () => {
+      alive = false;
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [confirm]);
+  }, [needKit, kit]);
 
-  return (
-    <>
-      {toasts.length > 0 && (
-        <div
-          className="fixed inset-x-0 top-0 z-[200] pointer-events-none px-4"
-          style={{ paddingTop: 'calc(var(--pb-safe-top) + 0.75rem)' }}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="max-w-md mx-auto space-y-2">
-            {toasts.map((toast) => {
-              const Icon = toast.kind === 'error' ? AlertTriangle : toast.kind === 'success' ? CheckCircle : Info;
-              const tone =
-                toast.kind === 'error'
-                  ? 'border-pb-danger/40 text-white'
-                  : toast.kind === 'success'
-                    ? 'border-pb-primary/40 text-white'
-                    : 'border-white/10 text-white';
-              const iconTone =
-                toast.kind === 'error' ? 'text-pb-danger' : toast.kind === 'success' ? 'text-pb-primary' : 'text-pb-subtext';
-              return (
-                <div
-                  key={toast.id}
-                  className={`pointer-events-auto flex items-start gap-3 rounded-2xl border bg-pb-surface px-4 py-3 shadow-xl animate-fade-in ${tone}`}
-                >
-                  <Icon size={18} className={`mt-0.5 shrink-0 ${iconTone}`} />
-                  <div className="flex-1 text-sm whitespace-pre-line">{toast.text}</div>
-                  <button
-                    type="button"
-                    aria-label="Закрыть"
-                    onClick={() => dismissToast(toast.id)}
-                    className="shrink-0 text-pb-subtext hover:text-white"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+  // Плашки: новая в состоянии — показать, исчезла из состояния — убрать.
+  const shown = React.useRef(new Map<number, unknown>());
+  React.useEffect(() => {
+    if (!kit) return;
+    const live = new Set(state.toasts.map((item) => item.id));
+    for (const item of state.toasts) {
+      if (shown.current.has(item.id)) continue;
+      shown.current.set(
+        item.id,
+        kit.toast.show({ text: item.text, kind: item.kind, timeout: item.kind === 'error' ? ERROR_TOAST_MS : TOAST_MS }),
+      );
+    }
+    for (const [id, uiId] of shown.current) {
+      if (live.has(id)) continue;
+      shown.current.delete(id);
+      kit.toast.dismiss(uiId);
+    }
+  }, [kit, state.toasts]);
 
-      {confirm && (
-        <div
-          className="fixed inset-0 z-[210] flex items-end sm:items-center justify-center bg-black/60 p-4"
-          onClick={() => confirm.resolve(false)}
-        >
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-pb-surface p-5 shadow-2xl"
-            style={{ marginBottom: 'var(--pb-safe-bottom)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-white text-base whitespace-pre-line mb-5">{confirm.text}</p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => confirm.resolve(false)}
-                className="flex-1 bg-white/10 text-white px-4 py-3 rounded-xl font-bold"
-              >
-                {confirm.cancelLabel}
-              </button>
-              <button
-                type="button"
-                autoFocus
-                onClick={() => confirm.resolve(true)}
-                className={`flex-1 px-4 py-3 rounded-xl font-bold ${
-                  confirm.danger ? 'bg-pb-danger text-white' : 'bg-pb-primary text-pb-background'
-                }`}
-              >
-                {confirm.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+  const { confirm } = state;
+  React.useEffect(() => {
+    if (!confirm || !kit) return;
+    return openConfirm(kit, confirm);
+  }, [kit, confirm]);
+
+  return null;
 };
+
+function openConfirm(kit: Kit, confirm: ConfirmRequest): () => void {  // ui-kit-allow: обёртка над UI.dialog, а не своё окно
+  const text = document.createElement('p');
+  text.textContent = confirm.text;
+  text.style.whiteSpace = 'pre-line';
+  text.style.margin = '0';
+  let done = false;
+  const win = kit.dialog.open({
+    content: text,
+    // Esc, подложка и крестик — отказ.
+    onClose: () => {
+      if (!done) confirm.resolve(false);
+    },
+    actions: [
+      { label: confirm.cancelLabel, onClick: () => confirm.resolve(false) },
+      { label: confirm.confirmLabel, kind: confirm.danger ? 'danger' : 'primary', onClick: () => confirm.resolve(true) },
+    ],
+  });
+  return () => {
+    done = true;
+    win.close();
+  };
+}

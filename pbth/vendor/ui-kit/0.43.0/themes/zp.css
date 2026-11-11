@@ -1,0 +1,181 @@
+/* Тема ZP (Steel). Родные переменные: zp-dashboards static/zp-bundle.css (:root) — --rnp-bg, --rnp-surface, --rnp-surface-2,
+   --rnp-border, --rnp-text, --rnp-text-muted, --rnp-primary, --rnp-green, --rnp-yellow, --rnp-red, --rnp-radius-sm/md/lg,
+   --rnp-font, --rnp-shadow. Родная тема тёмная и единственная; светлая (data-ui-theme="light") собрана из той же палитры
+   (стальной акцент, тёплый светлый фон) и в дашбордах пока не используется. Тема общая для дашбордов и ZP Studio. */
+:root {
+  --ui-bg: var(--rnp-bg, #0a0a0a);
+  --ui-surface: var(--rnp-surface, #141414);
+  --ui-surface-2: var(--rnp-surface-2, #1a1a1a);
+  --ui-text: var(--rnp-text, #f3f0ea);
+  --ui-muted: var(--rnp-text-muted, #8a8a8a);
+  --ui-border: var(--rnp-border, #222222);
+  --ui-accent: var(--rnp-primary, #7aa7c2);
+  --ui-accent-text: #0a0a0a;
+  --ui-danger: var(--rnp-red, #c97b63);
+  --ui-success: var(--rnp-green, #8ca79d);
+  --ui-warning: var(--rnp-yellow, #c9a66a);
+  --ui-link: var(--rnp-blue, #8eadc4);
+  --ui-overlay: rgba(10, 10, 10, .85);
+  /* Окна в Steel: заголовок 15/600, подпись 12, кнопки 12, подложка с размытием, xl как прежняя модалка сделок */
+  --ui-overlay-blur: 8px;
+  --ui-dialog-title-size: 15px;
+  --ui-dialog-title-weight: 600;
+  --ui-dialog-subtitle-size: 12px;
+  --ui-dialog-action-size: 12px;
+  --ui-dialog-w-xl: 1100px;
+  /* Палитра ⌘K в Steel — как прежняя ZPCmdK: тёмная подложка с размытием, малые радиусы, глубокая тень */
+  --ui-pal-overlay: rgba(10, 10, 10, .85);
+  --ui-pal-overlay-blur: 8px;
+  --ui-pal-shadow: 0 30px 80px rgba(0, 0, 0, .6);
+  --ui-pal-radius: var(--rnp-radius-md, 4px);
+  --ui-pal-radius-row: var(--rnp-radius-sm, 2px);
+  --ui-pal-radius-ic: var(--rnp-radius-sm, 2px);
+  --ui-pal-radius-kbd: var(--rnp-radius-sm, 2px);
+  --ui-radius-sm: var(--rnp-radius-sm, 2px);
+  --ui-radius-md: var(--rnp-radius-md, 4px);
+  --ui-radius-lg: var(--rnp-radius-lg, 6px);
+  --ui-font: var(--rnp-font, 'JetBrains Mono', 'Monaco', 'Menlo', 'Courier New', monospace);
+  --ui-font-mono: var(--rnp-font-mono, 'JetBrains Mono', monospace);
+  --ui-shadow: var(--rnp-shadow, 0 10px 22px rgba(0, 0, 0, .22));
+  --ui-icon-stroke: 2;
+  color-scheme: dark;
+}
+[data-ui-theme="dark"] { color-scheme: dark; }
+[data-ui-theme="light"] {
+  --ui-bg: #f3f1ed;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #eceae5;
+  --ui-text: #14130f;
+  --ui-muted: #6a675f;
+  --ui-border: #d9d6cf;
+  --ui-accent: #2b4a7a;
+  --ui-accent-text: #ffffff;
+  --ui-link: #2b4a7a;
+  --ui-danger: #a8503a;
+  --ui-success: #4f7a69;
+  --ui-warning: #8f6a22;
+  --ui-overlay: rgba(10, 10, 10, .4);
+  --ui-shadow: 0 10px 22px rgba(0, 0, 0, .12);
+  color-scheme: light;
+}
+
+/* Стекло и шрифты продуктового вида (спека 29.10.2026, решение 8): подписи — Montserrat (--rnp-font-body), числа — JetBrains Mono. */
+:root {
+  --ui-font: var(--rnp-font-body, 'Montserrat', 'Manrope', system-ui, sans-serif);
+  --ui-font-num: var(--rnp-font, 'JetBrains Mono', monospace);
+  --ui-violet: var(--rnp-violet, #a78bfa);
+  --ui-glass-bg: rgba(255, 255, 255, .035);
+  --ui-glass-border: rgba(255, 255, 255, .08);
+  --ui-glass-highlight: rgba(255, 255, 255, .06);
+  --ui-glass-blur: 22px;
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .42);
+  --ui-glow: var(--rnp-glow-primary, rgba(122, 167, 194, .5));
+  /* Графики UI.chart в Steel: подсказка на тёмной плашке, кривая переходов Steel */
+  --ui-chart-tip-bg: rgba(18, 20, 24, .96); /* 0.21.2: подсказка спарклайна встаёт над крупной цифрой карточки — при .86 цифра просвечивала */
+  --ui-ease: var(--rnp-ease, cubic-bezier(.4, 0, .2, 1));
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(122, 167, 194, .22), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(167, 139, 250, .16), transparent 62%),
+                 radial-gradient(420px 320px at 62% 36%, rgba(96, 165, 250, .10), transparent 60%);
+}
+[data-ui-theme="light"] {
+  --ui-glass-bg: rgba(255, 255, 255, .6);
+  --ui-glass-border: rgba(20, 19, 15, .09);
+  --ui-glass-highlight: rgba(255, 255, 255, .8);
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .10);
+  --ui-backdrop: radial-gradient(640px 420px at 18% 8%, rgba(43, 74, 122, .12), transparent 60%),
+                 radial-gradient(560px 480px at 86% 88%, rgba(120, 90, 220, .08), transparent 62%);
+}
+
+/* Контролы (0.13.0): значения байбла Steel — высота 40, радиус 2, кнопка 12/600, сегменты с тёмно-синим активным, стеклянная панель. */
+:root {
+  --ui-ctl-h: 40px;
+  --ui-ctl-pad-x: 10px;
+  --ui-ctl-radius: var(--rnp-radius-sm, 2px);
+  --ui-ctl-size: 14px;
+  --ui-btn-size: 12px;
+  --ui-btn-weight: 600;
+  --ui-btn-hover-brightness: 1;
+  --ui-accent-hover: #a8ccdf;
+  --ui-seg-radius: 8px;
+  --ui-seg-active-bg: #223249;
+  --ui-seg-active-text: var(--ui-text);
+  --ui-seg-hover-bg: rgba(255, 255, 255, .06);
+  --ui-focus-ring: rgba(122, 167, 194, .12);
+  --ui-ease: var(--rnp-ease, cubic-bezier(.4, 0, .2, 1));
+  --ui-panel-bg: var(--rnp-panel-bg, linear-gradient(145deg, rgba(255, 255, 255, .04) 0%, rgba(255, 255, 255, .015) 100%));
+  --ui-panel-border: var(--rnp-panel-border, rgba(255, 255, 255, .075));
+  --ui-panel-shadow: var(--rnp-shadow, 0 10px 22px rgba(0, 0, 0, .22));
+  --ui-panel-title-weight: 800;
+}
+[data-ui-theme="light"] {
+  --ui-accent-hover: #3a5f96;
+  --ui-seg-active-bg: var(--ui-accent);
+  --ui-seg-active-text: var(--ui-accent-text);
+  --ui-seg-hover-bg: rgba(0, 0, 0, .05);
+  --ui-focus-ring: rgba(43, 74, 122, .15);
+  --ui-panel-bg: var(--ui-surface);
+  --ui-panel-border: var(--ui-border);
+  --ui-panel-shadow: none;
+}
+
+/* Жидкое стекло сайдбара (0.21.0, приём Apple Liquid Glass; решение Василия 02.11.2026): содержимое под панелью видно и
+   преломляется кромкой, тонировка — тёмная сталь, светлее сверху; блик по кромке; свечения сдержанные, как в Steel. */
+:root {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(170, 200, 235, .17), rgba(60, 80, 110, .16) 22%, rgba(22, 30, 44, .34) 55%, rgba(26, 32, 52, .40));
+  --ui-lglass-blur: 4px;
+  --ui-lglass-sat: 180%;
+  --ui-lglass-bright: .95;
+  --ui-lglass-shadow: 0 24px 48px -16px rgba(0, 0, 0, .75), 0 2px 8px rgba(0, 0, 0, .35),
+                      inset 0 0 0 1px rgba(255, 255, 255, .09), inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 30px rgba(140, 175, 215, .09);
+  --ui-lglass-spec: 1;
+  --ui-sidenav-sel: rgba(160, 190, 225, .14);
+  --ui-sidenav-glow: rgba(190, 215, 240, .12);
+}
+[data-ui-theme="light"] {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(255, 255, 255, .72), rgba(255, 255, 255, .55));
+  --ui-lglass-blur: 8px;
+  --ui-lglass-sat: 150%;
+  --ui-lglass-bright: 1.04;
+  --ui-lglass-shadow: 0 18px 40px -16px rgba(20, 30, 50, .28), inset 0 0 0 1px rgba(255, 255, 255, .6);
+  --ui-lglass-spec: 1;
+  --ui-sidenav-sel: rgba(43, 74, 122, .10);
+  --ui-sidenav-glow: rgba(43, 74, 122, .08);
+}
+
+/* Тихое стекло сайдбара (0.27.4, решение Василия 04.11.2026 вместо плавающей панели 02.11): панель на всю высоту
+   без отступа и скругления, кромка — тонкая линия справа, тонировка темнее, без блика; пункты скруглены на 6px.
+   Токены стекла переопределены только на самой панели: другие элементы UI.glass в теме zp не меняются. */
+:root { --ui-sidenav-gap: 0px; --ui-sidenav-radius: 0px; --ui-sidenav-item-radius: 6px; }
+.ui-sidenav.ui-sidenav--glass {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(40, 52, 70, .30), rgba(20, 26, 36, .40));
+  --ui-lglass-shadow: inset -1px 0 0 rgba(255, 255, 255, .07);
+  --ui-lglass-spec: 0;
+}
+[data-ui-theme="light"] .ui-sidenav.ui-sidenav--glass {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(255, 255, 255, .72), rgba(255, 255, 255, .60));
+  --ui-lglass-shadow: inset -1px 0 0 rgba(20, 30, 50, .10);
+  --ui-lglass-spec: 0;
+}
+
+/* Подъём активного и второй слой стекла (0.18.0, приёмы дашбордов code.xr): активный пункт сайдбара и сегмент светлеют и получают тень цвета акцента с верхней кромкой,
+   главная кнопка светится акцентом, карточка внутри панели (.ui-glass2, UI.stat с layer: 2) светлее панели. В светлом режиме не включено. */
+:root {
+  --ui-lift-bg: rgba(255, 255, 255, .12);
+  --ui-lift-border: transparent;
+  --ui-lift-shadow: 0 4px 14px rgba(122, 167, 194, .28), inset 0 1px 0 rgba(255, 255, 255, .18);
+  --ui-btn-primary-shadow: 0 8px 22px rgba(122, 167, 194, .45);
+  --ui-glass2-bg: rgba(255, 255, 255, .07);
+  --ui-glass2-border: rgba(255, 255, 255, .12);
+  --ui-glass2-highlight: rgba(255, 255, 255, .14);
+  --ui-glass2-shadow: 0 8px 20px rgba(60, 80, 120, .25);
+}
+[data-ui-theme="light"] {
+  --ui-lift-bg: initial;
+  --ui-lift-border: initial;
+  --ui-lift-shadow: initial;
+  --ui-btn-primary-shadow: initial;
+  --ui-glass2-bg: rgba(255, 255, 255, .72);
+  --ui-glass2-border: rgba(20, 19, 15, .09);
+  --ui-glass2-highlight: rgba(255, 255, 255, .9);
+  --ui-glass2-shadow: 0 6px 16px rgba(43, 74, 122, .10);
+}

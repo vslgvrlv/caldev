@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "generated": "2026-11-11T09:36:14.206Z",
+  "counts": {
+    "components/CaptainReportModal.tsx::dialog": 1,
+    "components/EventCollectionSheet.tsx::dialog": 1,
+    "components/EventExpensesSheet.tsx::dialog": 1,
+    "components/EventTableModal.tsx::dialog": 1,
+    "components/FinanceTransactionModal.tsx::dialog": 1,
+    "components/GamePointsModal.tsx::dialog": 1,
+    "components/PointRosterModal.tsx::dialog": 1,
+    "components/RSVPModal.tsx::dialog": 1,
+    "components/ReflectionModal.tsx::dialog": 1,
+    "components/TransferConfirmationModal.tsx::dialog": 1,
+    "components/TransferConfirmationModal.tsx::native-dialog": 3,
+    "components/track1/QrCode.tsx::icon": 1,
+    "lib/event-charge-modal.ts::dialog": 1,
+    "lib/finance-transaction-modal-layout.ts::dialog": 1,
+    "lib/mobile-bottom-sheet-layout.ts::dialog": 1,
+    "public/guide/player.html::control": 4,
+    "views/CreateEventView.tsx::native-dialog": 5,
+    "views/EventDetailView.tsx::native-dialog": 16
+  }
+}
