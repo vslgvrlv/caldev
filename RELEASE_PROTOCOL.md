@@ -56,6 +56,11 @@ Auth v2 env block is mandatory for both files:
 окружения и следующим выкатом. Проверка: в логе бэкенда есть
 `reminders.auto.started`.
 
+Владелец платформы задаётся в `ADMIN_ROLE_ALLOWLIST_IDS` числовым ID Telegram;
+`ADMIN_ROLE_ALLOWLIST_USERNAMES` остаётся пустым (ник можно сменить, а
+освободившийся — занять). На сервере так с 11.11.2026 для прода и staging.
+Без этой настройки владельца нет: заявки на команды некому одобрить.
+
 ## How to release (copy-paste flow)
 
 ### 1) On Mac: build artifact
