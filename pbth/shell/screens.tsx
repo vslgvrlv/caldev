@@ -4,13 +4,16 @@ import { useShell } from './context';
 import { useGoBack } from './navigation';
 import { NotFoundScreen } from '../components/shell/StateScreens';
 import { eventCreateAccess, eventCreateViewProps } from '../lib/event-create-access';
-import { resolveEventTeamName } from '../lib/event-team';
+import { eventTeamCode, resolveEventTeamName } from '../lib/event-team';
 import { eventPath, memberPath, teamCodeOf, teamPath } from '../lib/team-url';
 import { captainHomeHints } from '../lib/events';
 import { teamLinkAccess } from '../lib/team-link-access';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
+import { HomeHeader } from '../components/shell/HomeHeader';
+import { TeamsPicker } from '../components/shell/TeamsPicker';
+import { shellExtensions, type ShellExtContext } from './extensions';
 import { GuestBookingsBlock } from '../components/track4/GuestBookingCards';
-import { PlayerStatus, Role, type Event, type TeamMember } from '../types';
+import { PlayerStatus, Role, type Event, type TeamContext, type TeamMember } from '../types';
 
 // Экраны по адресам. Здесь только проводка: данные и действия из оболочки,
 // «назад» — по адресу. Внутренности экранов не меняются.
@@ -38,12 +41,7 @@ function useOpenEvent() {
   const currentCode = useTeamCode();
   return React.useCallback(
     (event: Event) => {
-      const fromTeams = shell.teams.find((t) => t.teamId === event.teamId);
-      const code = event.teamShortCode
-        ? teamCodeOf({ teamId: event.teamId, shortCode: event.teamShortCode })
-        : fromTeams
-          ? teamCodeOf({ teamId: fromTeams.teamId, shortCode: fromTeams.shortCode })
-          : currentCode;
+      const code = eventTeamCode(event, shell.teams, currentCode);
       navigate(eventPath(code, event.id));
       // Расписание турнира правят, пока приложение открыто: на своей команде
       // подтягиваем свежие данные; чужую команда загрузит заново сама.
@@ -59,6 +57,12 @@ export const DashboardScreen: React.FC = () => {
   const openEvent = useOpenEvent();
   const code = useTeamCode();
   const [linkOpen, setLinkOpen] = React.useState(false);
+  const [teamsOpen, setTeamsOpen] = React.useState(false);
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const team = shell.team;
   // Подсказки капитану новой команды: «Позови команду», «Создай первое событие».
   const hints = captainHomeHints({
@@ -66,11 +70,45 @@ export const DashboardScreen: React.FC = () => {
     membersCount: shell.members.length,
     teamEventsCount: team ? shell.events.filter((event) => event.teamId === team.id).length : 0,
   });
+
+  // Значки шапки и пункты меню команды — от треков (pbth/shell/ext).
+  const extCtx: ShellExtContext | null = shell.user && team ? { user: shell.user, team, teamCode: code, role: team.role, teams: shell.teams } : null;
+  const badges = extCtx
+    ? shellExtensions.headerBadges
+        .filter((badge) => !badge.visible || badge.visible(extCtx))
+        .map(({ id, Component }) => <Component key={id} {...extCtx} />)
+    : null;
+  const menuItems = extCtx
+    ? shellExtensions.teamMenu
+        .filter((item) => !item.visible || item.visible(extCtx))
+        .map((item) => ({ id: item.id, label: item.label, to: item.to(extCtx) }))
+    : [];
+
+  // Знак команды в шапке открывает главную этой команды: раздел сменой команды не сохраняется.
+  const pickTeam = (target: TeamContext) => {
+    setTeamsOpen(false);
+    const targetCode = teamCodeOf({ teamId: target.teamId, shortCode: target.shortCode });
+    if (targetCode !== code) navigate(teamPath(targetCode));
+  };
+
   return (
     <>
       <Dashboard
         teams={shell.teams}
         events={shell.events}
+        currentTeam={team ? { id: team.id, name: team.name, shortCode: team.shortCode } : null}
+        header={
+          <HomeHeader
+            title="Главная"
+            modeNote={team?.via === 'owner' ? 'Владелец платформы' : undefined}
+            now={now}
+            teams={shell.teams}
+            currentCode={code}
+            badges={badges}
+            onPickTeam={pickTeam}
+            onOpenTeams={() => setTeamsOpen(true)}
+          />
+        }
         onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
         onEventClick={openEvent}
         onEventLongPress={shell.actions.openRsvpModal}
@@ -79,6 +117,18 @@ export const DashboardScreen: React.FC = () => {
         onInviteTeam={() => setLinkOpen(true)}
         onCreateEvent={() => navigate(teamPath(code || shell.teamCode || '', 'new'))}
         guestBookings={<GuestBookingsBlock />}
+      />
+      <TeamsPicker
+        open={teamsOpen}
+        onClose={() => setTeamsOpen(false)}
+        teams={shell.teams}
+        currentCode={code}
+        items={menuItems}
+        onPickTeam={pickTeam}
+        onPickItem={(to) => {
+          setTeamsOpen(false);
+          navigate(to);
+        }}
       />
       {linkOpen && team && (
         <TeamJoinLinkSheet

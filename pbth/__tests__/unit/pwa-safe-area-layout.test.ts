@@ -9,13 +9,15 @@ const createEventViewPath = fileURLToPath(new URL("../../views/CreateEventView.t
 const playerProfileViewPath = fileURLToPath(new URL("../../views/PlayerProfileView.tsx", import.meta.url));
 const eventExpensesSheetPath = fileURLToPath(new URL("../../components/EventExpensesSheet.tsx", import.meta.url));
 const eventCollectionSheetPath = fileURLToPath(new URL("../../components/EventCollectionSheet.tsx", import.meta.url));
-const dashboardViewPath = fileURLToPath(new URL("../../views/Dashboard.tsx", import.meta.url));
+// Главная живёт в <Screen>: верхний отступ под статус-бар задаёт его раскладка.
+const dashboardViewPath = fileURLToPath(new URL("../../ui/pbth-ui.css", import.meta.url));
 const calendarViewPath = fileURLToPath(new URL("../../views/CalendarView.tsx", import.meta.url));
 const financeViewPath = fileURLToPath(new URL("../../views/FinanceView.tsx", import.meta.url));
 const teamViewPath = fileURLToPath(new URL("../../views/TeamView.tsx", import.meta.url));
 const profileViewPath = fileURLToPath(new URL("../../views/ProfileView.tsx", import.meta.url));
-const loginViewPath = fileURLToPath(new URL("../../views/LoginView.tsx", import.meta.url));
-const inviteViewPath = fileURLToPath(new URL("../../views/InviteView.tsx", import.meta.url));
+const loginViewPath = fileURLToPath(new URL("../../views/login/login.css", import.meta.url));
+const inviteFrameCssPath = fileURLToPath(new URL("../../components/track1/invite-frame.css", import.meta.url));
+const screenCssPath = fileURLToPath(new URL("../../ui/pbth-ui.css", import.meta.url));
 const adminLoginViewPath = fileURLToPath(new URL("../../views/admin/AdminLoginView.tsx", import.meta.url));
 const privacyViewPath = fileURLToPath(new URL("../../views/PrivacyView.tsx", import.meta.url));
 const supportViewPath = fileURLToPath(new URL("../../views/SupportView.tsx", import.meta.url));
@@ -44,18 +46,24 @@ describe("pwa safe-area layouts", () => {
   });
 
   it("pads primary app tabs below the standalone status bar", () => {
-    [dashboardViewPath, calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
+    [calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });
+    expect(readFileSync(dashboardViewPath, "utf8")).toContain("calc(var(--pb-safe-top, 0px)");
   });
 
   it("keeps auth entry screens safe-area aware in standalone mode", () => {
-    [loginViewPath, inviteViewPath, adminLoginViewPath].forEach((path) => {
+    [loginViewPath, adminLoginViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("var(--pb-safe-top)");
       expect(source).toContain("var(--pb-safe-bottom)");
     });
+  });
+
+  it("keeps invite screens safe-area aware: Screen pads the top, the frame pads the bottom", () => {
+    expect(readFileSync(screenCssPath, "utf8")).toContain("var(--pb-safe-top");
+    expect(readFileSync(inviteFrameCssPath, "utf8")).toContain("var(--pb-safe-bottom");
   });
 
   it("pads static public pages with safe-area insets", () => {
