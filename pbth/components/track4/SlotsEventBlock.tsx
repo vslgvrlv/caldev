@@ -1,20 +1,15 @@
 import React from 'react';
-import { Minus, Plus, Ticket } from 'lucide-react';
 import { slotsApi, type SlotManageView } from '../../api/track4';
 import { confirmAction, errorText, notify } from '../../lib/notify';
 import type { EventBlockProps } from '../../shell/extensions';
 import { Role } from '../../types';
+import { Avatar, Button, Glass, Row, Switch } from '../../ui';
+import '../event/event.css';
 import { followersLabel, openedLabel, parsePriceInput, slotPriceLabel } from './slot-format';
 
 // Блок «Свободные слоты» на экране события у капитана и тренера (трек 4).
 // Открыть N мест с ценой — подписчикам команды сразу уходит уведомление;
 // список гостей с галочкой «оплатил» и кнопкой «Снять».
-
-const card = 'bg-pb-surface rounded-2xl p-4 border border-white/5';
-const primaryBtn =
-  'w-full py-2.5 rounded-xl bg-pb-primary text-pb-background font-bold hover:bg-opacity-90 transition-colors disabled:opacity-60';
-const secondaryBtn =
-  'px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold text-white hover:bg-white/10 transition-colors disabled:opacity-60';
 
 function isPast(event: EventBlockProps['event']): boolean {
   const start = event.startDate instanceof Date ? event.startDate : new Date(event.startAt || '');
@@ -70,12 +65,12 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
   if (past && !slot) return null;
   if (!view) {
     return (
-      <div className={card}>
-        <div className="flex items-center gap-2 text-white font-bold">
-          <Ticket size={18} className="text-pb-primary" /> Свободные слоты
+      <Glass layer={1} className="pbth-event__panel">
+        <div className="pbth-event__head">
+          <h2 className="pbth-event__h">Свободные слоты</h2>
         </div>
-        <div className="text-sm text-pb-subtext mt-2">{loadError ? 'Не удалось загрузить слоты.' : 'Загрузка…'}</div>
-      </div>
+        <div className="pbth-event__muted">{loadError ? 'Не удалось загрузить слоты.' : 'Загружаем…'}</div>
+      </Glass>
     );
   }
 
@@ -118,148 +113,125 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
   const isCaptain = viewerRole === Role.CAPTAIN;
 
   return (
-    <div className={`${card} space-y-3`} data-testid="slots-block">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-white font-bold">
-          <Ticket size={18} className="text-pb-primary" /> Свободные слоты
-        </div>
-        {slot?.open && (
-          <span className="text-xs text-pb-subtext">
+    <Glass layer={1} className="pbth-event__panel" data-testid="slots-block">
+      <div className="pbth-event__head">
+        <h2 className="pbth-event__h">Свободные слоты</h2>
+        {slot?.open ? (
+          <span className="pbth-event__muted">
             занято {slot.booked} из {slot.capacity}
           </span>
-        )}
+        ) : null}
       </div>
 
       {!view.openSchedule && !past && (
-        <div className="space-y-2">
-          <p className="text-sm text-pb-subtext">
+        <>
+          <div className="pbth-event__muted">
             Открой расписание команды — и подписчики смогут записываться на свободные места в событиях.
-          </p>
+          </div>
           {isCaptain ? (
-            <button type="button" className={primaryBtn} disabled={busy} onClick={() => void enableSchedule()}>
+            <Button variant="glass2" disabled={busy} onClick={() => void enableSchedule()}>
               Включить открытое расписание
-            </button>
+            </Button>
           ) : (
-            <p className="text-sm text-pb-subtext">Включает капитан в меню команды: «Открытое расписание».</p>
+            <div className="pbth-event__muted">Включает капитан в меню команды: «Открытое расписание».</div>
           )}
-        </div>
+        </>
       )}
 
-      {slot?.open && !editing && (
-        <div className="text-sm text-white">
-          {openedLabel(slot.capacity, slot.price, slot.free)}
-        </div>
-      )}
-      {slot && !slot.open && <div className="text-sm text-pb-subtext">Запись закрыта.</div>}
+      {slot?.open && !editing && <div>{openedLabel(slot.capacity, slot.price, slot.free)}</div>}
+      {slot && !slot.open && <div className="pbth-event__muted">Запись закрыта.</div>}
 
       {showForm && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-pb-subtext">Сколько мест</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+        <div className="pbth-event__form">
+          <div className="pbth-event__blockhead">
+            <span className="pbth-event__muted">Сколько мест</span>
+            <span className="pbth-event__inline">
+              <Button
+                variant="glass2"
+                icon="minus"
                 aria-label="Меньше мест"
-                className={secondaryBtn}
                 disabled={busy || capacity <= Math.max(1, slot?.booked ?? 0)}
                 onClick={() => setCapacity((n) => Math.max(1, n - 1))}
-              >
-                <Minus size={16} />
-              </button>
-              <span className="w-8 text-center text-white font-bold text-lg" aria-live="polite">
+              />
+              <span className="pbth-event__h" aria-live="polite">
                 {capacity}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="glass2"
+                icon="plus"
                 aria-label="Больше мест"
-                className={secondaryBtn}
                 disabled={busy || capacity >= 50}
                 onClick={() => setCapacity((n) => Math.min(50, n + 1))}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
+              />
+            </span>
           </div>
-          <label className="flex items-center justify-between gap-3">
-            <span className="text-sm text-pb-subtext">Цена за место, ₽</span>
+          <div className="pbth-event__field">
+            <label className="ui-label" htmlFor="slot-price">
+              Цена за место, ₽
+            </label>
             <input
+              id="slot-price"
+              className="ui-input"
               inputMode="decimal"
               value={priceText}
               onChange={(e) => setPriceText(e.target.value)}
               placeholder="0 — бесплатно"
-              className="w-36 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-right text-white placeholder:text-pb-subtext/60 focus:outline-none focus:border-pb-primary"
             />
-          </label>
+          </div>
           {(!slot || !slot.open) && (
-            <p className="text-xs text-pb-subtext">Уведомление получат: {followersLabel(view.followers)}.</p>
+            <div className="pbth-event__muted">Уведомление получат: {followersLabel(view.followers)}.</div>
           )}
-          <div className="flex gap-2">
-            <button type="button" className={primaryBtn} disabled={busy} onClick={() => void submitOpen()}>
-              {slot?.open ? 'Сохранить' : 'Открыть слоты'}
-            </button>
+          <div className="pbth-event__footer">
             {editing && (
-              <button type="button" className={secondaryBtn} disabled={busy} onClick={() => setEditing(false)}>
+              <Button variant="glass2" disabled={busy} onClick={() => setEditing(false)}>
                 Отмена
-              </button>
+              </Button>
             )}
+            <Button variant="primary" disabled={busy} onClick={() => void submitOpen()}>
+              {slot?.open ? 'Сохранить' : 'Открыть слоты'}
+            </Button>
           </div>
         </div>
       )}
 
       {slot?.open && !editing && !past && (
-        <div className="flex gap-2">
-          <button type="button" className={secondaryBtn} disabled={busy} onClick={() => setEditing(true)}>
+        <div className="pbth-event__footer">
+          <Button variant="glass2" disabled={busy} onClick={() => setEditing(true)}>
             Изменить
-          </button>
-          <button type="button" className={secondaryBtn} disabled={busy} onClick={() => void closeSlots()}>
+          </Button>
+          <Button variant="glass2" disabled={busy} onClick={() => void closeSlots()}>
             Закрыть запись
-          </button>
+          </Button>
         </div>
       )}
 
       {guests.length > 0 && (
-        <div className="border-t border-white/5 pt-3 space-y-2">
-          <div className="text-xs text-pb-subtext uppercase tracking-wide">Гости</div>
+        <div>
+          <div className="pbth-event__group">Гости</div>
           {guests.map((guest) => (
-            <div
+            <Row
               key={guest.userId}
-              className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/5 px-2.5 py-2"
-            >
-              <img
-                src={
-                  guest.avatar ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(guest.name)}&background=0F0F0F&color=fff`
-                }
-                alt=""
-                loading="lazy"
-                className="w-7 h-7 rounded-full object-cover shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-white truncate">{guest.name}</div>
-                <div className="text-[11px] text-pb-subtext">{slotPriceLabel(guest.price)}</div>
-              </div>
-              <label className="flex items-center gap-1.5 text-xs text-pb-subtext shrink-0">
-                <input
-                  type="checkbox"
-                  checked={guest.paid}
-                  disabled={busy}
-                  onChange={(e) => void run(() => slotsApi.setPaid(event.id, guest.userId, e.target.checked))}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-                оплатил
-              </label>
-              <button
-                type="button"
-                className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/5 text-pb-subtext border border-white/10 hover:text-white"
-                disabled={busy}
-                onClick={() => void removeGuest(guest.userId, guest.name)}
-              >
-                Снять
-              </button>
-            </div>
+              lead={<Avatar name={guest.name} size={40} />}
+              title={guest.name}
+              sub={slotPriceLabel(guest.price)}
+              trailing={
+                <span className="pbth-event__inline">
+                  <span className="pbth-event__tile-sub">оплатил</span>
+                  <Switch
+                    checked={guest.paid}
+                    disabled={busy}
+                    label={`${guest.name}: оплатил`}
+                    onChange={(paid) => void run(() => slotsApi.setPaid(event.id, guest.userId, paid))}
+                  />
+                  <Button variant="glass2" size="sm" disabled={busy} onClick={() => void removeGuest(guest.userId, guest.name)}>
+                    Снять
+                  </Button>
+                </span>
+              }
+            />
           ))}
         </div>
       )}
-    </div>
+    </Glass>
   );
 };

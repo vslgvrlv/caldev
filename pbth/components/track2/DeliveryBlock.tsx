@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Send } from 'lucide-react';
 import { getEventDelivery, REMINDERS_SENT_EVENT, type EventDeliveryReport } from '../../api/track2';
 import { countLabel } from '../../lib/plural';
 import { broadcastLabel, reserveLine } from './delivery-labels';
+import { Button, Glass } from '../../ui';
+import '../event/event.css';
 
 // «Кому дошло» на экране события (трек 2): капитан и тренер видят по последней
 // рассылке — «Напомнить» или сообщению о новом, перенесённом, отменённом
@@ -24,17 +25,7 @@ function times(n: number): string {
 }
 
 const Chip: React.FC<{ tone: 'ok' | 'bad' | 'muted'; children: React.ReactNode }> = ({ tone, children }) => (
-  <span
-    className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-xs ${
-      tone === 'ok'
-        ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30'
-        : tone === 'bad'
-          ? 'bg-rose-500/10 text-rose-200 border-rose-500/30'
-          : 'bg-white/5 text-pb-subtext border-white/10'
-    }`}
-  >
-    {children}
-  </span>
+  <span className={`ui-chip ${tone === 'ok' ? 'ui-chip--success' : tone === 'bad' ? 'ui-chip--danger' : 'ui-chip--muted'}`}>{children}</span>
 );
 
 export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
@@ -76,88 +67,77 @@ export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
   const nothingYet = state === 'ready' && !last && auto.length === 0;
 
   return (
-    <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-3" data-testid="delivery-block">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center text-white font-bold min-w-0">
-          <Send size={18} className="mr-2 text-pb-primary" />
-          Кому дошло
-        </div>
+    <Glass layer={1} className="pbth-event__panel" data-testid="delivery-block">
+      <div className="pbth-event__head">
+        <h2 className="pbth-event__h">Кому дошло</h2>
         {state === 'ready' && !nothingYet && (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="text-[12px] font-semibold text-pb-primary shrink-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
             {open ? 'Свернуть' : 'По именам'}
-          </button>
+          </Button>
         )}
       </div>
 
-      {state === 'loading' && <p className="text-xs text-pb-subtext">Загружаем журнал…</p>}
+      {state === 'loading' && <div className="pbth-event__muted">Загружаем журнал…</div>}
       {state === 'error' && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-pb-danger">Не удалось загрузить журнал.</p>
-          <button type="button" onClick={() => void load()} className="text-[12px] font-semibold text-pb-primary">
+        <div className="pbth-event__head">
+          <span className="pbth-event__muted">Не удалось загрузить журнал.</span>
+          <Button variant="glass2" size="sm" onClick={() => void load()}>
             Повторить
-          </button>
+          </Button>
         </div>
       )}
 
       {nothingYet && (
-        <p className="text-xs text-pb-subtext">
+        <div className="pbth-event__muted">
           Напоминаний по этому событию ещё не было.
           {report?.autoRemindersEnabled ? ' Молчунам оно уйдёт само накануне в 19:00 и утром в день события.' : ''}
-        </p>
-      )}
-
-      {state === 'ready' && last && (
-        <div className="space-y-2">
-          <p className="text-sm text-white">
-            {broadcastLabel(last.kind)} {when(last.at)}: дошло {delivered.length} из {last.total}
-            {failed.length ? `, не дошло ${failed.length}` : ''}.
-          </p>
-          {open && (
-            <>
-              {delivered.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {delivered.map((i) => (
-                    <Chip key={i.userId} tone="ok">
-                      {i.name}
-                      {i.channel === 'WEBPUSH' ? ' · пуш' : ''}
-                    </Chip>
-                  ))}
-                </div>
-              )}
-              {failed.length > 0 && (
-                <ul className="space-y-1">
-                  {failed.map((i) => (
-                    <li key={i.userId} className="text-xs text-rose-200">
-                      {i.name} — {i.reason || 'не удалось отправить'}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
         </div>
       )}
 
+      {state === 'ready' && last && (
+        <>
+          <div>
+            {broadcastLabel(last.kind)} {when(last.at)}: дошло {delivered.length} из {last.total}
+            {failed.length ? `, не дошло ${failed.length}` : ''}.
+          </div>
+          {open && delivered.length > 0 && (
+            <div className="pbth-event__chips">
+              {delivered.map((i) => (
+                <Chip key={i.userId} tone="ok">
+                  {i.name}
+                  {i.channel === 'WEBPUSH' ? ' · пуш' : ''}
+                </Chip>
+              ))}
+            </div>
+          )}
+          {open && failed.length > 0 && (
+            <ul className="pbth-event__plain">
+              {failed.map((i) => (
+                <li key={i.userId}>
+                  {i.name} — {i.reason || 'не удалось отправить'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
       {state === 'ready' && !nothingYet && (
-        <div className="space-y-2 border-t border-white/5 pt-2">
+        <>
           {!report?.autoRemindersEnabled ? (
-            <p className="text-xs text-pb-subtext">Авто-напоминания пока не включены.</p>
+            <div className="pbth-event__muted">Авто-напоминания пока не включены.</div>
           ) : auto.length === 0 ? (
-            <p className="text-xs text-pb-subtext">Авто-напоминания по этому событию ещё не уходили.</p>
+            <div className="pbth-event__muted">Авто-напоминания по этому событию ещё не уходили.</div>
           ) : (
-            <p className="text-sm text-white">
+            <div>
               Авто-напоминание уходило {auto.length} {auto.length === 1 ? 'человеку' : 'людям'}
               {autoFailed.length ? `, не дошло ${autoFailed.length}` : ''}.
-            </p>
+            </div>
           )}
           {open && auto.length > 0 && (
-            <ul className="space-y-1">
+            <ul className="pbth-event__plain pbth-event__muted">
               {auto.map((a) => (
-                <li key={a.userId} className={`text-xs ${a.lastStatus === 'FAILED' || a.lastStatus === 'NO_CHANNEL' ? 'text-rose-200' : 'text-pb-subtext'}`}>
+                <li key={a.userId}>
                   {a.name} — {times(a.count)}, последнее {SLOT_LABEL[a.lastSlot]} {when(a.lastAt)}
                   {a.lastReason ? `: ${a.lastReason}` : ''}
                 </li>
@@ -165,11 +145,11 @@ export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
             </ul>
           )}
           {open && autoOff.length > 0 && (
-            <p className="text-xs text-pb-subtext">Отключили авто-напоминания: {autoOff.map((m) => m.name).join(', ')}.</p>
+            <div className="pbth-event__muted">Отключили авто-напоминания: {autoOff.map((m) => m.name).join(', ')}.</div>
           )}
-          {open && reserveText && <p className="text-xs text-pb-subtext">{reserveText}</p>}
-        </div>
+          {open && reserveText && <div className="pbth-event__muted">{reserveText}</div>}
+        </>
       )}
-    </div>
+    </Glass>
   );
 };

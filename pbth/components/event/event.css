@@ -1,0 +1,85 @@
+/* Раскладка экрана события. Вид (стекло, цвет, шрифт) даёт тема ui-kit; здесь только сетка и размеры. */
+
+.pbth-event { display: flex; flex-direction: column; gap: 16px; --pbth-event-paint: var(--ui-accent); }
+.pbth-event > * { margin: 0; }
+
+.pbth-event__bar { padding: 8px 12px; }
+.pbth-event__bar .pbth-screenbar { margin-bottom: 0; }
+
+.pbth-event__hero { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.pbth-event__when { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 700; }
+.pbth-event__when .ui-chip { margin-left: auto; }
+.pbth-event__title { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.pbth-event__time { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.pbth-event__clock { font-size: 72px; font-weight: 800; line-height: 1; }
+.pbth-event__until { font-size: 20px; font-weight: 600; color: var(--ui-muted); }
+.pbth-event__place { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--ui-muted); }
+.pbth-event__caption { font-size: 12px; color: var(--ui-muted); }
+
+.pbth-event__answer { display: flex; gap: 12px; }
+.pbth-event__answer > .ui-btn { flex: 1 1 0; min-width: 0; }
+.pbth-event__quiet { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pbth-event__answered { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; }
+.pbth-event__answered-text { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 800; }
+.pbth-event__answered-text--yes { color: var(--ui-success); }
+
+.pbth-event__series { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 16px; }
+.pbth-event__series-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-event__series-title { font-size: 14px; font-weight: 700; }
+
+.pbth-event__panel { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.pbth-event__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pbth-event__h { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.2; }
+.pbth-event__muted { font-size: 14px; color: var(--ui-muted); }
+.pbth-event__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pbth-event__tile.ui-btn { display: flex; align-items: center; justify-content: flex-start; gap: 12px; height: auto; min-height: 56px; padding: 8px 12px; text-align: left; }
+.pbth-event__tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-event__tile-title { font-size: 14px; font-weight: 700; }
+.pbth-event__tile-sub { font-size: 12px; font-weight: 500; color: var(--ui-muted); }
+
+.pbth-event__dots { display: flex; gap: 12px; flex: none; }
+.pbth-event__dotgroup { display: flex; gap: 4px; }
+.pbth-event__dot { box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ui-muted); }
+.pbth-event__dot--on { border-color: var(--pbth-event-paint); background: var(--pbth-event-paint); }
+
+.pbth-event__group { padding: 8px 4px 0; font-size: 14px; font-weight: 700; color: var(--ui-muted); }
+.pbth-event__tag { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 700; color: var(--ui-success); }
+.pbth-event__tag--muted { color: var(--ui-muted); }
+.pbth-event__free { display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--ui-muted); color: var(--ui-muted); }
+.pbth-event__free-title { color: var(--ui-muted); }
+.pbth-event__fold.ui-btn { justify-content: space-between; width: 100%; }
+.pbth-event__fold-body { display: flex; flex-direction: column; padding: 0 4px; }
+
+.pbth-event__icon { display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; width: 44px; height: 44px; border-radius: 12px; }
+.pbth-event__line { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.pbth-event__line .pbth-row { padding: 0; }
+.pbth-event__note { display: flex; align-items: flex-start; gap: 12px; padding: 16px; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pbth-event__summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pbth-event__summary-card { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+.pbth-event__summary-value { font-size: 16px; font-weight: 800; }
+
+.pbth-event__games { display: flex; flex-direction: column; }
+.pbth-event__gametime { min-width: 48px; font-size: 16px; font-weight: 800; }
+.pbth-event__gameline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.pbth-event__linkbtn { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pbth-event__empty { padding: 8px 4px; font-size: 14px; color: var(--ui-muted); }
+
+.pbth-event__ext { display: flex; flex-direction: column; gap: 16px; }
+.pbth-event__ext:empty { display: none; }
+
+.pbth-event__form { display: flex; flex-direction: column; gap: 16px; }
+.pbth-event__field { display: flex; flex-direction: column; }
+.pbth-event__field .ui-input, .pbth-event__field .ui-select { width: 100%; box-sizing: border-box; }
+.pbth-event__area.ui-input { height: auto; min-height: 88px; padding-block: 12px; resize: none; }
+.pbth-event__two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pbth-event__two > * { min-width: 0; }
+.pbth-event__footer { display: flex; gap: 12px; padding-top: 4px; }
+.pbth-event__footer > .ui-btn { flex: 1 1 0; }
+.pbth-event__list { display: flex; flex-direction: column; max-height: 52vh; overflow-y: auto; }
+.pbth-event__menu { display: flex; flex-direction: column; gap: 8px; }
+.pbth-event__menu .ui-btn { justify-content: flex-start; width: 100%; }
+.pbth-event__blockhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pbth-event__actions { display: flex; gap: 4px; }
+.pbth-event__inline { display: inline-flex; align-items: center; gap: 8px; }
+.pbth-event__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pbth-event__plain { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
