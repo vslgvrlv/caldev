@@ -54,7 +54,8 @@ export const ReminderSettings: React.FC = () => {
           <div className="min-w-0">
             <div className="text-white font-bold text-sm">Авто-напоминания о событиях</div>
             <div className="text-pb-subtext text-xs">
-              Если не ответил, идёшь ли: накануне в 19:00 и утром в день события
+              Если не ответил, идёшь ли: накануне в 19:00 и утром в день события. Выключатель убирает и
+              сообщения о новых событиях; перенос и отмена событий, на которые ты идёшь, приходят всегда
             </div>
           </div>
         </div>
