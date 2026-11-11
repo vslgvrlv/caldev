@@ -1,38 +1,16 @@
 import React from 'react';
-import { Check, Copy, Loader2, RefreshCw, Share2, X } from 'lucide-react';
 import { joinUrl, track1Api, type TeamJoinLink } from '../../api/track1';
 import { confirmAction, errorText, notify } from '../../lib/notify';
 import { QrCode } from './QrCode';
+import { Button, Sheet } from '../../ui';
+import { copyText } from '../../lib/copy-text';
+import { joinLinkHint } from '../../lib/team-roster';
+import '../../views/team/team.css';
 
 // Ссылка команды для капитана и тренера (трек 1): ссылка, код, QR,
 // «Поделиться»; капитану ещё «Отозвать и выпустить новую» (`canRotate`).
 // Ссылка постоянная: по ней не вступают сразу, а подают заявку — её
 // принимает капитан или тренер.
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // ниже запасной путь
-  }
-  try {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.top = '-9999px';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(area);
-    return ok;
-  } catch {
-    return false;
-  }
-}
 
 export const TeamJoinLinkSheet: React.FC<{
   teamId: string;
@@ -107,78 +85,43 @@ export const TeamJoinLinkSheet: React.FC<{
   };
 
   return (
-    // Выше нижнего меню и кнопки «+» (z-40): иначе они закрывают низ листа.
-    <div className="fixed inset-0 z-[60] bg-black/60 flex items-end" onClick={onClose}>
-      <div
-        className="w-full bg-pb-surface border-t border-white/10 rounded-t-2xl p-4 text-white max-h-[92vh] overflow-y-auto"
-        style={{ paddingBottom: 'calc(var(--pb-safe-bottom) + 1rem)' }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Ссылка команды"
-      >
-        <div className="flex items-start justify-between mb-1">
-          <div>
-            <div className="font-bold text-lg">Ссылка команды</div>
-            <div className="text-xs text-pb-subtext">
-              По ней подают заявку, принимаешь ты или {canRotate ? 'тренер' : 'капитан'}.
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 -mr-2 -mt-1 text-pb-subtext" aria-label="Закрыть">
-            <X size={20} />
-          </button>
+    <Sheet open onClose={onClose} title="Ссылка команды" subtitle={joinLinkHint(canRotate)}>
+      {failed ? (
+        <div className="pbth-stack pbth-center">
+          <div className="pbth-muted">Ссылка не загрузилась.</div>
+          <Button variant="glass2" block onClick={() => void load()}>
+            Обновить
+          </Button>
         </div>
-
-        {failed ? (
-          <div className="py-6 text-center text-sm text-pb-subtext">
-            Ссылка не загрузилась.{' '}
-            <button className="text-pb-primary font-semibold" onClick={() => void load()}>
-              Обновить
-            </button>
+      ) : !link ? (
+        <div className="ui-skeleton" style={{ height: 220 }} aria-label="Загружаю ссылку" />
+      ) : (
+        <div className="pbth-stack">
+          <div className="pbth-linkqr">
+            <QrCode value={url} moduleSize={5} label={`QR-код ссылки команды ${teamName}`} />
           </div>
-        ) : !link ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="animate-spin text-pb-primary" size={28} />
+          <div className="pbth-center">
+            <div className="pbth-small">Код команды</div>
+            <p className="pbth-linkcode" data-testid="join-code">
+              {link.code}
+            </p>
           </div>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <div className="flex justify-center">
-              <QrCode value={url} moduleSize={5} label={`QR-код ссылки команды ${teamName}`} />
-            </div>
-            <div className="text-center">
-              <div className="text-xs text-pb-subtext">Код команды</div>
-              <div className="text-2xl font-bold tracking-widest" data-testid="join-code">
-                {link.code}
-              </div>
-            </div>
-            <button
-              onClick={() => void copy()}
-              className="w-full flex items-center gap-2 rounded-xl bg-black/30 px-3 py-3 text-left text-sm"
-            >
-              <span className="flex-1 truncate text-pb-subtext" data-testid="join-url">
-                {url}
-              </span>
-              {copied ? <Check size={16} className="text-pb-primary shrink-0" /> : <Copy size={16} className="shrink-0" />}
-            </button>
-            <button
-              onClick={() => void share()}
-              className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl flex items-center justify-center gap-2"
-            >
-              <Share2 size={18} />
-              Поделиться
-            </button>
-            {canRotate && (
-              <button
-                onClick={() => void rotate()}
-                disabled={rotating}
-                className="w-full bg-white/5 text-red-300 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {rotating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                Отозвать и выпустить новую
-              </button>
-            )}
+          <div className="pbth-linkurl" data-testid="join-url">
+            {url}
           </div>
-        )}
-      </div>
-    </div>
+          <Button variant="light" block icon={copied ? 'check' : 'copy'} onClick={() => void copy()}>
+            {copied ? 'Скопировано' : 'Скопировать'}
+          </Button>
+          <Button variant="glass2" block icon="share-2" onClick={() => void share()}>
+            Поделиться
+          </Button>
+          {canRotate && (
+            <Button variant="glass2" block icon="refresh-cw" disabled={rotating} onClick={() => void rotate()}>
+              Отозвать и выпустить новую
+            </Button>
+          )}
+        </div>
+      )}
+    </Sheet>
   );
 };

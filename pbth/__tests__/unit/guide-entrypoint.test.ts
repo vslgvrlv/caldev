@@ -41,8 +41,8 @@ describe("GuideEntrypoint", () => {
     const trainer = renderToStaticMarkup(React.createElement(GuideEntrypoint, { role: Role.TRAINER }));
     expect(trainer).toContain('href="/guide/trainer.html"');
     expect(trainer).not.toContain('/guide/player.html');
-    expect(trainer).toContain("Как пользоваться");
-    expect(trainer).toContain("Пошаговая инструкция для вашей роли");
+    expect(trainer).toContain("Инструкции");
+    expect(trainer).toContain("Пошаговая инструкция для твоей роли");
     expect(trainer).toContain('aria-label="Открыть инструкцию по работе с PaintBall Team Hub"');
     expect(trainer).toContain('target="_blank"');
     expect(trainer).toContain('rel="noopener noreferrer"');

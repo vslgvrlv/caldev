@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { listIdentities, unlinkProvider, startYandexLink, type Identity } from "../lib/yandex-auth";
+import { notify } from "../lib/notify";
+import { Button, Glass, Icon, Row } from "../ui";
+import "../views/team/team.css";
 
-export const ProfileIdentities: React.FC = () => {
+const PROVIDER_LABELS: Record<string, string> = { telegram: "Telegram", yandex: "Яндекс" };
+const PROVIDER_ICONS: Record<string, string> = { telegram: "send", yandex: "link" };
+
+/**
+ * Способы входа: что привязано, «Отвязать», «Привязать Яндекс».
+ * Пока список не пришёл (или не загрузился), показываем Telegram, как раньше.
+ */
+export const ProfileIdentities: React.FC<{ telegramNick?: string }> = ({ telegramNick }) => {
   const [identities, setIdentities] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string>("");
-  const [notice, setNotice] = useState<string>("");
   const [busy, setBusy] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -31,7 +40,7 @@ export const ProfileIdentities: React.FC = () => {
     const linkError = searchParams.get("link_error");
     if (!linked && !linkError) return;
     if (linked === "yandex") {
-      setNotice("Яндекс привязан.");
+      notify.success("Яндекс привязан.");
       setError("");
     } else if (linkError === "OAUTH_LINK_TAKEN") {
       setError("Этот Яндекс уже привязан к другому аккаунту PBTH.");
@@ -44,15 +53,11 @@ export const ProfileIdentities: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  if (identities === null) return null; // initial loading
-
-  const linked = new Set(identities.map((i) => i.provider));
-  const yandexLinked = linked.has("yandex");
+  const yandexLinked = identities ? identities.some((i) => i.provider === "yandex") : false;
 
   const onUnlink = async (provider: "yandex" | "telegram") => {
     setBusy(provider);
     setError("");
-    setNotice("");
     try {
       await unlinkProvider(provider);
       await reload();
@@ -71,46 +76,52 @@ export const ProfileIdentities: React.FC = () => {
   };
 
   return (
-    <div className="bg-pb-surface rounded-2xl p-4 mt-4">
-      <div className="text-white font-bold mb-3">Способы входа</div>
-      {notice && (
-        <div className="mb-3 text-xs text-green-300 bg-green-500/10 border border-green-500/30 px-3 py-2 rounded-lg">
-          {notice}
-        </div>
-      )}
-      {error && (
-        <div className="mb-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-lg">
-          {error}
-        </div>
-      )}
-      <div className="space-y-2">
-        {identities.map((id) => (
-          <div
-            key={id.provider}
-            className="flex items-center justify-between bg-white/5 rounded-xl px-3 py-2"
-          >
-            <div>
-              <div className="text-white text-sm font-semibold capitalize">{id.provider}</div>
-              {id.emailMasked && <div className="text-pb-subtext text-xs">{id.emailMasked}</div>}
-            </div>
-            <button
-              onClick={() => onUnlink(id.provider as "yandex" | "telegram")}
-              disabled={busy === id.provider}
-              className="text-xs text-red-300 hover:text-red-200 disabled:opacity-50"
-            >
-              {busy === id.provider ? "…" : "Отвязать"}
-            </button>
-          </div>
-        ))}
-        {!yandexLinked && (
-          <button
-            onClick={() => startYandexLink()}
-            className="w-full bg-[#FFCC00] hover:bg-[#FFB800] text-black font-bold py-3 rounded-xl mt-2"
-          >
-            Привязать Яндекс
-          </button>
+    <>
+      <Glass className="pbth-team__panel">
+        {identities === null ? (
+          <Row
+            lead={
+              <span className="pbth-iconlead ui-glass2">
+                <Icon name="send" />
+              </span>
+            }
+            title="Telegram"
+            sub={telegramNick ? `@${telegramNick}` : undefined}
+            trailing={<span className="pbth-muted">привязан</span>}
+          />
+        ) : (
+          identities.map((id) => (
+            <Row
+              key={id.provider}
+              lead={
+                <span className="pbth-iconlead ui-glass2">
+                  <Icon name={PROVIDER_ICONS[id.provider] ?? "link"} />
+                </span>
+              }
+              title={PROVIDER_LABELS[id.provider] ?? id.provider}
+              sub={id.emailMasked || undefined}
+              trailing={
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy === id.provider}
+                  onClick={() => void onUnlink(id.provider as "yandex" | "telegram")}
+                >
+                  {busy === id.provider ? "…" : "Отвязать"}
+                </Button>
+              }
+            />
+          ))
         )}
-      </div>
-    </div>
+        {identities !== null && !yandexLinked && (
+          <div style={{ padding: "8px 0 12px" }}>
+            <Button variant="glass2" block icon="link" onClick={() => startYandexLink()}>
+              Привязать Яндекс
+            </Button>
+          </div>
+        )}
+      </Glass>
+      {error && <p className="pbth-warn">{error}</p>}
+    </>
   );
 };

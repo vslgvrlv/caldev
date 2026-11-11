@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { SlotOffer } from '../../api/track4';
 import { EventCard } from '../../components/EventCard';
-import { TeamJoinLinkSheet } from '../../components/track1/TeamJoinLinkSheet';
+import { joinLinkHint } from '../../lib/team-roster';
 import { GuestBookingCards } from '../../components/track4/GuestBookingCards';
 import { upcomingGuestBookings } from '../../components/track4/slot-format';
 import { captainHomeHints } from '../../lib/events';
@@ -176,22 +176,19 @@ const renderTeam = (role: Role, count = 1) =>
   );
 
 describe('7. ссылка команды у тренера', () => {
-  it('тренер видит «Пригласить», но не отзывает ссылку', () => {
+  it('тренер видит «Ссылку команды», но не отзывает её', () => {
     expect(teamLinkAccess(Role.TRAINER)).toEqual({ canShare: true, canRotate: false });
     expect(teamLinkAccess(Role.CAPTAIN)).toEqual({ canShare: true, canRotate: true });
     expect(teamLinkAccess(Role.ADMIN)).toEqual({ canShare: true, canRotate: true });
     expect(teamLinkAccess(Role.PLAYER)).toEqual({ canShare: false, canRotate: false });
     expect(renderTeam(Role.TRAINER)).toContain('Пригласить');
+    expect(renderTeam(Role.CAPTAIN)).toContain('Пригласить');
     expect(renderTeam(Role.PLAYER)).not.toContain('Пригласить');
   });
 
-  it('подпись листа — от лица того, кто его открыл', () => {
-    const sheet = (canRotate: boolean) =>
-      renderToStaticMarkup(
-        React.createElement(TeamJoinLinkSheet, { teamId: 't1', teamName: 'Дозор', canRotate, onClose: () => {} }),
-      );
-    expect(sheet(false)).toContain('принимаешь ты или капитан');
-    expect(sheet(true)).toContain('принимаешь ты или тренер');
+  it('подпись шторки — от лица того, кто её открыл', () => {
+    expect(joinLinkHint(false)).toContain('принимаешь ты или капитан');
+    expect(joinLinkHint(true)).toContain('принимаешь ты или тренер');
   });
 });
 
@@ -239,9 +236,9 @@ describe('11. склонения', () => {
   });
 
   it('шапка состава', () => {
-    expect(renderTeam(Role.CAPTAIN, 1)).toContain('1 участник<');
-    expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 участника<');
-    expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 участников<');
+    expect(renderTeam(Role.CAPTAIN, 1)).toContain('1 участник · ты капитан<');
+    expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 участника · ты капитан<');
+    expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 участников · ты капитан<');
   });
 });
 

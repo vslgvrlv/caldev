@@ -184,6 +184,8 @@ export const RosterScreen: React.FC = () => {
       onMemberClick={(member) => navigate(memberPath(code, member.id))}
       onUpdateMemberStatus={shell.actions.updateMemberStatus}
       onRemoveMember={shell.actions.removeMember}
+      currentUserId={shell.user?.id}
+      onOpenRequests={() => navigate(teamPath(code, 'requests'))}
     />
   );
 };
@@ -229,6 +231,7 @@ export const MemberScreen: React.FC = () => {
     <PlayerProfileView
       member={member}
       teamName={shell.team.name}
+      teamId={shell.team.id}
       onBack={goBack}
       canManage={canManage}
       onUpdateMemberStatus={shell.actions.updateMemberStatus}
@@ -326,6 +329,8 @@ export const ProfileScreen: React.FC = () => {
       canEnterAdmin={shell.canEnterAdmin}
       onEnterAdmin={() => navigate('/admin')}
       guestBookings={<GuestBookingsBlock />}
+      teams={shell.teams}
+      onOpenTeam={(t) => navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode })))}
     />
   );
 };

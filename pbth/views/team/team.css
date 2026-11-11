@@ -1,0 +1,70 @@
+/* Раскладка экранов команды и профиля. Вид (стекло, кнопки, шрифт) даёт ui-kit. */
+
+.pbth-person { display: inline-flex; flex: none; align-items: center; justify-content: center; border-radius: 50%; object-fit: cover; }
+.pbth-person--big { font-weight: 800; color: var(--ui-text); }
+
+.pbth-team__hero { display: flex; align-items: center; gap: 16px; margin: 8px 0 16px; }
+.pbth-team__heroText { min-width: 0; }
+.pbth-team__name { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.pbth-team__markbtn { display: inline-flex; flex: none; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 12px; }
+.pbth-team__group { padding: 12px 4px 4px; font-size: 12px; color: var(--ui-muted); }
+.pbth-team__tools .ui-seg > button { height: 44px; }
+@keyframes pbth-spin { to { transform: rotate(360deg); } }
+.pbth-team__meta { margin-top: 4px; font-size: 14px; color: var(--ui-muted); }
+.pbth-team__tools { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.pbth-team__panel { padding: 4px 12px; }
+.pbth-team__empty { padding: 24px 8px; text-align: center; color: var(--ui-muted); }
+.pbth-team__name-line { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.pbth-team__you { font-size: 14px; font-weight: 400; color: var(--ui-muted); }
+.pbth-team__leader { flex: none; color: var(--ui-muted); }
+.pbth-team__acts { display: flex; align-items: center; gap: 0; margin-right: -8px; }
+.pbth-team__pct { font-size: 16px; font-weight: 700; }
+.pbth-team__lead { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
+.pbth-btnlist { display: flex; flex-direction: column; gap: 8px; }
+.pbth-muted { color: var(--ui-muted); }
+.pbth-small { font-size: 12px; color: var(--ui-muted); }
+.pbth-center { text-align: center; }
+
+.pbth-linkcode { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.04em; text-align: center; }
+.pbth-linkqr { display: flex; justify-content: center; }
+.pbth-linkurl { word-break: break-all; font-size: 14px; color: var(--ui-muted); text-align: center; }
+
+.pbth-section { margin: 24px 4px 8px; display: flex; align-items: baseline; justify-content: space-between; }
+.pbth-section__title { margin: 0; font-size: 20px; font-weight: 800; }
+.pbth-stack { display: flex; flex-direction: column; gap: 12px; }
+.pbth-stack--tight { gap: 8px; }
+.pbth-pad { padding: 16px; }
+.pbth-phero { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 8px 0 8px; text-align: center; }
+.pbth-phero__name { margin: 12px 0 0; font-size: 28px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.pbth-phero__nick { font-size: 16px; color: var(--ui-muted); }
+.pbth-iconlead { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; }
+.pbth-switchrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 4px; border-top: 1px solid var(--ui-border); box-sizing: border-box; }
+.pbth-switchrow:first-child { border-top: 0; }
+.pbth-switchrow__main { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-switchrow__title { font-size: 16px; font-weight: 700; }
+.pbth-switchrow__sub { font-size: 12px; line-height: 1.4; color: var(--ui-muted); }
+.pbth-switchpanel { --ui-switch-on: var(--ui-text); --ui-switch-thumb-on: var(--ui-bg); }
+.pbth-warn { margin: 8px 4px 4px; font-size: 12px; color: var(--ui-danger); }
+.pbth-pnote { margin: 4px 4px 0; font-size: 12px; color: var(--ui-muted); }
+
+.pbth-req { display: flex; flex-direction: column; gap: 12px; padding: 16px 4px; border-top: 1px solid var(--ui-border); }
+.pbth-req:first-child { border-top: 0; }
+.pbth-req__who { display: flex; align-items: center; gap: 12px; }
+.pbth-req__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-req__name { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.pbth-req__sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ui-muted); }
+.pbth-req__btns { display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; }
+.pbth-rempty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; text-align: center; }
+.pbth-rempty__title { margin: 8px 0 0; font-size: 20px; font-weight: 800; }
+.pbth-rempty__text { margin: 0 0 8px; color: var(--ui-muted); }
+.pbth-pagehead { margin: 16px 4px 12px; }
+.pbth-pagehead__title { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; }
+.pbth-pagehead__sub { margin-top: 4px; font-size: 14px; color: var(--ui-muted); }
+.pbth-statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pbth-stat { padding: 16px; }
+.pbth-stat__label { font-size: 12px; color: var(--ui-muted); }
+.pbth-stat__value { margin-top: 4px; font-size: 20px; font-weight: 800; }
+.pbth-stat__value--neg { color: var(--ui-danger); }
+.pbth-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pbth-spinbtn .ui-icon { animation: pbth-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .pbth-spinbtn .ui-icon { animation: none; } }

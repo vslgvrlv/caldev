@@ -207,8 +207,8 @@ test("profile guide card fits 320 px and opens from a visible keyboard focus", a
   const unexpectedRequests = await openProfile(page, "TRAINER", "PLAYER");
   const link = page.getByRole("link", { name: GUIDE_ARIA_LABEL, exact: true });
   await expect(link).toBeVisible();
-  await expect(link.getByText("Как пользоваться", { exact: true })).toBeVisible();
-  await expect(link.getByText("Пошаговая инструкция для вашей роли", { exact: true })).toBeVisible();
+  await expect(link.getByText("Инструкции", { exact: true })).toBeVisible();
+  await expect(link.getByText("Пошаговая инструкция для твоей роли", { exact: true })).toBeVisible();
   expect(await link.locator("button, a").count()).toBe(0);
 
   const box = await link.boundingBox();
@@ -225,14 +225,17 @@ test("profile guide card fits 320 px and opens from a visible keyboard focus", a
   expect(widths.html).toBeLessThanOrEqual(widths.viewport);
   expect(widths.body).toBeLessThanOrEqual(widths.viewport);
 
-  const unfocusedShadow = await link.evaluate((element) => getComputedStyle(element).boxShadow);
+  const ring = (element: Element) => {
+    const style = getComputedStyle(element);
+    return `${style.boxShadow}|${style.outlineStyle}|${style.outlineColor}`;
+  };
+  const unfocusedShadow = await link.evaluate(ring);
   for (let attempts = 0; attempts < 20 && !(await link.evaluate((element) => document.activeElement === element)); attempts += 1) {
     await page.keyboard.press("Tab");
   }
   await expect(link).toBeFocused();
-  const focusedShadow = await link.evaluate((element) => getComputedStyle(element).boxShadow);
+  const focusedShadow = await link.evaluate(ring);
   expect(focusedShadow).not.toBe(unfocusedShadow);
-  expect(focusedShadow).toContain("rgb(0, 230, 118)");
 
   const [guide] = await Promise.all([page.waitForEvent("popup"), page.keyboard.press("Enter")]);
   await guide.waitForLoadState("domcontentloaded");

@@ -144,7 +144,8 @@ export function initialsOf(name?: string | null): string {
 
 /** Разметка аватара: круг на втором слое стекла с инициалами. */
 export function avatarHtml(name?: string | null, size = 40): string {
-  const fs = size >= 56 ? 20 : size >= 40 ? 14 : 12;
+  // Крупный аватар (профиль): буквы растут вместе с кругом; до 80px размеры прежние.
+  const fs = size >= 80 ? Math.round(size * 0.34) : size >= 56 ? 20 : size >= 40 ? 14 : 12;
   return (
     `<span class="ui-glass2" role="img" aria-label="${esc(name ?? '')}" style="display:inline-flex;align-items:center;justify-content:center;flex:none;` +
     `width:${size}px;height:${size}px;border-radius:50%;font-size:${fs}px;font-weight:700;color:var(--ui-text)">${esc(initialsOf(name))}</span>`

@@ -25,7 +25,7 @@ const termsViewPath = fileURLToPath(new URL("../../views/TermsView.tsx", import.
 
 describe("pwa safe-area layouts", () => {
   it("uses explicit top inset math for sticky in-app headers", () => {
-    [createEventViewPath, playerProfileViewPath].forEach((path) => {
+    [createEventViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
       expect(source).not.toContain(" pb-safe-top");
@@ -46,7 +46,7 @@ describe("pwa safe-area layouts", () => {
   });
 
   it("pads primary app tabs below the standalone status bar", () => {
-    [calendarViewPath, teamViewPath, profileViewPath].forEach((path) => {
+    [calendarViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });
@@ -55,6 +55,14 @@ describe("pwa safe-area layouts", () => {
 
   it("keeps the treasury screen inside Screen, which owns the safe-area padding", () => {
     expect(readFileSync(financeViewPath, "utf8")).toContain("<Screen");
+    expect(readFileSync(screenCssPath, "utf8")).toContain("var(--pb-safe-top");
+  });
+
+  it("team, player and profile screens sit in Screen, which pads the top by the safe area", () => {
+    [teamViewPath, playerProfileViewPath, profileViewPath].forEach((path) => {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("<Screen");
+    });
     expect(readFileSync(screenCssPath, "utf8")).toContain("var(--pb-safe-top");
   });
 
