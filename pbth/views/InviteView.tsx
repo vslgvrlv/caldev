@@ -192,7 +192,8 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
   // Поля одноразового приглашения (трек 1) — тип общего клиента их ещё не знает.
   const inviteExtra = inviteInfo as TeamInviteInfoResponse & { singleUse?: boolean; note?: string | null };
   const team = { id: inviteInfo.teamId, name: inviteInfo.teamName };
-  const until = inviteValidUntil(inviteInfo.expiresAt);
+  // Пояс команды приходит только вместе с ближайшим событием; без него срок — по поясу браузера.
+  const until = inviteValidUntil(inviteInfo.expiresAt, inviteInfo.nextEvent?.timezone);
   const acceptLabel = accepted ? 'Готово' : isSubmitting ? 'Вступаем…' : 'Вступить';
 
   return (

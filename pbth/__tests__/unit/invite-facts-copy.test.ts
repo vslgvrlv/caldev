@@ -31,24 +31,40 @@ describe('подписи фактов', () => {
     expect(membersParts(undefined)).toBeNull();
   });
 
-  it('ближайшее событие: когда и что', () => {
-    const event = { startsAt: '2026-11-12T16:00:00.000Z', type: 'TRAINING', title: 'Тренировка', location: 'Арена', timezone: 'Europe/Moscow' };
-    expect(nextEventLines(event, NOW)).toEqual({ when: 'Завтра в 19:00', details: 'Тренировка · «Арена»' });
-    expect(nextEventLines({ ...event, location: null }, NOW)?.details).toBe('Тренировка');
-    expect(nextEventLines({ ...event, type: 'FRIENDLY_MATCH', title: 'Спарринг с South Crew', location: null }, NOW)?.details).toBe(
-      'Спарринг · Спарринг с South Crew',
-    );
+  it('ближайшее событие: когда и тип, без названия и места', () => {
+    const event = { startsAt: '2026-11-12T16:00:00.000Z', type: 'TRAINING', timezone: 'Europe/Moscow' };
+    expect(nextEventLines(event, NOW)).toEqual({ when: 'Завтра в 19:00', details: 'Тренировка' });
+    expect(nextEventLines({ ...event, type: 'FRIENDLY_MATCH' }, NOW)?.details).toBe('Спарринг');
+    expect(nextEventLines({ ...event, type: 'TOURNAMENT' }, NOW)?.details).toBe('Турнир');
+    expect(nextEventLines({ ...event, type: 'CHAMPIONSHIP' }, NOW)?.details).toBe('Чемпионат');
+    expect(nextEventLines({ ...event, type: 'НЕИЗВЕСТНО' }, NOW)?.details).toBe('');
     expect(nextEventLines(null, NOW)).toBeNull();
+    expect(nextEventLines({ ...event, startsAt: 'не дата' }, NOW)).toBeNull();
   });
 
-  it('заявка у капитана: имя первым словом, без имени — «Капитан»', () => {
-    expect(requestWaitingParts('Денис Голев')).toEqual({ name: 'Денис', rest: ' увидит заявку и ответит. Мы пришлём уведомление.' });
+  it('старый ответ с названием и местом: они не показываются', () => {
+    const old = { startsAt: '2026-11-12T16:00:00.000Z', type: 'TRAINING', title: 'Закрытое собрание', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' };
+    expect(nextEventLines(old, NOW)).toEqual({ when: 'Завтра в 19:00', details: 'Тренировка' });
+  });
+
+  it('дальше «завтра» — дата по поясу команды, а не браузера', () => {
+    // 20 ноября 23:30 по Москве — это уже 21 ноября во Владивостоке.
+    const startsAt = '2026-11-20T20:30:00.000Z';
+    expect(nextEventLines({ startsAt, type: 'TRAINING', timezone: 'Europe/Moscow' }, NOW)?.when).toBe('20 ноября в 23:30');
+    expect(nextEventLines({ startsAt, type: 'TRAINING', timezone: 'Asia/Vladivostok' }, NOW)?.when).toBe('21 ноября в 06:30');
+  });
+
+  it('заявка у капитана: имя как пришло (сервер уже отдаёт первое имя), без имени — «Капитан»', () => {
+    expect(requestWaitingParts('Денис')).toEqual({ name: 'Денис', rest: ' увидит заявку и ответит. Мы пришлём уведомление.' });
+    expect(requestWaitingParts(' Анна-Мария ').name).toBe('Анна-Мария');
     expect(requestWaitingParts(undefined).name).toBeNull();
+    expect(requestWaitingParts(null).name).toBeNull();
     expect(requestWaitingParts(' ').rest).toMatch(/^Капитан увидит/);
   });
 
   it('имя зовущего: пустое имя — нет имени', () => {
-    expect(inviterName({ inviter: { name: ' Денис Голев ' } })).toBe('Денис Голев');
+    expect(inviterName({ inviter: { name: ' Денис ' } })).toBe('Денис');
+    expect(inviterName({ inviter: null })).toBeNull();
     expect(inviterName({ inviter: { name: '' } })).toBeNull();
     expect(inviterName({})).toBeNull();
   });
@@ -60,14 +76,29 @@ describe('блок фактов', () => {
 
   it('с полями: три строки', () => {
     const html = render({
-      inviter: { name: 'Денис Голев' },
+      inviter: { name: 'Денис' },
       membersCount: 12,
-      nextEvent: { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', title: 'Тренировка', location: 'Арена', timezone: 'Europe/Moscow' },
+      nextEvent: { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', timezone: 'Europe/Moscow' },
     });
-    expect(html).toContain('Денис Голев');
+    expect(html).toContain('Денис');
     expect(html).toContain('Капитан · зовёт тебя игроком');
     expect(html).toContain('12 человек');
-    expect(html).toContain('Тренировка · «Арена»');
+    expect(html).toContain('1 января в 19:00');
+    expect(html).toContain('Тренировка');
+  });
+
+  it('старый ответ с названием и местом события: их на экране нет', () => {
+    const old = { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', title: 'Закрытое собрание', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' };
+    const html = render({ inviter: { name: 'Денис' }, membersCount: 3, nextEvent: old });
+    expect(html).toContain('Тренировка');
+    expect(html).not.toContain('Закрытое собрание');
+    expect(html).not.toContain('maps.example');
+  });
+
+  it('inviter: null — строки «кто зовёт» нет, остальное на месте', () => {
+    const html = render({ inviter: null, membersCount: 3, nextEvent: null });
+    expect(html).toContain('3 человека');
+    expect(html).not.toContain('зовёт тебя');
   });
 
   it('старый ответ без новых полей: блока нет, ничего не падает', () => {

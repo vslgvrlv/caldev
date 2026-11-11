@@ -25,11 +25,24 @@ function shiftDay(now: Date, days: number): Date {
   return new Date(now.getTime() + days * 86_400_000);
 }
 
-/** «Приглашение действует до 18 ноября»; пусто, если срока нет. */
-export function inviteValidUntil(expiresAt: string | null | undefined): string | null {
+/** «18 ноября» в заданном часовом поясе; битый или пустой пояс — пояс браузера. */
+function dayMonthText(date: Date, timeZone?: string | null): string {
+  try {
+    return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: timeZone || undefined }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(date);
+  }
+}
+
+/**
+ * «Приглашение действует до 18 ноября»; пусто, если срока нет. День — по поясу
+ * команды, если он известен (он приходит только вместе с ближайшим событием),
+ * иначе по поясу браузера.
+ */
+export function inviteValidUntil(expiresAt: string | null | undefined, timeZone?: string | null): string | null {
   const date = validDate(expiresAt);
   if (!date) return null;
-  return `Приглашение действует до ${format(date, 'd MMMM', { locale: ru })}`;
+  return `Приглашение действует до ${dayMonthText(date, timeZone)}`;
 }
 
 /** «Заявка отправлена сегодня» / «вчера» / «18 ноября». */
@@ -55,7 +68,7 @@ export function eventWhenText(startAt: string, timezone: string | null | undefin
   const key = dayKey(date, timezone || undefined);
   if (key === dayKey(now, timezone || undefined)) return `Сегодня в ${time}`;
   if (key === dayKey(shiftDay(now, 1), timezone || undefined)) return `Завтра в ${time}`;
-  return `${format(date, 'd MMMM', { locale: ru })} в ${time}`;
+  return `${dayMonthText(date, timezone)} в ${time}`;
 }
 
 /** Вторая строка ближайшего события: «Тренировка · Арена». */
@@ -64,12 +77,14 @@ export function eventDetailsText(title: string, location: string | null | undefi
 }
 
 // Факты о команде на экранах приглашения. Поля необязательные: старый ответ
-// сервера без них даёт `null`, и строки на экране просто нет.
+// сервера без них даёт `null`, и строки на экране просто нет. Название и место
+// события сюда не входят: сервер их больше не шлёт, а из старого ответа они не
+// читаются.
 
 export type InviteFactsInput = {
   inviter?: { name?: string | null } | null;
   membersCount?: number | null;
-  nextEvent?: { startsAt: string; type?: string | null; title?: string | null; location?: string | null; timezone?: string | null } | null;
+  nextEvent?: { startsAt: string; type?: string | null; timezone?: string | null } | null;
 };
 
 const INVITED_AS: Record<string, string> = { CAPTAIN: 'капитаном', TRAINER: 'тренером', PLAYER: 'игроком' };
@@ -93,7 +108,7 @@ export function membersParts(count: number | null | undefined): { strong: string
   return { strong: `${count} ${pluralRu(count, 'человек', 'человека', 'человек')}`, rest: ' в команде' };
 }
 
-/** Две строки ближайшего события: «Завтра в 19:00» и «Тренировка · «Арена»». */
+/** Две строки ближайшего события: «Завтра в 19:00» и тип — «Тренировка». Без названия и места. */
 export function nextEventLines(
   event: InviteFactsInput['nextEvent'],
   now: Date = new Date(),
@@ -102,16 +117,16 @@ export function nextEventLines(
   const when = eventWhenText(event.startsAt, event.timezone, now);
   if (!when) return null;
   const type = (EVENT_LABELS as Record<string, string>)[String(event.type ?? '')] ?? '';
-  const title = String(event.title ?? '').trim();
-  const place = String(event.location ?? '').trim();
-  const detail = place ? `«${place}»` : title && title !== type ? title : '';
-  return { when, details: [type, detail].filter(Boolean).join(' · ') };
+  return { when, details: type };
 }
 
-/** Имя в абзаце выделяется, поэтому текст отдаём двумя частями. */
-export function requestWaitingParts(inviterFullName: string | null | undefined): { name: string | null; rest: string } {
-  const first = String(inviterFullName ?? '').trim().split(/\s+/)[0];
-  return first
-    ? { name: first, rest: ' увидит заявку и ответит. Мы пришлём уведомление.' }
+/**
+ * Имя в абзаце выделяется, поэтому текст отдаём двумя частями. Сервер уже
+ * отдаёт только первое имя, поэтому оно идёт как есть.
+ */
+export function requestWaitingParts(inviterName: string | null | undefined): { name: string | null; rest: string } {
+  const name = String(inviterName ?? '').trim();
+  return name
+    ? { name, rest: ' увидит заявку и ответит. Мы пришлём уведомление.' }
     : { name: null, rest: 'Капитан увидит заявку и ответит. Мы пришлём уведомление.' };
 }
