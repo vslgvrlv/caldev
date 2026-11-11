@@ -387,7 +387,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, se
                 профиле. Адрес возврата (`?next=`) едет в `redirectTo` (caldev#128). */}
             {yandexEnabled && (
               <>
-                <Button variant="ghost" block onClick={handleYandexLogin} disabled={isLoading}>
+                <Button variant="ghost" block className="pbth-login__quiet" onClick={handleYandexLogin} disabled={isLoading}>
                   Войти через Яндекс
                 </Button>
                 <p className="pbth-login__small">Работает, если ты уже привязал Яндекс в профиле. Первый вход — через Telegram.</p>

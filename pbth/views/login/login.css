@@ -5,8 +5,8 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-top: calc(var(--pb-safe-top, 0px) + 48px);
-  padding-bottom: calc(var(--pb-safe-bottom, 0px) + 16px);
+  padding-top: calc(var(--pb-safe-top) + 48px);
+  padding-bottom: calc(var(--pb-safe-bottom) + 16px);
 }
 
 .pbth-login__hero {
@@ -59,3 +59,4 @@
 .pbth-login__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; }
 .pbth-login__links a { font-size: 12px; color: var(--ui-muted); text-decoration: underline; text-underline-offset: 3px; }
 .pbth-login__dev { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
+.pbth-login__quiet { color: var(--ui-muted); }
