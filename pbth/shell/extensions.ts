@@ -34,6 +34,11 @@ export type HeaderBadge = {
   Component: ComponentType<ShellExtContext>;
   visible?: (ctx: ShellExtContext) => boolean;
   order?: number;
+  /**
+   * Значок про текущую команду (заявки с числом). На «Моё» и в «Календаре»
+   * текущей команды для человека нет — там такие значки не ставятся.
+   */
+  teamScoped?: boolean;
 };
 
 export type EventBlockProps = ShellExtContext & {

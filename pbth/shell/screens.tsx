@@ -14,6 +14,9 @@ import { teamScreenRows } from './section-head';
 import { treasuryRowSub } from '../lib/treasury-view';
 import { formatRub } from '../lib/format-rub';
 import { GuestBookingsBlock } from '../components/track4/GuestBookingCards';
+import { useTeamFilter } from './team-filter-context';
+import { requestsNotices } from '../lib/team-filter';
+import { useTeamRequestCounts } from '../lib/use-team-requests';
 import { PlayerStatus, Role, type Event, type TeamContext, type TeamMember } from '../types';
 
 // Экраны по адресам. Здесь только проводка: данные и действия из оболочки,
@@ -59,11 +62,27 @@ export const DashboardScreen: React.FC = () => {
   const code = useTeamCode();
   const [linkOpen, setLinkOpen] = React.useState(false);
   const team = shell.team;
-  // Подсказки капитану новой команды: «Позови команду», «Создай первое событие».
+  const filter = useTeamFilter();
+  // Лента, «Ждут ответа» и ближайшее событие — только по включённым в фильтре командам.
+  const events = React.useMemo(() => shell.events.filter((event) => filter.isShown(event.teamId)), [shell.events, filter]);
+  // Подсказки капитану новой команды: «Позови команду», «Создай первое событие» — если команда включена.
   const hints = captainHomeHints({
-    role: team?.role,
+    role: team && filter.isShown(team.id) ? team.role : undefined,
     membersCount: shell.members.length,
     teamEventsCount: team ? shell.events.filter((event) => event.teamId === team.id).length : 0,
+  });
+  // Заявки в команду: по строке на каждую включённую команду, где я решаю заявки и они есть.
+  const counts = useTeamRequestCounts(shell.teams);
+  const notices = requestsNotices(shell.teams, counts, filter.hidden).map(({ team: t, text }) => {
+    const teamCode = teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode });
+    return {
+      id: t.teamId,
+      teamId: t.teamId,
+      teamName: t.teamName,
+      shortCode: t.shortCode,
+      text,
+      onOpen: () => navigate(teamPath(teamCode, 'requests')),
+    };
   });
 
   // Шапку «Моё» (название, дата, ряд знаков, «Команды», значки) и фон даёт оболочка.
@@ -71,7 +90,7 @@ export const DashboardScreen: React.FC = () => {
     <>
       <Dashboard
         teams={shell.teams}
-        events={shell.events}
+        events={events}
         currentTeam={team ? { id: team.id, name: team.name, shortCode: team.shortCode } : null}
         onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
         onEventClick={openEvent}
@@ -80,7 +99,10 @@ export const DashboardScreen: React.FC = () => {
         captainHints={hints}
         onInviteTeam={() => setLinkOpen(true)}
         onCreateEvent={() => navigate(teamPath(code || shell.teamCode || '', 'new'))}
-        guestBookings={<GuestBookingsBlock />}
+        guestBookings={<GuestBookingsBlock isShown={filter.isShown} />}
+        requestNotices={notices}
+        allTeamsHidden={filter.allHidden}
+        onShowAllTeams={filter.showAll}
       />
       {linkOpen && team && (
         <TeamJoinLinkSheet
@@ -97,9 +119,14 @@ export const DashboardScreen: React.FC = () => {
 export const CalendarScreen: React.FC = () => {
   const shell = useShell();
   const openEvent = useOpenEvent();
+  const filter = useTeamFilter();
+  // Точки под числами и список дня — только по включённым в фильтре командам.
+  const events = React.useMemo(() => shell.events.filter((event) => filter.isShown(event.teamId)), [shell.events, filter]);
   return (
     <CalendarView
-      events={shell.events}
+      events={events}
+      allTeamsHidden={filter.allHidden}
+      onShowAllTeams={filter.showAll}
       onEventClick={openEvent}
       onEventLongPress={shell.actions.openRsvpModal}
       onCommitSeries={(seriesId) => void shell.actions.commitSeries(seriesId)}

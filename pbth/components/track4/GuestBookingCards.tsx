@@ -32,8 +32,11 @@ export const GuestBookingCards: React.FC<{ bookings: SlotOffer[]; onOpen: (event
   );
 };
 
-/** Карточки с загрузкой ленты. Нет записей или нет сети — ничего не показывает. */
-export const GuestBookingsBlock: React.FC = () => {
+/**
+ * Карточки с загрузкой ленты. Нет записей или нет сети — ничего не показывает.
+ * `isShown` — фильтр команд «Моё»: запись в выключенной команде не показываем.
+ */
+export const GuestBookingsBlock: React.FC<{ isShown?: (teamId: string) => boolean }> = ({ isShown }) => {
   const navigate = useNavigate();
   const [bookings, setBookings] = React.useState<SlotOffer[]>([]);
 
@@ -52,5 +55,6 @@ export const GuestBookingsBlock: React.FC = () => {
     };
   }, []);
 
-  return <GuestBookingCards bookings={bookings} onOpen={(eventId) => navigate(slotsPath.event(eventId))} />;
+  const shown = isShown ? bookings.filter((offer) => isShown(offer.teamId)) : bookings;
+  return <GuestBookingCards bookings={shown} onOpen={(eventId) => navigate(slotsPath.event(eventId))} />;
 };

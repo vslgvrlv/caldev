@@ -11,6 +11,7 @@ import { canAnswerRsvp } from '../lib/rsvp';
 import { eventPath } from '../lib/team-url';
 import { useRowPress } from './Dashboard';
 import { useSectionSubtitle } from '../shell/section-subtitle';
+import { AllTeamsHidden } from '../components/shell/TeamFilterNotes';
 import '../shell/home.css';
 import './calendar-view.css';
 
@@ -20,6 +21,9 @@ interface CalendarViewProps {
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
   onCommitSeries: (seriesId: string) => void;
+  /** В фильтре команд выключены все: под сеткой — «Все команды скрыты». */
+  allTeamsHidden?: boolean;
+  onShowAllTeams?: () => void;
   /** Текущее время для тестов и снимков; по умолчанию часы устройства. */
   nowOverride?: number;
 }
@@ -96,6 +100,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onEventClick,
   onEventLongPress,
   onCommitSeries,
+  allTeamsHidden,
+  onShowAllTeams,
   nowOverride,
 }) => {
   const now = React.useMemo(() => nowOverride ?? Date.now(), [nowOverride]);
@@ -133,19 +139,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           />
         </Glass>
 
-        <section className="pbth-day pbth-calday">
-          <div className="pbth-day__head">
-            <h2 className="pbth-day__title">{heading.title}</h2>
-            <span className="pbth-day__sub">{heading.sub}</span>
-          </div>
-          {dayEvents.length === 0 ? (
-            <Glass as="div" className="pbth-empty">
-              <div className="pbth-empty__text">В этот день событий нет</div>
-            </Glass>
-          ) : (
-            <DayEvents events={dayEvents} onOpen={onEventClick} onLong={onEventLongPress} onCommitSeries={onCommitSeries} />
-          )}
-        </section>
+        {allTeamsHidden ? (
+          <AllTeamsHidden onShowAll={() => onShowAllTeams?.()} />
+        ) : (
+          <section className="pbth-day pbth-calday">
+            <div className="pbth-day__head">
+              <h2 className="pbth-day__title">{heading.title}</h2>
+              <span className="pbth-day__sub">{heading.sub}</span>
+            </div>
+            {dayEvents.length === 0 ? (
+              <Glass as="div" className="pbth-empty">
+                <div className="pbth-empty__text">В этот день событий нет</div>
+              </Glass>
+            ) : (
+              <DayEvents events={dayEvents} onOpen={onEventClick} onLong={onEventLongPress} onCommitSeries={onCommitSeries} />
+            )}
+          </section>
+        )}
       </div>
     </Screen>
   );

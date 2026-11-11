@@ -26,6 +26,7 @@ import {
 } from '../lib/home-feed';
 import { canAnswerRsvp } from '../lib/rsvp';
 import { eventPath } from '../lib/team-url';
+import { AllTeamsHidden, RequestsNotice, type RequestsNoticeItem } from '../components/shell/TeamFilterNotes';
 import '../shell/home.css';
 
 interface DashboardProps {
@@ -48,6 +49,11 @@ interface DashboardProps {
   onCreateEvent?: () => void;
   /** Карточки «Ты записан гостем» — между ближайшим событием и лентой. */
   guestBookings?: React.ReactNode;
+  /** Строки «<Команда>: N заявок ждут ответа» — под блоком ближайшего события. */
+  requestNotices?: RequestsNoticeItem[];
+  /** В фильтре команд выключены все: вместо ленты — «Все команды скрыты». */
+  allTeamsHidden?: boolean;
+  onShowAllTeams?: () => void;
   /** Текущее время для тестов и снимков; по умолчанию часы устройства. */
   nowOverride?: number;
 }
@@ -310,6 +316,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onInviteTeam,
   onCreateEvent,
   guestBookings,
+  requestNotices,
+  allTeamsHidden,
+  onShowAllTeams,
   nowOverride,
 }) => {
   const [tick, setTick] = React.useState(() => Date.now());
@@ -338,6 +347,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const findHero = React.useCallback((el: Element) => (el.closest?.('[data-hero]') && hero ? hero : undefined), [hero]);
   const heroPress = useRowPress(findHero, onEventClick, onEventLongPress);
 
+  if (allTeamsHidden) {
+    return (
+      <Screen>
+        <div className="pbth-home">
+          {header}
+          <AllTeamsHidden onShowAll={() => onShowAllTeams?.()} />
+        </div>
+      </Screen>
+    );
+  }
+
   return (
     <Screen paints={paints}>
       <div className="pbth-home">
@@ -362,6 +382,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </Button>
           </Glass>
         )}
+
+        {requestNotices?.map((item) => <RequestsNotice key={item.id} item={item} />)}
 
         {guestBookings}
 

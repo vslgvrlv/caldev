@@ -8,6 +8,10 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { ContentLoader, ScreenLoader } from '../components/shell/ScreenLoader';
 import { DataUnavailableScreen, TeamForbiddenScreen } from '../components/shell/StateScreens';
 import { TeamsPicker } from '../components/shell/TeamsPicker';
+import { TeamsFilter } from '../components/shell/TeamsFilter';
+import { CreateTeamPicker } from '../components/shell/CreateTeamPicker';
+import { TeamFilterContext, useTeamFilter, useTeamFilterState } from './team-filter-context';
+import { plusAction } from '../lib/team-filter';
 import { TeamsPickerContext } from './teams-picker-context';
 import { SectionHeader } from './SectionHeader';
 import { useSectionSubtitleOverride } from './section-subtitle';
@@ -105,22 +109,36 @@ const SectionFrame: React.FC<{ paints: string[]; head: (onHeight: (px: number) =
   );
 };
 
-/** Значки расширений шапки и пункты меню команды (треки, `pbth/shell/ext`). */
-function useShellExt(code: string) {
+/**
+ * Разделы, где ряд знаков — фильтр команд, а не переключатель: «Моё» и «Календарь»
+ * показывают события всех команд человека, текущей команды там для него нет.
+ */
+export function isFilterSection(pathname: string): boolean {
+  const parsed = parseTeamPath(pathname);
+  return Boolean(parsed) && (parsed!.section === '' || parsed!.section === 'calendar') && parsed!.rest.length === 0;
+}
+
+/**
+ * Какие значки расширений ставить в шапку раздела. «Моё» — только не про
+ * команду (свободные слоты), «Календарь» — никаких, разделы команды — все.
+ */
+export function headerBadgeScope(pathname: string): 'all' | 'global' | 'none' {
+  const section = parseTeamPath(pathname)?.section;
+  if (section === '' && isFilterSection(pathname)) return 'global';
+  if (section === 'calendar') return 'none';
+  return 'all';
+}
+
+/** Значки расширений шапки (треки, `pbth/shell/ext`). */
+function useShellBadges(code: string, scope: 'all' | 'global' | 'none') {
   const shell = useShell();
   const extCtx: ShellExtContext | null =
     shell.user && shell.team ? { user: shell.user, team: shell.team, teamCode: code, role: shell.team.role, teams: shell.teams } : null;
-  const badges = extCtx
-    ? shellExtensions.headerBadges
-        .filter((badge) => !badge.visible || badge.visible(extCtx))
-        .map(({ id, Component }) => <Component key={id} {...extCtx} />)
-    : null;
-  const menuItems = extCtx
-    ? shellExtensions.teamMenu
-        .filter((item) => !item.visible || item.visible(extCtx))
-        .map((item) => ({ id: item.id, label: item.label, to: item.to(extCtx) }))
-    : [];
-  return { badges, menuItems };
+  if (!extCtx || scope === 'none') return null;
+  return shellExtensions.headerBadges
+    .filter((badge) => scope === 'all' || !badge.teamScoped)
+    .filter((badge) => !badge.visible || badge.visible(extCtx))
+    .map(({ id, Component }) => <Component key={id} {...extCtx} />);
 }
 
 /** Шапка раздела и выбор команд: общие для разделов команды и профиля. */
@@ -141,8 +159,10 @@ const SectionHead: React.FC<{
     const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
-  const { badges, menuItems } = useShellExt(code);
   const onMe = location.pathname === '/me';
+  const filterMode = isFilterSection(location.pathname);
+  const filter = useTeamFilter();
+  const badges = useShellBadges(code, headerBadgeScope(location.pathname));
   const text = sectionHeadText(location.pathname, { now, team, membersCount: ready ? shell.members.length : 0 });
   const subtitleOverride = useSectionSubtitleOverride();
   const pickTeam = (target: TeamContext) => {
@@ -161,37 +181,53 @@ const SectionHead: React.FC<{
           ) : undefined
         }
         note={!onMe && team?.via === 'owner' ? 'Владелец платформы' : undefined}
-        teams={shell.teams}
-        currentCode={onMe ? null : code}
+        teams={filterMode ? filter.teams : shell.teams}
+        currentCode={onMe || filterMode ? null : code}
+        filter={filterMode ? { isShown: filter.isShown, onToggle: (t) => filter.toggle(t.teamId) } : undefined}
         badges={ready && !onMe ? badges : null}
         onPickTeam={pickTeam}
         onOpenTeams={() => setTeamsOpen(true)}
         onHeight={onHeight}
       />
-      <TeamsPicker
-        open={teamsOpen}
-        onClose={() => setTeamsOpen(false)}
-        teams={shell.teams}
-        currentCode={onMe ? '' : code}
-        items={ready && !onMe ? menuItems : []}
-        onPickTeam={pickTeam}
-        onPickItem={(to) => {
-          setTeamsOpen(false);
-          navigate(to);
-        }}
-      />
+      {filterMode ? (
+        <TeamsFilter
+          open={teamsOpen}
+          onClose={() => setTeamsOpen(false)}
+          teams={filter.teams}
+          hidden={filter.hidden}
+          onSetShown={filter.setShown}
+          onSetHidden={filter.setHidden}
+          onOpenTeam={(t) => {
+            setTeamsOpen(false);
+            navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }), 'roster'));
+          }}
+        />
+      ) : (
+        <TeamsPicker
+          open={teamsOpen}
+          onClose={() => setTeamsOpen(false)}
+          teams={shell.teams}
+          currentCode={onMe ? '' : code}
+          onPickTeam={pickTeam}
+        />
+      )}
     </>
   );
 };
 
-/** Краски фона раздела. */
-function useSectionPaints(pathname: string): string[] {
+/**
+ * Краски фона раздела. На «Моё» и в «Календаре» — только по включённым в
+ * фильтре командам: скрытая команда не красит фон, все скрыты — фон без пятен.
+ */
+function useSectionPaints(pathname: string, isShown?: (teamId: string) => boolean): string[] {
   const shell = useShell();
   const [now] = React.useState(() => Date.now());
-  return React.useMemo(
-    () => sectionPaints(pathname, { now, events: shell.events, team: shell.team, teams: shell.teams, paintOf: teamPaint }),
-    [pathname, now, shell.events, shell.team, shell.teams],
-  );
+  return React.useMemo(() => {
+    const filtered = Boolean(isShown) && isFilterSection(pathname);
+    const events = filtered ? shell.events.filter((e) => isShown!(e.teamId)) : shell.events;
+    const team = filtered && shell.team && !isShown!(shell.team.id) ? null : shell.team;
+    return sectionPaints(pathname, { now, events, team, teams: shell.teams, paintOf: teamPaint });
+  }, [pathname, now, shell.events, shell.team, shell.teams, isShown]);
 }
 
 const OnboardingNote: React.FC = () => {
@@ -225,7 +261,9 @@ const TeamShellInner: React.FC = () => {
 
   const recordScreen = isRecordScreen(location.pathname);
   const [teamsOpen, setTeamsOpen] = React.useState(false);
-  const paints = useSectionPaints(location.pathname);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const filter = useTeamFilterState(shell.user?.id, shell.teams);
+  const paints = useSectionPaints(location.pathname, filter.isShown);
 
   if (!ready && shell.teamLoad === 'forbidden') {
     return (
@@ -280,7 +318,17 @@ const TeamShellInner: React.FC = () => {
 
   const canCreate = ready && shell.team ? eventCreateAccess(shell.team.role).canCreate : false;
   const section = parseTeamPath(location.pathname)?.section ?? '';
-  const nav = <ShellNav teamCode={code} canCreate={canCreate && section !== 'requests' && section !== 'journal'} />;
+  // «Плюс» на «Моё» и в «Календаре» не привязан к последней открытой команде:
+  // команд с правом создавать несколько — сначала шторка выбора, одна — сразу её форма.
+  const plus = isFilterSection(location.pathname) ? plusAction(shell.teams) : null;
+  const onCreate =
+    plus?.kind === 'pick'
+      ? () => setCreateOpen(true)
+      : plus?.kind === 'go'
+        ? () => navigate(teamPath(teamCodeOf({ teamId: plus.team.teamId, shortCode: plus.team.shortCode }), 'new'))
+        : undefined;
+  const navCanCreate = plus && plus.kind !== 'none' ? ready : canCreate && section !== 'requests' && section !== 'journal';
+  const nav = <ShellNav teamCode={code} canCreate={navCanCreate} onCreate={onCreate} />;
   const content = (
     <div className="flex-1">
       <TeamsPickerContext.Provider value={() => setTeamsOpen(true)}>
@@ -307,23 +355,36 @@ const TeamShellInner: React.FC = () => {
   }
 
   return (
-    <SectionFrame
-      paints={paints}
-      head={(onHeight) => (
-        <SectionHead
-          code={code}
-          team={headerTeam}
-          ready={ready}
-          teamsOpen={teamsOpen}
-          setTeamsOpen={setTeamsOpen}
-          onHeight={onHeight}
+    <TeamFilterContext.Provider value={filter}>
+      <SectionFrame
+        paints={paints}
+        head={(onHeight) => (
+          <SectionHead
+            code={code}
+            team={headerTeam}
+            ready={ready}
+            teamsOpen={teamsOpen}
+            setTeamsOpen={setTeamsOpen}
+            onHeight={onHeight}
+          />
+        )}
+      >
+        <OnboardingNote />
+        {content}
+        {nav}
+      </SectionFrame>
+      {plus?.kind === 'pick' && (
+        <CreateTeamPicker
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          teams={plus.teams}
+          onPick={(t) => {
+            setCreateOpen(false);
+            navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }), 'new'));
+          }}
         />
       )}
-    >
-      <OnboardingNote />
-      {content}
-      {nav}
-    </SectionFrame>
+    </TeamFilterContext.Provider>
   );
 };
 

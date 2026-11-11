@@ -5,21 +5,21 @@ import { roleLabel } from '../../lib/labels';
 import { teamCodeOf } from '../../lib/team-url';
 import '../../shell/home.css';
 
-export type TeamsPickerItem = { id: string; label: string; to: string };
-
 export type TeamsPickerProps = {
   open: boolean;
   onClose: () => void;
   teams: TeamContext[];
   currentCode: string;
-  /** Пункты меню команды от треков (заявки, журнал, открытое расписание). */
-  items: TeamsPickerItem[];
   onPickTeam: (team: TeamContext) => void;
-  onPickItem: (to: string) => void;
 };
 
-/** Выбор команды и пункты меню команды: то, что раньше выпадало из названия команды в шапке. */
-export const TeamsPicker: React.FC<TeamsPickerProps> = ({ open, onClose, teams, currentCode, items, onPickTeam, onPickItem }) => {
+/**
+ * Выбор команды в разделах команды (состав, казна, журнал) и в профиле. Пункты
+ * меню команды (заявки, журнал, открытое расписание) — строками на экране
+ * команды, консоль владельца — в профиле; здесь их нет. На «Моё» и в
+ * «Календаре» вместо этой шторки — фильтр команд (`TeamsFilter`).
+ */
+export const TeamsPicker: React.FC<TeamsPickerProps> = ({ open, onClose, teams, currentCode, onPickTeam }) => {
   const own = teams.filter((t) => t.via !== 'owner');
   const owner = teams.filter((t) => t.via === 'owner');
   const row = (t: TeamContext, hint: string) => {
@@ -46,10 +46,6 @@ export const TeamsPicker: React.FC<TeamsPickerProps> = ({ open, onClose, teams, 
             {owner.map((t) => row(t, 'Как владелец'))}
           </>
         )}
-        {items.length > 0 && <div className="pbth-teams__label">Текущая команда</div>}
-        {items.map((item) => (
-          <Row key={item.id} title={item.label} chevron onClick={() => onPickItem(item.to)} />
-        ))}
       </div>
     </Sheet>
   );

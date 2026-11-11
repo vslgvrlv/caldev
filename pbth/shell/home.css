@@ -4,7 +4,10 @@
 
 /* Шапка раздела оболочки: закреплена сверху, стекло закрывает вырез и часы.
    Без выреза — парящая панель с отступом; с вырезом панель доходит до верхнего края, верхние углы прямые
-   (clamp: при safe-area-inset-top > 0 отступ и радиус уходят в ноль). */
+   (clamp: при safe-area-inset-top > 0 отступ и радиус уходят в ноль).
+   С вырезом текст шапки начинается на 24px ниже зоны часов, а не на 10px: iOS кладёт на верх окна под часами
+   размытую полосу, и крупное название, стоявшее вплотную к ней, выходило мутным и выцветшим (снимок владельца 11.11).
+   Стекло шапки по-прежнему закрывает зону часов, но текста под ней нет. */
 .pbth-sectionhead {
   position: fixed;
   top: 0;
@@ -21,7 +24,7 @@
   -webkit-font-smoothing: antialiased;
 }
 .pbth-sectionhead__bar {
-  padding: calc(var(--pb-safe-top) + 10px) 16px 6px;
+  padding: calc(var(--pb-safe-top) + 10px + clamp(0px, var(--pb-safe-top) * 100, 14px)) 16px 6px;
   border-top-left-radius: clamp(0px, calc(var(--ui-radius-lg) - var(--pb-safe-top) * 100), var(--ui-radius-lg));
   border-top-right-radius: clamp(0px, calc(var(--ui-radius-lg) - var(--pb-safe-top) * 100), var(--ui-radius-lg));
 }
@@ -36,17 +39,39 @@
   font-size: 28px;
   font-weight: 800;
   line-height: 1.15;
-  overflow-wrap: anywhere;
+  /* Перенос только по словам: «Молни/я» не бывает. Длинное слово, которому не хватает места, уменьшает
+     название до 20px, а не влезает и так — одна строка с многоточием (titleFit в section-head.ts). */
+  overflow-wrap: normal;
+  word-break: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
+/* Длинное слово не помещается рядом со знаком и значками: название своей строкой под ними, на всю ширину. */
+.pbth-sectionhead__top.is-stacked { flex-wrap: wrap; align-items: center; row-gap: 4px; }
+.pbth-sectionhead__top.is-stacked > .pbth-sectionhead__lead { order: 1; }
+.pbth-sectionhead__top.is-stacked > .pbth-sectionhead__tools { order: 2; margin-left: auto; }
+.pbth-sectionhead__top.is-stacked > .pbth-sectionhead__titles { order: 3; flex-basis: 100%; }
+.pbth-sectionhead__title.is-md { font-size: 20px; line-height: 1.2; }
+.pbth-sectionhead__title.is-clip { display: block; font-size: 20px; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
 .pbth-sectionhead__sub { max-width: 100%; margin-top: 2px; font-size: 14px; color: var(--ui-muted); overflow-wrap: anywhere; }
 .pbth-sectionhead__note { margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
 .pbth-sectionhead__tools { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 4px; margin-right: -8px; }
 .pbth-sectionhead__teams { white-space: nowrap; }
 .pbth-sectionhead__badge { position: relative; display: inline-flex; }
 .pbth-sectionhead__badge > .ui-sidenav__badge { position: absolute; top: 2px; right: 0; pointer-events: none; }
+/* Число на красном кружке: тёмное на сплошном красном (6,5:1) и 12px — бледное красное на красном с 10px не читалось. */
+.pbth-sectionhead__badge > .ui-sidenav__badge {
+  min-width: 20px;
+  box-sizing: border-box;
+  padding: 1px 5px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: var(--ui-bg);
+  background: var(--ui-danger);
+}
 .pbth-sectionhead__marks {
   display: flex;
   gap: 0;
@@ -80,6 +105,10 @@
   border-radius: 1px;
   background: var(--ui-text);
 }
+/* Ряд знаков как фильтр («Моё», «Календарь»): выключенная команда — контур в цвете краски без заливки, приглушённый. */
+.pbth-sectionhead__mark.is-off .pbth-teammark { overflow: visible; opacity: .8; }
+.pbth-sectionhead__mark.is-off .pbth-teammark path { fill: transparent; stroke: var(--pbth-paint); stroke-width: 1.5; }
+.pbth-sectionhead__mark.is-off .pbth-teammark text { fill: var(--pbth-paint); }
 .pbth-sectionhead__mark:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; border-radius: var(--ui-radius-md); }
 
 /* Стекло под часами на экранах без шапки раздела (событие, заявки, карточка игрока): полоса высотой в вырез. */
@@ -146,6 +175,55 @@
 .pbth-empty { padding: 20px 16px; }
 .pbth-empty__title { font-size: 16px; font-weight: 700; }
 .pbth-empty__text { margin-top: 4px; font-size: 14px; color: var(--ui-muted); }
+.pbth-empty__actions { display: flex; margin-top: 12px; }
+
+/* Строка «<Команда>: N заявок ждут ответа» в ленте «Моё»: тихая, стеклянная, со стрелкой. */
+.pbth-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px 10px 16px;
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbth-notice__text { flex: 1 1 auto; min-width: 0; font-size: 14px; color: var(--ui-muted); }
+.pbth-notice__chev { flex: none; color: var(--ui-muted); }
+.pbth-notice:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+
+/* Шторка «Команды» на «Моё» и в «Календаре»: быстрый выбор, группы по роли, выключатели в цвете краски. */
+.pbth-tfilter { display: flex; flex-direction: column; gap: 4px; }
+.pbth-tfilter__group { display: flex; flex-direction: column; margin-top: 12px; }
+.pbth-tfilter__head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 4px; }
+.pbth-tfilter__title { font-size: 16px; font-weight: 700; }
+.pbth-tfilter__count { font-size: 14px; color: var(--ui-muted); }
+.pbth-tfilter__row { display: flex; align-items: center; gap: 4px; min-height: 56px; border-top: 1px solid var(--ui-border); }
+.pbth-tfilter__head + .pbth-tfilter__row { border-top: 0; }
+.pbth-tfilter__open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pbth-tfilter__open:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; border-radius: var(--ui-radius-md); }
+.pbth-tfilter__main { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-tfilter__name { font-size: 16px; font-weight: 700; overflow-wrap: break-word; }
+.pbth-tfilter__role { font-size: 14px; color: var(--ui-muted); }
+.pbth-tfilter__chev { flex: none; color: var(--ui-muted); }
+.pbth-tfilter__switch { display: inline-flex; flex: none; padding-left: 8px; border-left: 1px solid var(--ui-border); }
 
 .pbth-teams { display: flex; flex-direction: column; }
 .pbth-teams__label { padding: 12px 4px 4px; font-size: 12px; color: var(--ui-muted); }

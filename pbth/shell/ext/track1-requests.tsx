@@ -6,7 +6,7 @@ import { teamPath } from '../../lib/team-url';
 import { Button } from '../../ui';
 import { onJoinRequestsChanged, track1Api } from '../../api/track1';
 
-// Трек 1: заявки на вступление в меню команды и значок с их числом в шапке.
+// Трек 1: заявки на вступление в меню команды и значок с их числом в шапке разделов команды.
 // Видят капитан и тренер (владелец платформы в чужой команде — как капитан).
 
 const canDecide = (ctx: ShellExtContext) =>
@@ -66,7 +66,8 @@ const ext: ShellExtension = {
       visible: canDecide,
     },
   ],
-  headerBadges: [{ id: 'join-requests', Component: RequestsBadge, visible: canDecide }],
+  // Значок — про текущую команду: на «Моё» вместо него строки заявок по всем командам в ленте.
+  headerBadges: [{ id: 'join-requests', Component: RequestsBadge, visible: canDecide, teamScoped: true }],
 };
 
 export default ext;

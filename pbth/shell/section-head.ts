@@ -100,6 +100,29 @@ export function shouldCompact(m: { rowWidth: number; titleWidth: number; toolsWi
   return Math.ceil(m.titleWidth) + gap + Math.ceil(fullTools) > Math.floor(m.rowWidth);
 }
 
+/** Как уложить название шапки: размер (28px или 20px, `clip` — одна строка 20px с многоточием) и где — в строке с инструментами или своей строкой под ними. */
+export type TitleFit = 'lg' | 'md' | 'clip';
+export type TitleLayout = { fit: TitleFit; stacked: boolean };
+
+/**
+ * Название не рвётся внутри слова. Самое длинное слово (ширина при 28px)
+ * помещается рядом с инструментами — 28px с переносом по словам; помещается
+ * там при 20px — 20px по словам. Не помещается рядом — название уходит своей
+ * строкой под знак и инструменты, на всю ширину шапки, и там так же: 28px,
+ * 20px или одна строка с многоточием в конце.
+ */
+export function titleLayout(m: { longestWord: number; inline: number; full: number }): TitleLayout {
+  const fits = (width: number): TitleFit | null => {
+    if (m.longestWord <= width) return 'lg';
+    if ((m.longestWord * 20) / 28 <= width) return 'md';
+    return null;
+  };
+  if (!(m.inline > 0)) return { fit: 'lg', stacked: false };
+  const inline = fits(m.inline);
+  if (inline) return { fit: inline, stacked: false };
+  return { fit: fits(m.full) ?? 'clip', stacked: true };
+}
+
 export type TeamScreenRow = { id: string; label: string; to: string; icon: string };
 
 /** Значки строк меню команды на экране команды (ui-kit, набор Lucide). */
