@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../../ui';
 import { membersParts, nextEventLines, type InviteFactsInput } from '../../lib/invite-copy';
+import '../../shell/home.css';
 import './invite-frame.css';
 
 // Общий каркас экранов приглашения и заявки (`/invite/:token`, `/join/:code`):
@@ -16,6 +17,8 @@ export const InviteFrame: React.FC<{ teamId?: string | null; /** Краски в
   children,
 }) => (
   <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : (paints ?? PRODUCT_PAINT)}>
+    {/* Стекло под часами: содержимое не лезет под вырез голым. */}
+    <div className="ui-glass pbth-statusveil" aria-hidden="true" />
     <div className="pbth-invite__brand">
       <Icon name="hexagon" size={24} />
       <span className="pbth-invite__brand-name">Paintball TeamHub</span>
