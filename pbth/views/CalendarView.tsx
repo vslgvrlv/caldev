@@ -1,127 +1,141 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useParams } from 'react-router-dom';
+import { Feed, Glass, Month, Screen, teamMarkSvg, teamPaint, type FeedItem, type FeedType } from '../ui';
 import { Event } from '../types';
-import { EVENT_COLORS } from '../constants';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isToday, getISODay, addDays } from 'date-fns';
-import { ru } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { EventCard } from '../components/EventCard';
-import { sortEventsByStart } from '../lib/events';
+import { useShell } from '../shell/context';
+import { canCommitToSeries } from '../lib/events';
+import { eventTeamCode, resolveEventTeamName } from '../lib/event-team';
+import { answerStatus, eventSubline, feedTitle, timeLabel } from '../lib/home-feed';
+import { calendarDayHeading, calendarMarks, eventsOfDay, isoOfDate, monthPaints, parseIso } from '../lib/calendar-days';
+import { canAnswerRsvp } from '../lib/rsvp';
+import { eventPath } from '../lib/team-url';
+import { useRowPress } from './Dashboard';
+import '../shell/home.css';
+import './calendar-view.css';
 
 interface CalendarViewProps {
+  /** События всех команд игрока (`shell.events`). */
   events: Event[];
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
   onCommitSeries: (seriesId: string) => void;
+  /** Шапка раздела оболочки: живёт внутри экрана, потому что краски фона задаёт он. */
+  header?: React.ReactNode;
+  /** Текущее время для тестов и снимков; по умолчанию часы устройства. */
+  nowOverride?: number;
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ events, onEventClick, onEventLongPress, onCommitSeries }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+const FEED_TYPES: Record<string, FeedType> = { event: { icon: 'calendar' } };
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const leadPadding = getISODay(monthStart) - 1;
-  const trailPadding = (7 - ((leadPadding + monthDays.length) % 7)) % 7;
-  const gridDays = [
-    ...Array.from({ length: leadPadding }, (_, idx) => addDays(monthStart, -(leadPadding - idx))),
-    ...monthDays,
-    ...Array.from({ length: trailPadding }, (_, idx) => addDays(monthEnd, idx + 1)),
-  ];
+/** События выбранного дня одной стеклянной лентой: знак команды, название, время, отметка ответа. */
+const DayEvents: React.FC<{
+  events: Event[];
+  onOpen: (event: Event) => void;
+  onLong: (event: Event) => void;
+  onCommitSeries: (seriesId: string) => void;
+}> = ({ events, onOpen, onLong, onCommitSeries }) => {
+  const shell = useShell();
+  const { team: teamParam } = useParams();
+  const currentCode = String(teamParam || '').toLowerCase();
+  const teams = shell.teams;
+  const multi = teams.length > 1;
+  const commit = React.useRef(onCommitSeries);
+  commit.current = onCommitSeries;
 
-  // Get events for the selected date
-  const selectedEvents = sortEventsByStart(events.filter(e => isSameDay(e.startDate, selectedDate)));
+  const { map, items } = React.useMemo(() => {
+    const byHref = new Map<string, Event>();
+    const list: FeedItem[] = events.map((event) => {
+      const href = eventPath(eventTeamCode(event, teams, currentCode), event.id);
+      byHref.set(href, event);
+      const teamName = resolveEventTeamName(event, teams, null);
+      const actions: NonNullable<FeedItem['actions']> = [];
+      if (canAnswerRsvp(event) && canCommitToSeries(event)) {
+        actions.push({ label: 'Иду на серию', onClick: () => commit.current(event.seriesId!) });
+      }
+      return {
+        id: event.id,
+        type: 'event',
+        at: event.startDate.toISOString(),
+        title: feedTitle(event, teamName, multi),
+        sub: eventSubline(event),
+        href,
+        lead: teamMarkSvg({ teamId: event.teamId, name: teamName, code: event.teamShortCode, size: 40 }),
+        timeDisplay: timeLabel(event.startDate),
+        status: answerStatus(event) ?? undefined,
+        actions: actions.length ? actions : undefined,
+      };
+    });
+    return { map: byHref, items: list };
+  }, [events, teams, multi, currentCode]);
 
-  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
-  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const press = useRowPress(
+    (el) => {
+      const a = el.closest?.('a.ui-feed__row');
+      return a ? map.get(a.getAttribute('href') || '') : undefined;
+    },
+    onOpen,
+    onLong,
+  );
 
   return (
-    <div
-      className="pb-24 px-4 h-full flex flex-col"
-      style={{ paddingTop: 'calc(var(--pb-safe-top) + 1rem)' }}
-    >
-      <h1 className="text-2xl font-bold text-white mb-6">Календарь</h1>
-
-      {/* Month Navigation */}
-      <div className="flex justify-between items-center mb-6 bg-pb-surface p-2 rounded-xl border border-white/5">
-        <button onClick={prevMonth} className="p-2 hover:bg-white/10 rounded-lg text-white">
-          <ChevronLeft size={20} />
-        </button>
-        <span className="text-lg font-bold capitalize text-white">
-          {format(currentDate, 'LLLL yyyy', { locale: ru })}
-        </span>
-        <button onClick={nextMonth} className="p-2 hover:bg-white/10 rounded-lg text-white">
-          <ChevronRight size={20} />
-        </button>
-      </div>
-
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 mb-6">
-        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-          <div key={day} className="text-center text-pb-subtext text-xs font-medium py-2">
-            {day}
-          </div>
-        ))}
-        
-        {gridDays.map((day) => {
-           const dayEvents = events.filter(e => isSameDay(e.startDate, day));
-           const isSelected = isSameDay(day, selectedDate);
-           const isCurrentDay = isToday(day);
-           const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-
-           return (
-             <button
-                key={day.toString()}
-                onClick={() => setSelectedDate(day)}
-                className={`
-                  h-12 rounded-xl flex flex-col items-center justify-center relative transition-colors
-                  ${isSelected ? 'bg-pb-primary text-pb-background font-bold shadow-lg shadow-green-500/20' : 'bg-pb-surface/50 text-white hover:bg-pb-surface'}
-                  ${isCurrentDay && !isSelected ? 'border border-pb-primary text-pb-primary' : ''}
-                  ${!isCurrentMonth ? 'opacity-45' : ''}
-                `}
-             >
-               <span className="text-sm">{format(day, 'd')}</span>
-               
-               {/* Event Dots */}
-               <div className="flex space-x-0.5 mt-1">
-                 {dayEvents.slice(0, 3).map((e, i) => (
-                   <div 
-                    key={i} 
-                    className="w-1 h-1 rounded-full" 
-                    style={{ backgroundColor: EVENT_COLORS[e.type] }}
-                   />
-                 ))}
-               </div>
-             </button>
-           );
-        })}
-      </div>
-
-      {/* Selected Day Events */}
-      <div className="flex-1 overflow-y-auto">
-        <h3 className="text-pb-subtext text-sm uppercase font-bold mb-3">
-          {format(selectedDate, 'd MMMM, EEEE', { locale: ru })}
-        </h3>
-        
-        <div className="space-y-3">
-          {selectedEvents.length === 0 ? (
-            <div className="text-center py-8 text-pb-subtext/50">
-              <p>Нет событий</p>
-            </div>
-          ) : (
-            selectedEvents.map(event => (
-               <EventCard
-                 key={event.id}
-                 event={event}
-                 compact
-                 onClick={onEventClick}
-                 onLongPress={onEventLongPress}
-                 onCommitSeries={onCommitSeries}
-               />
-            ))
-          )}
-        </div>
-      </div>
+    <div className="pbth-day__list" {...press}>
+      <Feed types={FEED_TYPES} items={items} order="asc" limit={100} />
     </div>
+  );
+};
+
+/** Календарь: сетка месяца со знаками команд-красок, под ней события выбранного дня. */
+export const CalendarView: React.FC<CalendarViewProps> = ({
+  events,
+  onEventClick,
+  onEventLongPress,
+  onCommitSeries,
+  header,
+  nowOverride,
+}) => {
+  const now = React.useMemo(() => nowOverride ?? Date.now(), [nowOverride]);
+  const todayIso = isoOfDate(new Date(now));
+  const [shown, setShown] = React.useState(() => ({ year: new Date(now).getFullYear(), month: new Date(now).getMonth() + 1 }));
+  const [selected, setSelected] = React.useState(todayIso);
+
+  const marks = React.useMemo(() => calendarMarks(events, teamPaint), [events]);
+  const paints = React.useMemo(() => monthPaints(events, shown.year, shown.month, now, teamPaint), [events, shown, now]);
+  const dayEvents = React.useMemo(() => eventsOfDay(events, selected), [events, selected]);
+  const heading = calendarDayHeading(parseIso(selected) ?? new Date(now), dayEvents.length);
+
+  const onNav = React.useCallback((to: { year: number; month: number }) => setShown(to), []);
+
+  return (
+    <Screen paints={paints}>
+      <div className="pbth-home">
+        {header}
+
+        <Glass as="section" className="pbth-cal" aria-label="Календарь">
+          <Month
+            year={shown.year}
+            month={shown.month}
+            today={todayIso}
+            selected={selected}
+            marks={marks}
+            onSelect={setSelected}
+            onNav={onNav}
+          />
+        </Glass>
+
+        <section className="pbth-day">
+          <div className="pbth-day__head">
+            <h2 className="pbth-day__title">{heading.title}</h2>
+            <span className="pbth-day__sub">{heading.sub}</span>
+          </div>
+          {dayEvents.length === 0 ? (
+            <Glass as="div" className="pbth-empty">
+              <div className="pbth-empty__text">В этот день событий нет</div>
+            </Glass>
+          ) : (
+            <DayEvents events={dayEvents} onOpen={onEventClick} onLong={onEventLongPress} onCommitSeries={onCommitSeries} />
+          )}
+        </section>
+      </div>
+    </Screen>
   );
 };

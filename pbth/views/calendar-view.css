@@ -1,0 +1,8 @@
+/* Раскладка календаря. Вид (стекло, цвета, шрифт) даёт тема ui-kit. */
+.pbth-cal { padding: 8px 8px 12px; }
+/* Выбранный день — рамка второго слоя стекла, а не акцентная заливка: зелёный в приложении только у главного действия. */
+.pbth-cal .ui-month__d.is-selected {
+  border-color: color-mix(in srgb, var(--ui-text) 16%, transparent);
+  background: var(--ui-glass2-bg);
+}
+.pbth-cal .ui-month__d.is-selected:focus-visible { border-color: var(--ui-accent); }

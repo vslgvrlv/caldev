@@ -56,7 +56,7 @@ const LONG_PRESS_MS = 600;
 const FEED_TYPES: Record<string, FeedType> = { event: { icon: 'calendar' } };
 
 /** Долгое нажатие по строкам: открывает окно ответа; следующий за ним тап строку не открывает. */
-function useRowPress(find: (el: Element) => Event | undefined, onOpen: (e: Event) => void, onLong: (e: Event) => void) {
+export function useRowPress(find: (el: Element) => Event | undefined, onOpen: (e: Event) => void, onLong: (e: Event) => void) {
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const fired = React.useRef(false);
   const stop = () => {
