@@ -1,0 +1,9 @@
+/* Раскладка журнала команды. Вид (стекло, шрифт) даёт ui-kit. */
+.pbth-journal__lead { margin: 0 4px 12px; font-size: 14px; color: var(--ui-muted); }
+.pbth-jrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 4px; border-top: 1px solid var(--ui-border); }
+.pbth-team__group + .pbth-jrow { border-top: 0; }
+.pbth-jrow__main { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-jrow__who { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.pbth-jrow__text { font-size: 14px; color: var(--ui-muted); overflow-wrap: anywhere; }
+.pbth-jrow__owner { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
+.pbth-jrow .pbth-small { flex: none; padding-top: 4px; }

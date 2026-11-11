@@ -33,7 +33,7 @@ const SECTION_SAFE_TOP = {
  * Разделы в новом виде: рисуют свою шапку и фон внутри экрана, старая шапка
  * команды над ними не нужна. Календарь и разделы треков пока в старом виде.
  */
-const NEW_LOOK_SECTIONS = new Set(['', 'roster', 'requests', 'money']);
+const NEW_LOOK_SECTIONS = new Set(['', 'roster', 'requests', 'money', 'journal']);
 
 function isRecordScreen(pathname: string): boolean {
   const parsed = parseTeamPath(pathname);
