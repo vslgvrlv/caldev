@@ -1,14 +1,24 @@
 import React from 'react';
 import { Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../../ui';
 import { membersParts, nextEventLines, type InviteFactsInput } from '../../lib/invite-copy';
+import '../../shell/home.css';
 import './invite-frame.css';
 
 // Общий каркас экранов приглашения и заявки (`/invite/:token`, `/join/:code`):
 // знак продукта сверху, стеклянная панель, знак команды, заголовок. Человек
 // ещё не в приложении, поэтому нижней панели нет.
 
-export const InviteFrame: React.FC<{ teamId?: string | null; children: React.ReactNode }> = ({ teamId, children }) => (
-  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : undefined}>
+// Без команды за стеклом слабое зелёное пятно продукта.
+const PRODUCT_PAINT = ['#00E676'];
+
+export const InviteFrame: React.FC<{ teamId?: string | null; /** Краски вместо краски команды (hex), если команды нет. */ paints?: string[]; children: React.ReactNode }> = ({
+  teamId,
+  paints,
+  children,
+}) => (
+  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : (paints ?? PRODUCT_PAINT)}>
+    {/* Стекло под часами: содержимое не лезет под вырез голым. */}
+    <div className="ui-glass pbth-statusveil" aria-hidden="true" />
     <div className="pbth-invite__brand">
       <Icon name="hexagon" size={24} />
       <span className="pbth-invite__brand-name">Paintball TeamHub</span>
@@ -21,12 +31,19 @@ export const InviteFrame: React.FC<{ teamId?: string | null; children: React.Rea
 
 export const InviteHero: React.FC<{
   team?: { id: string; name: string; shortCode?: string } | null;
+  /** Значок вместо знака команды: ссылка не работает, ничего не нашлось. */
+  icon?: string;
   /** Отметка на знаке: заявка отправлена. */
   checked?: boolean;
   title: React.ReactNode;
   children?: React.ReactNode;
-}> = ({ team, checked, title, children }) => (
+}> = ({ team, icon, checked, title, children }) => (
   <div className="pbth-invite__hero">
+    {icon && !team ? (
+      <span className="pbth-invite__icon ui-glass2">
+        <Icon name={icon} size={32} />
+      </span>
+    ) : null}
     {team ? (
       <span className="pbth-invite__mark">
         <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={96} />

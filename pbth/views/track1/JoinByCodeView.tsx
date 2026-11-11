@@ -130,7 +130,7 @@ export const JoinByCodeView: React.FC = () => {
   if (state.kind === 'invalid') {
     return (
       <InviteFrame>
-        <InviteHero title="Ссылка не работает">
+        <InviteHero icon="link" title="Ссылка не работает">
           Капитан мог выпустить новую ссылку. Попроси у него свежую или код команды.
         </InviteHero>
         <InviteActions>
@@ -145,7 +145,7 @@ export const JoinByCodeView: React.FC = () => {
   if (state.kind === 'error') {
     return (
       <InviteFrame>
-        <InviteHero title="Не открылось">{state.text}</InviteHero>
+        <InviteHero icon="cloud-off" title="Не открылось">{state.text}</InviteHero>
         <InviteActions>
           <Button variant="glass2" block onClick={() => window.location.reload()}>
             Обновить
