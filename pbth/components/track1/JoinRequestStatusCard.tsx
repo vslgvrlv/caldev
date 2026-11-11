@@ -1,11 +1,16 @@
 import React from 'react';
-import { CalendarDays, Clock3, MapPin, XCircle } from 'lucide-react';
-import type { JoinRequest, NextEvent } from '../../api/track1';
+import { CalendarDays, Clock3, XCircle } from 'lucide-react';
+import type { JoinRequest } from '../../api/track1';
+import { EVENT_LABELS } from '../../constants';
+import type { PublicEventInput } from '../../lib/invite-copy';
 
 // Состояние заявки на вступление: «у капитана» с ближайшим событием или отказ
 // словами. Общая для экрана ссылки и экрана «нет команды». Без состава и денег.
 
-export function formatEventWhen(event: NextEvent): string {
+// Событие в заявке — время, тип, пояс: человек ещё не в команде. `startAt` —
+// имя поля в старом ответе; `title` и `location` старого ответа не читаются.
+export function formatEventWhen(event: PublicEventInput): string {
+  const startsAt = String(event.startsAt ?? event.startAt ?? '');
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
     day: 'numeric',
@@ -14,28 +19,25 @@ export function formatEventWhen(event: NextEvent): string {
     minute: '2-digit',
   };
   try {
-    return new Date(event.startAt).toLocaleString('ru-RU', { ...options, timeZone: event.timezone || undefined });
+    return new Date(startsAt).toLocaleString('ru-RU', { ...options, timeZone: event.timezone || undefined });
   } catch {
-    return new Date(event.startAt).toLocaleString('ru-RU', options);
+    return new Date(startsAt).toLocaleString('ru-RU', options);
   }
 }
 
-export const NextEventLine: React.FC<{ event: NextEvent }> = ({ event }) => (
-  <div className="rounded-xl bg-black/30 px-3 py-3 text-left text-sm">
-    <div className="text-pb-subtext text-xs mb-1">Ближайшее событие команды</div>
-    <div className="text-white font-semibold">{event.title}</div>
-    <div className="mt-1 flex items-center gap-2 text-pb-subtext">
-      <CalendarDays size={14} className="shrink-0" />
-      <span>{formatEventWhen(event)}</span>
-    </div>
-    {event.location && (
+export const NextEventLine: React.FC<{ event: PublicEventInput }> = ({ event }) => {
+  const type = (EVENT_LABELS as Record<string, string>)[String(event.type ?? '')] ?? '';
+  return (
+    <div className="rounded-xl bg-black/30 px-3 py-3 text-left text-sm">
+      <div className="text-pb-subtext text-xs mb-1">Ближайшее событие команды</div>
+      {type ? <div className="text-white font-semibold">{type}</div> : null}
       <div className="mt-1 flex items-center gap-2 text-pb-subtext">
-        <MapPin size={14} className="shrink-0" />
-        <span>{event.location}</span>
+        <CalendarDays size={14} className="shrink-0" />
+        <span>{formatEventWhen(event)}</span>
       </div>
-    )}
-  </div>
-);
+    </div>
+  );
+};
 
 export const JoinRequestStatusCard: React.FC<{ request: JoinRequest; compact?: boolean }> = ({ request, compact }) => {
   if (request.status === 'DECLINED' || request.status === 'CANCELLED') {

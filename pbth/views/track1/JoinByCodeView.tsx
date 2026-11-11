@@ -2,8 +2,8 @@ import React from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useShell } from '../../shell/context';
 import { track1Api, type JoinRequest, type TeamBrief } from '../../api/track1';
-import { InviteActions, InviteFrame, InviteHero, InviteNotNow } from '../../components/track1/InviteFrame';
-import { eventDetailsText, eventWhenText, requestSentText } from '../../lib/invite-copy';
+import { InviteActions, InviteFacts, InviteFrame, InviteHero, InviteNotNow } from '../../components/track1/InviteFrame';
+import { nextEventLines, requestSentText, type InviteFactsInput } from '../../lib/invite-copy';
 import { Button, Glass, Icon, Row } from '../../ui';
 import { teamCodeOf, teamPath } from '../../lib/team-url';
 import { errorText } from '../../lib/notify';
@@ -22,7 +22,7 @@ type State =
   | { kind: 'loading' }
   | { kind: 'invalid' }
   | { kind: 'error'; text: string }
-  | { kind: 'anonymous'; team: TeamBrief }
+  | { kind: 'anonymous'; team: TeamBrief; facts: InviteFactsInput }
   | { kind: 'member'; team: TeamBrief }
   | { kind: 'request'; request: JoinRequest };
 
@@ -46,7 +46,8 @@ export const JoinByCodeView: React.FC = () => {
       try {
         const preview = await track1Api.previewJoinLink(code);
         if (cancelled) return;
-        if (!preview.authenticated) return setState({ kind: 'anonymous', team: preview.team });
+        const previewFacts: InviteFactsInput = { membersCount: preview.membersCount, nextEvent: preview.nextEvent };
+        if (!preview.authenticated) return setState({ kind: 'anonymous', team: preview.team, facts: previewFacts });
         if (preview.member) return setState({ kind: 'member', team: preview.team });
         if (preview.request && preview.request.status !== 'CANCELLED') {
           return setState({ kind: 'request', request: preview.request });
@@ -161,6 +162,7 @@ export const JoinByCodeView: React.FC = () => {
         <InviteHero team={state.team} title={`Тебя зовут в ${state.team.name}`}>
           Команда принимает по заявке. Капитан ответит на неё.
         </InviteHero>
+        <InviteFacts facts={state.facts} />
         <InviteActions>
           <Button variant="primary" block onClick={() => navigate(`/login?next=${next}`)}>
             Подать заявку
@@ -172,6 +174,8 @@ export const JoinByCodeView: React.FC = () => {
   }
 
   const { request } = state;
+  // Ближайшее событие заявки: когда и тип; старый ответ с названием и местом их не показывает.
+  const requestEvent = nextEventLines(request.nextEvent);
   const openApp = (
     <InviteActions>
       <Button variant="primary" block onClick={() => navigate('/app')}>
@@ -208,12 +212,8 @@ export const JoinByCodeView: React.FC = () => {
       </InviteHero>
       <Glass layer={2} className="pbth-invite__facts">
         <Row lead={<Icon name="clock" size={24} />} title={request.team.name} sub={requestSentText(request.createdAt)} />
-        {request.nextEvent ? (
-          <Row
-            lead={<Icon name="calendar" size={24} />}
-            title={eventWhenText(request.nextEvent.startAt, request.nextEvent.timezone)}
-            sub={eventDetailsText(request.nextEvent.title, request.nextEvent.location)}
-          />
+        {requestEvent ? (
+          <Row lead={<Icon name="calendar" size={24} />} title={requestEvent.when} sub={requestEvent.details || undefined} />
         ) : null}
       </Glass>
       {openApp}

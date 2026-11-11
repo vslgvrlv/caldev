@@ -5,6 +5,8 @@ import { attachAuthUser, requireAuth } from "../../middleware/auth.js";
 import { sendTrackError as sendError } from "./delivery.js";
 import { resolveTeamAccess, sendTeamAccessError, TeamAccessError } from "../../lib/team-access.js";
 import { findActiveJoinLink } from "../teams/join-link.js";
+import { loadInviteFacts } from "../teams/invite-facts.js";
+import { publicLinkReadLimiter } from "../../lib/public-link-rate-limit.js";
 import {
   canDecideJoinRequests,
   createJoinRequest,
@@ -43,19 +45,21 @@ function sendDecisionError(req: Request, res: Response, error: unknown): boolean
 
 joinRequestsRouter.get(
   "/link/:code",
+  publicLinkReadLimiter(),
   asyncHandler(async (req, res) => {
     const link = await findActiveJoinLink(req.params.code);
     if (!link) return sendError(req, res, 404, "JOIN_LINK_NOT_FOUND", "Join link not found or revoked");
     const team = { id: link.teamId, name: link.teamName, shortCode: link.teamShortCode };
+    const facts = (await loadInviteFacts(link.teamId)) ?? {};
     const user = await attachAuthUser(req);
-    if (!user) return res.json({ team, authenticated: false, member: false, request: null });
+    if (!user) return res.json({ team, authenticated: false, member: false, request: null, ...facts });
     const membership = await findMembership(link.teamId, user.id);
     let request = null;
     if (!membership) {
       const mine = await listMyJoinRequests(user.id);
       request = mine.find((item) => item.team.id === link.teamId) ?? null;
     }
-    return res.json({ team, authenticated: true, member: Boolean(membership), request });
+    return res.json({ team, authenticated: true, member: Boolean(membership), request, ...facts });
   })
 );
 

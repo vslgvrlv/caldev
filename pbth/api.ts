@@ -86,7 +86,17 @@ export type TeamInviteInfoResponse = {
   isExpired: boolean;
   isUsed: boolean;
   isRevoked: boolean;
+  /** Необязательные факты для экрана приглашения; старый сервер их не шлёт. */
+  membersCount?: number;
+  nextEvent?: InviteNextEvent | null;
 };
+
+/**
+ * Ближайшее игровое событие команды для экранов приглашения: только время, тип
+ * и пояс команды. Название и место сервер не отдаёт (свободный текст); старый
+ * ответ с ними экран не читает.
+ */
+export type InviteNextEvent = { startsAt: string; type: string; timezone: string };
 
 export type AuthMethod = 'WEBAPP' | 'OIDC' | 'LEGACY_WIDGET' | 'DEV' | 'BOT_HANDOFF' | null;
 export type AdminScope = 'NONE' | 'TEAM' | 'PLATFORM';
