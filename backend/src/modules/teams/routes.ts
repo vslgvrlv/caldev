@@ -1,5 +1,6 @@
 import { Router, type Request } from "express";
 import { loadInviteFacts } from "./invite-facts.js";
+import { publicLinkReadLimiter } from "../../lib/public-link-rate-limit.js";
 import { z } from "zod";
 import { isPlatformOwner, resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
@@ -209,6 +210,7 @@ teamsRouter.post(
 
 teamsRouter.get(
   "/invites/:token",
+  publicLinkReadLimiter(),
   asyncHandler(async (req, res) => {
     const token = z.string().uuid().parse(req.params.token);
     const inviteResult = await query<{

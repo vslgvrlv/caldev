@@ -1,7 +1,11 @@
 // Экраны приглашения (`/invite/:token`, `/join/:code`) открыты тому, у кого есть
 // ссылка. Ручки отдают три дополнительных поля: inviter, membersCount,
 // nextEvent. Тест держит: поля приходят для живой ссылки, не приходят для
-// недействующей, и больше про людей команды наружу не уходит ничего.
+// недействующей, и больше про людей команды наружу не уходит ничего:
+//   inviter   — только первое имя и только если это имя (не `tg-…`, `@ник`,
+//               телефон, почта);
+//   nextEvent — только `{ startsAt, type, timezone }` игрового события;
+//               сборы, ТО и «другое» пропускаются, название и место не уходят.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
@@ -18,6 +22,9 @@ const stamp = Date.now() % 1_000_000;
 const f = {
   team: "",
   emptyTeam: "",
+  badTeam: "",
+  badUsers: [] as string[],
+  badCode: `IB${stamp}`.slice(0, 8),
   captain: "",
   trainer: "",
   inactive: "",
@@ -35,11 +42,11 @@ async function user(tg: number, name: string, active = true) {
   return r.rows[0].id;
 }
 
-async function invite(opts: { createdBy: string; role?: string; expiresInHours?: number; revoked?: boolean; used?: boolean; singleUse?: boolean }) {
+async function invite(opts: { createdBy: string; role?: string; expiresInHours?: number; revoked?: boolean; used?: boolean; singleUse?: boolean; team?: string }) {
   const r = await pool.query<{ token: string }>(
     `INSERT INTO team_invites (team_id, role, created_by, expires_at, is_revoked, used_at, single_use)
      VALUES ($1, $2::membership_role, $3, NOW() + ($4 || ' hours')::interval, $5, $6, $7) RETURNING token::text`,
-    [f.team, opts.role ?? "PLAYER", opts.createdBy, String(opts.expiresInHours ?? 24), opts.revoked ?? false, opts.used ? new Date() : null, opts.singleUse ?? false]
+    [opts.team ?? f.team, opts.role ?? "PLAYER", opts.createdBy, String(opts.expiresInHours ?? 24), opts.revoked ?? false, opts.used ? new Date() : null, opts.singleUse ?? false]
   );
   return r.rows[0].token;
 }
@@ -60,17 +67,36 @@ beforeAll(async () => {
     await pool.query(`INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, $3::membership_role)`, [uid, f.team, role]);
   }
 
-  // Прошедшее, отменённое и два будущих события: берётся ближайшее живое будущее.
-  const ev = (type: string, title: string, hours: number, cancelled = false, location: string | null = "Арена") =>
+  // Прошедшее, отменённое, внутренние (сбор, ТО, другое) и два игровых будущих
+  // события: берётся ближайшее живое будущее игровое.
+  const ev = (type: string, title: string, hours: number, cancelled = false, location: string | null = "Арена", team = f.team) =>
     pool.query(
       `INSERT INTO events (team_id, type, title, description, start_at, location, cost, is_cancelled)
        VALUES ($1, $2::event_type, $3, 'секретное описание', NOW() + ($4 || ' hours')::interval, $5, 5000, $6)`,
-      [f.team, type, title, String(hours), location, cancelled]
+      [team, type, title, String(hours), location, cancelled]
     );
   await ev("TRAINING", "Было вчера", -24);
   await ev("TRAINING", "Отменённая", 2, true);
+  await ev("MEETING", "Закрытое собрание", 3, false, "https://maps.example/secret?x=1");
+  await ev("MAINTENANCE", "Ремонт маркеров", 4, false, "Гараж, кв. 5");
+  await ev("OTHER", "Личное", 5, false, "Дом капитана");
   await ev("TRAINING", "Ближайшая тренировка", 20);
   await ev("TOURNAMENT", "Турнир позже", 200);
+
+  // Команда, где имена — фолбэки регистрации и контакты, а впереди только
+  // внутренние события.
+  const bad = await pool.query<{ id: string }>(`INSERT INTO teams (name, short_code, timezone) VALUES ($1, $2, 'Asia/Vladivostok') RETURNING id`, [`Bad ${stamp}`, f.badCode]);
+  f.badTeam = bad.rows[0].id;
+  const badNames = ["tg-970000001", "@nick_cap", "+7 999 123-45-67", "ivan@mail.ru", "Денис🔥", "Константинопольский-Длинный Иван"];
+  for (const [i, name] of badNames.entries()) {
+    const id = await user(940_000_000 + i * 1_000_000 + stamp, name);
+    f.badUsers.push(id);
+    await pool.query(`INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, $3::membership_role)`, [id, f.badTeam, i === 0 ? "CAPTAIN" : "TRAINER"]);
+    f.tokens[`bad${i}`] = await invite({ createdBy: id, team: f.badTeam });
+  }
+  await ev("MEETING", "Закрытое собрание", 3, false, "https://maps.example/secret?x=1", f.badTeam);
+  await ev("OTHER", "Личное", 30, false, "Дом капитана", f.badTeam);
+  await pool.query(`INSERT INTO team_join_links (team_id, code, created_by) VALUES ($1, $2, $3)`, [f.badTeam, f.badCode, f.badUsers[0]]);
 
   await pool.query(`INSERT INTO team_join_links (team_id, code, created_by) VALUES ($1, $2, $3)`, [f.team, f.code, f.captain]);
   await pool.query(`INSERT INTO team_join_links (team_id, code, created_by) VALUES ($1, $2, NULL)`, [f.emptyTeam, f.emptyCode]);
@@ -82,24 +108,47 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool.query(`DELETE FROM teams WHERE id = ANY($1::uuid[])`, [[f.team, f.emptyTeam]]);
-  await pool.query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [[f.captain, f.trainer, f.inactive]]);
+  await pool.query(`DELETE FROM teams WHERE id = ANY($1::uuid[])`, [[f.team, f.emptyTeam, f.badTeam]]);
+  await pool.query(`DELETE FROM users WHERE id = ANY($1::uuid[])`, [[f.captain, f.trainer, f.inactive, ...f.badUsers]]);
   await pool.query(`DELETE FROM users WHERE telegram_id IN ($1, $2)`, [962_000_000 + stamp, 963_000_000 + stamp]);
 });
 
 const INVITE_KEYS = ["expiresAt", "inviter", "isExpired", "isRevoked", "isUsed", "isValid", "membersCount", "nextEvent", "note", "role", "singleUse", "teamId", "teamName"];
-const NEXT_EVENT_KEYS = ["location", "startsAt", "timezone", "title", "type"];
+const NEXT_EVENT_KEYS = ["startsAt", "timezone", "type"];
+// Свободный текст событий и фамилии: ни одно из этого не уходит наружу.
+const EVENT_TEXT = ["Ближайшая тренировка", "Турнир позже", "Закрытое собрание", "Ремонт маркеров", "Личное", "Арена", "maps.example", "Гараж", "Дом капитана", "секретное описание"];
 
 describe("GET /teams/invites/:token", () => {
   it("действующее приглашение: кто зовёт, сколько людей, ближайшее событие", async () => {
     const res = await request(app).get(`/api/v1/teams/invites/${f.tokens.ok}`).expect(200);
-    expect(res.body.inviter).toEqual({ name: "Тренер Тренеров" });
+    // только имя, без фамилии
+    expect(res.body.inviter).toEqual({ name: "Тренер" });
     // капитан, тренер, игрок; ушедший (is_active = false) не считается
     expect(res.body.membersCount).toBe(3);
-    expect(res.body.nextEvent.title).toBe("Ближайшая тренировка");
+    // сбор через 3 ч, ТО через 4 ч, «другое» через 5 ч пропущены — тренировка через 20 ч
     expect(res.body.nextEvent.type).toBe("TRAINING");
-    expect(res.body.nextEvent.location).toBe("Арена");
-    expect(new Date(res.body.nextEvent.startsAt).getTime()).toBeGreaterThan(Date.now());
+    expect(res.body.nextEvent.timezone).toBe("Europe/Moscow");
+    const hoursAhead = (new Date(res.body.nextEvent.startsAt).getTime() - Date.now()) / 3_600_000;
+    expect(hoursAhead).toBeGreaterThan(19);
+    expect(hoursAhead).toBeLessThan(21);
+  });
+
+  it("имя-фолбэк и контакты вместо имени: inviter — null", async () => {
+    for (const i of [0, 1, 2, 3, 4, 5]) {
+      const res = await request(app).get(`/api/v1/teams/invites/${f.tokens[`bad${i}`]}`).expect(200);
+      expect(res.body.inviter).toBeNull();
+      const text = JSON.stringify(res.body);
+      for (const leak of ["tg-", "970000001", "@nick", "nick_cap", "+7", "123-45-67", "mail.ru", "ivan", "🔥", "Константинопольский"]) {
+        expect(text).not.toContain(leak);
+      }
+    }
+  });
+
+  it("впереди только сбор и «другое»: nextEvent — null, текст событий не уходит", async () => {
+    const res = await request(app).get(`/api/v1/teams/invites/${f.tokens.bad0}`).expect(200);
+    expect(res.body.nextEvent).toBeNull();
+    const text = JSON.stringify(res.body);
+    for (const leak of EVENT_TEXT) expect(text).not.toContain(leak);
   });
 
   it("наружу — только разрешённые ключи, без людей, денег и заметок", async () => {
@@ -108,7 +157,7 @@ describe("GET /teams/invites/:token", () => {
     expect(Object.keys(res.body.inviter)).toEqual(["name"]);
     expect(Object.keys(res.body.nextEvent).sort()).toEqual(NEXT_EVENT_KEYS);
     const text = JSON.stringify(res.body);
-    for (const leak of ["nick", "secret-avatar", "секретное описание", "5000", String(f.captain), String(f.trainer), "telegram"]) {
+    for (const leak of ["nick", "secret-avatar", "5000", String(f.captain), String(f.trainer), "telegram", "Тренеров", "Голев", ...EVENT_TEXT]) {
       expect(text).not.toContain(leak);
     }
   });
@@ -117,7 +166,8 @@ describe("GET /teams/invites/:token", () => {
     for (const [key, status, code] of [["expired", 409, "INVITE_EXPIRED"], ["revoked", 409, "INVITE_REVOKED"], ["used", 409, "INVITE_USED"]] as const) {
       const res = await request(app).get(`/api/v1/teams/invites/${f.tokens[key]}`).expect(status);
       expect(res.body.code).toBe(code);
-      for (const field of ["inviter", "membersCount", "nextEvent"]) expect(res.body).not.toHaveProperty(field);
+      // тело ошибки прежнее: код, текст, correlationId — и ничего больше
+      expect(Object.keys(res.body).sort()).toEqual(["code", "correlationId", "detail"]);
     }
   });
 
@@ -136,16 +186,27 @@ describe("GET /join-requests/link/:code", () => {
   it("живая ссылка без входа: капитан, число людей, ближайшее событие", async () => {
     const res = await request(app).get(`/api/v1/join-requests/link/${f.code}`).expect(200);
     expect(res.body.authenticated).toBe(false);
-    expect(res.body.inviter).toEqual({ name: "Денис Голев" });
+    expect(res.body.request).toBeNull();
+    expect(res.body.inviter).toEqual({ name: "Денис" });
     expect(res.body.membersCount).toBe(3);
-    expect(res.body.nextEvent.title).toBe("Ближайшая тренировка");
+    expect(res.body.nextEvent.type).toBe("TRAINING");
     expect(Object.keys(res.body).sort()).toEqual(["authenticated", "inviter", "member", "membersCount", "nextEvent", "request", "team"]);
+    expect(Object.keys(res.body.inviter)).toEqual(["name"]);
     expect(Object.keys(res.body.nextEvent).sort()).toEqual(NEXT_EVENT_KEYS);
     expect(Object.keys(res.body.team).sort()).toEqual(["id", "name", "shortCode"]);
     const text = JSON.stringify(res.body);
-    for (const leak of ["nick", "secret-avatar", "секретное описание", "5000", "Тренер Тренеров", "Игрок Игроков"]) {
+    for (const leak of ["nick", "secret-avatar", "5000", "Голев", "Тренер", "Игрок", ...EVENT_TEXT]) {
       expect(text).not.toContain(leak);
     }
+  });
+
+  it("капитан с именем «tg-…»: inviter — null; впереди только сбор — nextEvent null", async () => {
+    const res = await request(app).get(`/api/v1/join-requests/link/${f.badCode}`).expect(200);
+    expect(res.body.inviter).toBeNull();
+    expect(res.body.nextEvent).toBeNull();
+    expect(res.body.membersCount).toBe(6);
+    const text = JSON.stringify(res.body);
+    for (const leak of ["tg-", "970000001", "@nick", "+7", "mail.ru", ...EVENT_TEXT]) expect(text).not.toContain(leak);
   });
 
   it("команда без капитана и событий: inviter и nextEvent — null, людей ноль", async () => {
@@ -159,7 +220,9 @@ describe("GET /join-requests/link/:code", () => {
     await pool.query(`UPDATE team_join_links SET revoked_at = NOW() WHERE code = $1`, [f.emptyCode]);
     for (const code of [f.emptyCode, "ZZZZZZ"]) {
       const res = await request(app).get(`/api/v1/join-requests/link/${code}`).expect(404);
-      for (const field of ["inviter", "membersCount", "nextEvent"]) expect(res.body).not.toHaveProperty(field);
+      expect(res.body.code).toBe("JOIN_LINK_NOT_FOUND");
+      expect(res.body.detail).toBe("Join link not found or revoked");
+      expect(Object.keys(res.body).sort()).toEqual(["code", "correlationId", "detail"]);
     }
   });
 

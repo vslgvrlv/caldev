@@ -164,6 +164,10 @@ export const env = {
     authMax: asNumber(process.env.RATE_AUTH_MAX || "20", "RATE_AUTH_MAX"),
     writeWindowMs: asNumber(process.env.RATE_WRITE_WINDOW_MS || "60000", "RATE_WRITE_WINDOW_MS"),
     writeMax: asNumber(process.env.RATE_WRITE_MAX || "120", "RATE_WRITE_MAX"),
+    // Открытые ручки ссылок приглашения (`/teams/invites/:token`,
+    // `/join-requests/link/:code`): предел на IP на каждую ручку.
+    publicLinkWindowMs: asNumber(process.env.RATE_PUBLIC_LINK_WINDOW_MS || "60000", "RATE_PUBLIC_LINK_WINDOW_MS"),
+    publicLinkMax: asNumber(process.env.RATE_PUBLIC_LINK_MAX || "30", "RATE_PUBLIC_LINK_MAX"),
   },
 
   notifications: {

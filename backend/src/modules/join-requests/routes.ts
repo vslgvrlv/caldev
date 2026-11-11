@@ -6,6 +6,7 @@ import { sendTrackError as sendError } from "./delivery.js";
 import { resolveTeamAccess, sendTeamAccessError, TeamAccessError } from "../../lib/team-access.js";
 import { findActiveJoinLink } from "../teams/join-link.js";
 import { loadInviteFacts } from "../teams/invite-facts.js";
+import { publicLinkReadLimiter } from "../../lib/public-link-rate-limit.js";
 import {
   canDecideJoinRequests,
   createJoinRequest,
@@ -44,6 +45,7 @@ function sendDecisionError(req: Request, res: Response, error: unknown): boolean
 
 joinRequestsRouter.get(
   "/link/:code",
+  publicLinkReadLimiter(),
   asyncHandler(async (req, res) => {
     const link = await findActiveJoinLink(req.params.code);
     if (!link) return sendError(req, res, 404, "JOIN_LINK_NOT_FOUND", "Join link not found or revoked");
