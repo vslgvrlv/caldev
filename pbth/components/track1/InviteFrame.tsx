@@ -7,12 +7,15 @@ import './invite-frame.css';
 // знак продукта сверху, стеклянная панель, знак команды, заголовок. Человек
 // ещё не в приложении, поэтому нижней панели нет.
 
+// Без команды за стеклом слабое зелёное пятно продукта.
+const PRODUCT_PAINT = ['#00E676'];
+
 export const InviteFrame: React.FC<{ teamId?: string | null; /** Краски вместо краски команды (hex), если команды нет. */ paints?: string[]; children: React.ReactNode }> = ({
   teamId,
   paints,
   children,
 }) => (
-  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : paints}>
+  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : (paints ?? PRODUCT_PAINT)}>
     <div className="pbth-invite__brand">
       <Icon name="hexagon" size={24} />
       <span className="pbth-invite__brand-name">Paintball TeamHub</span>
@@ -25,12 +28,19 @@ export const InviteFrame: React.FC<{ teamId?: string | null; /** Краски в
 
 export const InviteHero: React.FC<{
   team?: { id: string; name: string; shortCode?: string } | null;
+  /** Значок вместо знака команды: ссылка не работает, ничего не нашлось. */
+  icon?: string;
   /** Отметка на знаке: заявка отправлена. */
   checked?: boolean;
   title: React.ReactNode;
   children?: React.ReactNode;
-}> = ({ team, checked, title, children }) => (
+}> = ({ team, icon, checked, title, children }) => (
   <div className="pbth-invite__hero">
+    {icon && !team ? (
+      <span className="pbth-invite__icon ui-glass2">
+        <Icon name={icon} size={32} />
+      </span>
+    ) : null}
     {team ? (
       <span className="pbth-invite__mark">
         <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={96} />

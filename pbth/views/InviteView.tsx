@@ -171,7 +171,7 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
   if (unusable || !inviteInfo) {
     return (
       <InviteFrame>
-        <InviteHero title={unusable ? 'Приглашение не работает' : 'Не открылось'}>{statusText}</InviteHero>
+        <InviteHero icon={unusable ? 'link' : 'cloud-off'} title={unusable ? 'Приглашение не работает' : 'Не открылось'}>{statusText}</InviteHero>
         <InviteActions>
           {unusable ? (
             <Button variant="glass2" block onClick={() => navigate('/')}>

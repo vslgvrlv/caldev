@@ -98,7 +98,14 @@ export const JoinRequestsView: React.FC = () => {
 
       {!canDecide ? (
         <Glass className="pbth-rempty">
-          <div className="pbth-muted">Заявки решают капитан и тренер.</div>
+          <span className="pbth-iconlead ui-glass2" style={{ width: 72, height: 72 }}>
+            <Icon name="lock" size={32} />
+          </span>
+          <h3 className="pbth-rempty__title">Заявки решают капитан и тренер</h3>
+          <p className="pbth-rempty__text">Новых игроков принимают они. Тебе от заявок ничего делать не нужно.</p>
+          <Button variant="glass2" block onClick={goBack}>
+            К составу
+          </Button>
         </Glass>
       ) : failed ? (
         <Glass className="pbth-rempty">

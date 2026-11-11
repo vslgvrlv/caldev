@@ -53,3 +53,4 @@
 .pbth-noteam__label { font-size: 14px; font-weight: 700; }
 .pbth-noteam__hint { margin: 0; font-size: 12px; color: var(--ui-muted); }
 .pbth-noteam__out { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pbth-invite__icon { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin-bottom: 8px; border-radius: 50%; }

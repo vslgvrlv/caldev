@@ -23,9 +23,6 @@ import './invite-frame.css';
 // Опрос идёт через общий ограничитель записи (120 в минуту на адрес), поэтому редкий.
 const POLL_MS = 10000;
 
-// Пока ни одной заявки нет, за стеклом слабое зелёное пятно продукта.
-const PRODUCT_PAINT = ['#00E676'];
-
 const TeamRequestRow: React.FC<{ request: TeamCreationRequest }> = ({ request }) => {
   const text =
     request.status === 'PENDING'
@@ -136,7 +133,7 @@ export const NoTeamScreen: React.FC<{
 
   if (entering) {
     return (
-      <InviteFrame paints={PRODUCT_PAINT}>
+      <InviteFrame>
         <InviteHero title="Открываем команду" />
       </InviteFrame>
     );
@@ -148,7 +145,7 @@ export const NoTeamScreen: React.FC<{
   const codeVariant = waiting ? 'glass2' : 'primary';
 
   return (
-    <InviteFrame teamId={mainJoin?.team.id} paints={PRODUCT_PAINT}>
+    <InviteFrame teamId={mainJoin?.team.id}>
       {mainJoin ? (
         <JoinRequestStatusCard request={mainJoin} />
       ) : (
