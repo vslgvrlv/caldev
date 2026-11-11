@@ -2,21 +2,15 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { InviteFacts } from '../../components/track1/InviteFrame';
-import { inviterName, inviterSubText, membersParts, nextEventLines, requestWaitingParts } from '../../lib/invite-copy';
+import { membersParts, nextEventLines } from '../../lib/invite-copy';
 
-// Факты о команде на экранах приглашения: тексты, склонение, обратная
-// совместимость со старым ответом сервера.
+// Факты о команде на экранах приглашения и событие в заявке: тексты,
+// склонение, обратная совместимость со старым ответом сервера. Имени того, кто
+// зовёт, нет: сервер его не отдаёт, а из старого ответа экран его не читает.
 
 const NOW = new Date('2026-11-11T10:00:00.000Z');
 
 describe('подписи фактов', () => {
-  it('кто зовёт: роль зовущего и роль приглашения', () => {
-    expect(inviterSubText('CAPTAIN', 'PLAYER')).toBe('Капитан · зовёт тебя игроком');
-    expect(inviterSubText('CAPTAIN', 'TRAINER')).toBe('Капитан · зовёт тебя тренером');
-    expect(inviterSubText(null, 'PLAYER')).toBe('Зовёт тебя игроком');
-    expect(inviterSubText(null, 'CAPTAIN')).toBe('Зовёт тебя капитаном');
-  });
-
   it('сколько людей: склонение', () => {
     const text = (n: number) => {
       const p = membersParts(n)!;
@@ -47,69 +41,63 @@ describe('подписи фактов', () => {
     expect(nextEventLines(old, NOW)).toEqual({ when: 'Завтра в 19:00', details: 'Тренировка' });
   });
 
+  it('старый ответ заявки (startAt, title, location, без типа): время есть, названия и места нет', () => {
+    const oldRequestEvent = { title: 'Закрытое собрание', startAt: '2026-11-12T16:00:00.000Z', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' };
+    expect(nextEventLines(oldRequestEvent, NOW)).toEqual({ when: 'Завтра в 19:00', details: '' });
+  });
+
   it('дальше «завтра» — дата по поясу команды, а не браузера', () => {
     // 20 ноября 23:30 по Москве — это уже 21 ноября во Владивостоке.
     const startsAt = '2026-11-20T20:30:00.000Z';
     expect(nextEventLines({ startsAt, type: 'TRAINING', timezone: 'Europe/Moscow' }, NOW)?.when).toBe('20 ноября в 23:30');
     expect(nextEventLines({ startsAt, type: 'TRAINING', timezone: 'Asia/Vladivostok' }, NOW)?.when).toBe('21 ноября в 06:30');
   });
-
-  it('заявка у капитана: имя как пришло (сервер уже отдаёт первое имя), без имени — «Капитан»', () => {
-    expect(requestWaitingParts('Денис')).toEqual({ name: 'Денис', rest: ' увидит заявку и ответит. Мы пришлём уведомление.' });
-    expect(requestWaitingParts(' Анна-Мария ').name).toBe('Анна-Мария');
-    expect(requestWaitingParts(undefined).name).toBeNull();
-    expect(requestWaitingParts(null).name).toBeNull();
-    expect(requestWaitingParts(' ').rest).toMatch(/^Капитан увидит/);
-  });
-
-  it('имя зовущего: пустое имя — нет имени', () => {
-    expect(inviterName({ inviter: { name: ' Денис ' } })).toBe('Денис');
-    expect(inviterName({ inviter: null })).toBeNull();
-    expect(inviterName({ inviter: { name: '' } })).toBeNull();
-    expect(inviterName({})).toBeNull();
-  });
 });
 
 describe('блок фактов', () => {
-  const render = (facts: Parameters<typeof InviteFacts>[0]['facts']) =>
-    renderToStaticMarkup(React.createElement(InviteFacts, { facts, inviterRole: 'CAPTAIN', invitedRole: 'PLAYER' }));
+  type Facts = Parameters<typeof InviteFacts>[0]['facts'];
+  const render = (facts: Facts, children?: React.ReactNode) =>
+    renderToStaticMarkup(React.createElement(InviteFacts, { facts }, children));
 
-  it('с полями: три строки', () => {
+  it('с полями: две строки', () => {
     const html = render({
-      inviter: { name: 'Денис' },
       membersCount: 12,
       nextEvent: { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', timezone: 'Europe/Moscow' },
     });
-    expect(html).toContain('Денис');
-    expect(html).toContain('Капитан · зовёт тебя игроком');
     expect(html).toContain('12 человек');
     expect(html).toContain('1 января в 19:00');
     expect(html).toContain('Тренировка');
+    expect(html).not.toContain('зовёт');
   });
 
-  it('старый ответ с названием и местом события: их на экране нет', () => {
-    const old = { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', title: 'Закрытое собрание', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' };
-    const html = render({ inviter: { name: 'Денис' }, membersCount: 3, nextEvent: old });
+  it('старый ответ с именем, названием и местом: на экране их нет', () => {
+    const old = {
+      inviter: { name: 'ivanpetrov' },
+      membersCount: 3,
+      nextEvent: { startsAt: '2099-01-01T16:00:00.000Z', type: 'TRAINING', title: 'Закрытое собрание', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' },
+    };
+    const html = render(old as Facts);
+    expect(html).toContain('3 человека');
     expect(html).toContain('Тренировка');
+    expect(html).not.toContain('ivanpetrov');
     expect(html).not.toContain('Закрытое собрание');
     expect(html).not.toContain('maps.example');
-  });
-
-  it('inviter: null — строки «кто зовёт» нет, остальное на месте', () => {
-    const html = render({ inviter: null, membersCount: 3, nextEvent: null });
-    expect(html).toContain('3 человека');
-    expect(html).not.toContain('зовёт тебя');
   });
 
   it('старый ответ без новых полей: блока нет, ничего не падает', () => {
     expect(render({})).toBe('');
     expect(render(null)).toBe('');
-    expect(render({ inviter: null, membersCount: undefined, nextEvent: null })).toBe('');
+    expect(render({ membersCount: undefined, nextEvent: null })).toBe('');
+  });
+
+  it('без фактов строка роли остаётся', () => {
+    const html = render({}, React.createElement('span', null, 'Роль: игрок'));
+    expect(html).toContain('Роль: игрок');
   });
 
   it('часть полей: только те строки, что пришли', () => {
     const html = render({ membersCount: 3 });
     expect(html).toContain('3 человека');
-    expect(html).not.toContain('зовёт тебя');
+    expect(html).not.toContain('Тренировка');
   });
 });

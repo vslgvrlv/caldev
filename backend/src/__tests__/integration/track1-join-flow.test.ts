@@ -226,7 +226,9 @@ describe("новичок: ссылка → вход → заявка → «Пр�
     const requestId = created.body.request.id as string;
     expect(created.body.request.status).toBe("PENDING");
     expect(created.body.request.team.name).toBe(`Заявки ${stamp}`);
-    expect(created.body.request.nextEvent).toMatchObject({ title: "Тренировка", location: "Точка" });
+    // Человек ещё не в команде: время, тип и пояс — без названия и места.
+    expect(Object.keys(created.body.request.nextEvent).sort()).toEqual(["startsAt", "timezone", "type"]);
+    expect(created.body.request.nextEvent.type).toBe("TRAINING");
 
     const captainCard = sentTo("sendMessage", TG.captain);
     const trainerCard = sentTo("sendMessage", TG.trainer);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventDetailsText, eventWhenText, inviteValidUntil, requestSentText } from '../../lib/invite-copy';
+import { eventWhenText, inviteValidUntil, requestSentText } from '../../lib/invite-copy';
 
 const now = new Date('2026-11-11T09:00:00Z');
 
@@ -42,9 +42,3 @@ describe('eventWhenText', () => {
   });
 });
 
-describe('eventDetailsText', () => {
-  it('название и место через точку', () => {
-    expect(eventDetailsText('Тренировка', 'Арена')).toBe('Тренировка · Арена');
-    expect(eventDetailsText('Тренировка', null)).toBe('Тренировка');
-  });
-});

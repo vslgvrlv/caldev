@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type TeamInviteInfoResponse } from '../api';
 import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
 import { describeInviteProblem } from '../lib/invite-problem';
-import { inviteValidUntil, inviterName } from '../lib/invite-copy';
+import { inviteValidUntil } from '../lib/invite-copy';
 import { roleLabel } from '../lib/labels';
 import { Button, Icon, Row } from '../ui';
 import { InviteActions, InviteFacts, InviteFrame, InviteHero, InviteNotNow } from '../components/track1/InviteFrame';
@@ -16,8 +16,6 @@ function describeTrackInviteProblem(err: unknown): string | null {
   }
   return describeInviteProblem(err);
 }
-
-const singleUseText = 'Приглашение одноразовое: сработает у одного человека';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'unknown error';
@@ -202,16 +200,12 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
         Тренировки, турниры и спарринги команды будут у тебя в ленте.
       </InviteHero>
 
-      <InviteFacts facts={inviteInfo} invitedRole={inviteInfo.role}>
-        {!inviterName(inviteInfo) ? (
-          <Row
-            lead={<Icon name="shield" size={24} />}
-            title={`Роль: ${roleLabel(inviteInfo.role).toLowerCase()}`}
-            sub={inviteExtra.singleUse ? singleUseText : undefined}
-          />
-        ) : inviteExtra.singleUse ? (
-          <Row lead={<Icon name="shield" size={24} />} title="Приглашение одноразовое" sub="Сработает у одного человека" />
-        ) : null}
+      <InviteFacts facts={inviteInfo}>
+        <Row
+          lead={<Icon name="shield" size={24} />}
+          title={`Роль: ${roleLabel(inviteInfo.role).toLowerCase()}`}
+          sub={inviteExtra.singleUse ? 'Приглашение одноразовое: сработает у одного человека' : undefined}
+        />
         {inviteExtra.note ? <Row lead={<Icon name="message-circle" size={24} />} title={inviteExtra.note} /> : null}
       </InviteFacts>
 

@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useShell } from '../../shell/context';
 import { track1Api, type JoinRequest, type TeamBrief } from '../../api/track1';
 import { InviteActions, InviteFacts, InviteFrame, InviteHero, InviteNotNow } from '../../components/track1/InviteFrame';
-import { eventDetailsText, eventWhenText, requestSentText, requestWaitingParts, type InviteFactsInput } from '../../lib/invite-copy';
+import { nextEventLines, requestSentText, type InviteFactsInput } from '../../lib/invite-copy';
 import { Button, Glass, Icon, Row } from '../../ui';
 import { teamCodeOf, teamPath } from '../../lib/team-url';
 import { errorText } from '../../lib/notify';
@@ -32,9 +32,6 @@ export const JoinByCodeView: React.FC = () => {
   const shell = useShell();
   const navigate = useNavigate();
   const [state, setState] = React.useState<State>({ kind: 'loading' });
-  // Капитан, число людей и ближайшее событие — со страницы ссылки; нужны и
-  // после подачи заявки, когда ответ сервера уже другой.
-  const [facts, setFacts] = React.useState<InviteFactsInput | null>(null);
   const [entering, setEntering] = React.useState(false);
   const enteredRef = React.useRef(false);
 
@@ -49,12 +46,7 @@ export const JoinByCodeView: React.FC = () => {
       try {
         const preview = await track1Api.previewJoinLink(code);
         if (cancelled) return;
-        const previewFacts: InviteFactsInput = {
-          inviter: preview.inviter,
-          membersCount: preview.membersCount,
-          nextEvent: preview.nextEvent,
-        };
-        setFacts(previewFacts);
+        const previewFacts: InviteFactsInput = { membersCount: preview.membersCount, nextEvent: preview.nextEvent };
         if (!preview.authenticated) return setState({ kind: 'anonymous', team: preview.team, facts: previewFacts });
         if (preview.member) return setState({ kind: 'member', team: preview.team });
         if (preview.request && preview.request.status !== 'CANCELLED') {
@@ -170,7 +162,7 @@ export const JoinByCodeView: React.FC = () => {
         <InviteHero team={state.team} title={`Тебя зовут в ${state.team.name}`}>
           Команда принимает по заявке. Капитан ответит на неё.
         </InviteHero>
-        <InviteFacts facts={state.facts} inviterRole="CAPTAIN" invitedRole="PLAYER" />
+        <InviteFacts facts={state.facts} />
         <InviteActions>
           <Button variant="primary" block onClick={() => navigate(`/login?next=${next}`)}>
             Подать заявку
@@ -182,7 +174,8 @@ export const JoinByCodeView: React.FC = () => {
   }
 
   const { request } = state;
-  const waiting = requestWaitingParts(facts?.inviter?.name);
+  // Ближайшее событие заявки: когда и тип; старый ответ с названием и местом их не показывает.
+  const requestEvent = nextEventLines(request.nextEvent);
   const openApp = (
     <InviteActions>
       <Button variant="primary" block onClick={() => navigate('/app')}>
@@ -215,17 +208,12 @@ export const JoinByCodeView: React.FC = () => {
   return (
     <InviteFrame teamId={request.team.id}>
       <InviteHero team={request.team} checked title="Заявка у капитана">
-        {waiting.name ? <strong>{waiting.name}</strong> : null}
-        {waiting.rest}
+        Капитан увидит заявку и ответит. Мы пришлём уведомление.
       </InviteHero>
       <Glass layer={2} className="pbth-invite__facts">
         <Row lead={<Icon name="clock" size={24} />} title={request.team.name} sub={requestSentText(request.createdAt)} />
-        {request.nextEvent ? (
-          <Row
-            lead={<Icon name="calendar" size={24} />}
-            title={eventWhenText(request.nextEvent.startAt, request.nextEvent.timezone)}
-            sub={eventDetailsText(request.nextEvent.title, request.nextEvent.location)}
-          />
+        {requestEvent ? (
+          <Row lead={<Icon name="calendar" size={24} />} title={requestEvent.when} sub={requestEvent.details || undefined} />
         ) : null}
       </Glass>
       {openApp}

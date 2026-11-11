@@ -1,6 +1,6 @@
 import React from 'react';
-import { Avatar, Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../../ui';
-import { inviterName, inviterSubText, membersParts, nextEventLines, type InviteFactsInput } from '../../lib/invite-copy';
+import { Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../../ui';
+import { membersParts, nextEventLines, type InviteFactsInput } from '../../lib/invite-copy';
 import './invite-frame.css';
 
 // Общий каркас экранов приглашения и заявки (`/invite/:token`, `/join/:code`):
@@ -53,25 +53,19 @@ export const InviteNotNow: React.FC<{ onClick: () => void }> = ({ onClick }) => 
 );
 
 /**
- * Строки фактов: кто зовёт, сколько людей в команде, ближайшее событие. Что
- * сервер не прислал, того на экране нет; нет ни одной строки — нет и блока.
- * Лишние строки (роль, заметка) приходят снаружи и идут после фактов.
+ * Строки фактов: сколько людей в команде и ближайшее событие (когда и тип).
+ * Что сервер не прислал, того на экране нет; нет ни одной строки — нет и
+ * блока. Лишние строки (роль, заметка) приходят снаружи и идут после фактов.
  */
 export const InviteFacts: React.FC<{
   facts: InviteFactsInput | null | undefined;
-  /** Роль зовущего, если она известна экрану (у ссылки команды зовёт капитан). */
-  inviterRole?: string | null;
-  /** Роль, на которую зовут. */
-  invitedRole: string | null | undefined;
   children?: React.ReactNode;
-}> = ({ facts, inviterRole, invitedRole, children }) => {
-  const name = inviterName(facts);
+}> = ({ facts, children }) => {
   const members = membersParts(facts?.membersCount);
   const event = nextEventLines(facts?.nextEvent);
-  if (!name && !members && !event && !children) return null;
+  if (!members && !event && !children) return null;
   return (
     <Glass layer={2} className="pbth-invite__facts">
-      {name ? <Row lead={<Avatar name={name} size={44} />} title={name} sub={inviterSubText(inviterRole, invitedRole)} /> : null}
       {members ? (
         <Row
           lead={<Icon name="users" size={24} />}
@@ -83,7 +77,7 @@ export const InviteFacts: React.FC<{
           }
         />
       ) : null}
-      {event ? <Row lead={<Icon name="calendar" size={24} />} title={event.when} sub={event.details} /> : null}
+      {event ? <Row lead={<Icon name="calendar" size={24} />} title={event.when} sub={event.details || undefined} /> : null}
       {children}
     </Glass>
   );

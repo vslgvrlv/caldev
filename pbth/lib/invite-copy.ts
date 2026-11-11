@@ -1,7 +1,6 @@
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { EVENT_LABELS } from '../constants';
-import { roleLabel } from './labels';
 import { pluralRu } from './plural';
 
 // Тексты экранов приглашения и заявки: даты словами, без времени и секунд там,
@@ -71,36 +70,27 @@ export function eventWhenText(startAt: string, timezone: string | null | undefin
   return `${dayMonthText(date, timezone)} в ${time}`;
 }
 
-/** Вторая строка ближайшего события: «Тренировка · Арена». */
-export function eventDetailsText(title: string, location: string | null | undefined): string {
-  return location ? `${title} · ${location}` : title;
-}
+// Факты о команде на экранах приглашения и ближайшее событие в заявке. Поля
+// необязательные: старый ответ сервера без них даёт `null`, и строки на экране
+// просто нет. Название и место события сюда не входят: сервер их больше не
+// шлёт, а из старого ответа они не читаются.
 
-// Факты о команде на экранах приглашения. Поля необязательные: старый ответ
-// сервера без них даёт `null`, и строки на экране просто нет. Название и место
-// события сюда не входят: сервер их больше не шлёт, а из старого ответа они не
-// читаются.
-
-export type InviteFactsInput = {
-  inviter?: { name?: string | null } | null;
-  membersCount?: number | null;
-  nextEvent?: { startsAt: string; type?: string | null; timezone?: string | null } | null;
+/**
+ * Ближайшее событие для того, кто ещё не в команде: время, тип, пояс.
+ * `startAt` — имя поля в старом ответе заявки; `title` и `location` старого
+ * ответа не читаются.
+ */
+export type PublicEventInput = {
+  startsAt?: string | null;
+  startAt?: string | null;
+  type?: string | null;
+  timezone?: string | null;
 };
 
-const INVITED_AS: Record<string, string> = { CAPTAIN: 'капитаном', TRAINER: 'тренером', PLAYER: 'игроком' };
-
-/** Имя того, кто зовёт; пусто, если сервер его не прислал. */
-export function inviterName(facts: InviteFactsInput | null | undefined): string | null {
-  const name = String(facts?.inviter?.name ?? '').trim();
-  return name || null;
-}
-
-/** «Капитан · зовёт тебя игроком»; без роли зовущего — «Зовёт тебя игроком». */
-export function inviterSubText(inviterRole: string | null | undefined, invitedRole: string | null | undefined): string {
-  const as = INVITED_AS[String(invitedRole ?? '').toUpperCase()] ?? 'в команду';
-  const call = `зовёт тебя ${as}`;
-  return inviterRole ? `${roleLabel(inviterRole)} · ${call}` : `${call[0].toUpperCase()}${call.slice(1)}`;
-}
+export type InviteFactsInput = {
+  membersCount?: number | null;
+  nextEvent?: PublicEventInput | null;
+};
 
 /** «12 человек» и « в команде» отдельно: число выделяется. Нет числа — null. */
 export function membersParts(count: number | null | undefined): { strong: string; rest: string } | null {
@@ -110,23 +100,12 @@ export function membersParts(count: number | null | undefined): { strong: string
 
 /** Две строки ближайшего события: «Завтра в 19:00» и тип — «Тренировка». Без названия и места. */
 export function nextEventLines(
-  event: InviteFactsInput['nextEvent'],
+  event: PublicEventInput | null | undefined,
   now: Date = new Date(),
 ): { when: string; details: string } | null {
   if (!event) return null;
-  const when = eventWhenText(event.startsAt, event.timezone, now);
+  const when = eventWhenText(String(event.startsAt ?? event.startAt ?? ''), event.timezone, now);
   if (!when) return null;
   const type = (EVENT_LABELS as Record<string, string>)[String(event.type ?? '')] ?? '';
   return { when, details: type };
-}
-
-/**
- * Имя в абзаце выделяется, поэтому текст отдаём двумя частями. Сервер уже
- * отдаёт только первое имя, поэтому оно идёт как есть.
- */
-export function requestWaitingParts(inviterName: string | null | undefined): { name: string | null; rest: string } {
-  const name = String(inviterName ?? '').trim();
-  return name
-    ? { name, rest: ' увидит заявку и ответит. Мы пришлём уведомление.' }
-    : { name: null, rest: 'Капитан увидит заявку и ответит. Мы пришлём уведомление.' };
 }

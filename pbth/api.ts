@@ -86,8 +86,7 @@ export type TeamInviteInfoResponse = {
   isExpired: boolean;
   isUsed: boolean;
   isRevoked: boolean;
-  /** Необязательные факты для экрана приглашения; старый сервер их не шлёт. `inviter.name` — только первое имя. */
-  inviter?: { name: string } | null;
+  /** Необязательные факты для экрана приглашения; старый сервер их не шлёт. */
   membersCount?: number;
   nextEvent?: InviteNextEvent | null;
 };

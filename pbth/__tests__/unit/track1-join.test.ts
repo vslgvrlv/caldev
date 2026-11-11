@@ -17,7 +17,7 @@ const request = (patch: Partial<JoinRequest> = {}): JoinRequest => ({
   createdAt: '2026-11-11T10:00:00.000Z',
   decidedAt: null,
   team: { id: 't1', name: 'Дневной Дозор', shortCode: 'DD' },
-  nextEvent: { title: 'Спарринг', startAt: '2026-11-22T09:00:00.000Z', location: 'Точка', timezone: 'Europe/Moscow' },
+  nextEvent: { startsAt: '2026-11-22T09:00:00.000Z', type: 'FRIENDLY_MATCH', timezone: 'Europe/Moscow' },
   ...patch,
 });
 
@@ -42,13 +42,23 @@ describe('после входа по ссылке команды человек 
 });
 
 describe('экран заявки', () => {
-  it('ждёт: название команды, ближайшее событие, без состава и денег', () => {
+  it('ждёт: название команды, ближайшее событие (тип и время), без состава и денег', () => {
     const html = renderToStaticMarkup(React.createElement(JoinRequestStatusCard, { request: request() }));
     expect(html).toContain('Заявка у капитана');
     expect(html).toContain('Дневной Дозор');
     expect(html).toContain('Спарринг');
-    expect(html).toContain('Точка');
+    expect(html).toContain('22 ноября');
     expect(html).not.toMatch(/₽|Состав|Баланс/);
+  });
+
+  it('старый ответ с названием и местом события: их на экране нет', () => {
+    const old = { title: 'Закрытое собрание', startAt: '2026-11-22T09:00:00.000Z', location: 'https://maps.example/secret', timezone: 'Europe/Moscow' };
+    const html = renderToStaticMarkup(
+      React.createElement(JoinRequestStatusCard, { request: request({ nextEvent: old as unknown as JoinRequest['nextEvent'] }) }),
+    );
+    expect(html).toContain('22 ноября');
+    expect(html).not.toContain('Закрытое собрание');
+    expect(html).not.toContain('maps.example');
   });
 
   it('отказ — словами', () => {
