@@ -24,7 +24,7 @@ const termsViewPath = fileURLToPath(new URL("../../views/TermsView.tsx", import.
 
 describe("pwa safe-area layouts", () => {
   it("uses explicit top inset math for sticky in-app headers", () => {
-    [eventDetailViewPath, createEventViewPath, playerProfileViewPath].forEach((path) => {
+    [eventDetailViewPath, createEventViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
       expect(source).not.toContain(" pb-safe-top");
@@ -39,10 +39,18 @@ describe("pwa safe-area layouts", () => {
   });
 
   it("pads primary app tabs below the standalone status bar", () => {
-    [dashboardViewPath, calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
+    [dashboardViewPath, calendarViewPath, financeViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });
+  });
+
+  it("team, player and profile screens sit in Screen, which pads the top by the safe area", () => {
+    [teamViewPath, playerProfileViewPath, profileViewPath].forEach((path) => {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("<Screen");
+    });
+    expect(readFileSync(screenCssPath, "utf8")).toContain("var(--pb-safe-top");
   });
 
   it("keeps auth entry screens safe-area aware in standalone mode", () => {
