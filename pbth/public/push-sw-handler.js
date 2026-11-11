@@ -45,6 +45,8 @@ self.addEventListener("push", (event) => {
     // Свой тег у каждого события: пуш о другом событии не затирает этот.
     tag: payload.tag || "pbth-reminder",
     renotify: Boolean(payload.tag),
+    // Ночное сообщение о событии, которое нельзя отложить до утра, — без звука.
+    silent: Boolean(payload.silent),
     data: {
       url: pbthSafeUrl(payload.url),
       rsvpToken: hasRsvp ? payload.rsvp.token : null,
