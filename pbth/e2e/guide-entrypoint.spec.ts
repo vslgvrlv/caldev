@@ -1,17 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const GUIDE_ARIA_LABEL = "Открыть инструкцию по работе с PaintBall Team Hub";
-// Нижняя панель оболочки (ui-kit): четыре пункта и «Ещё»; «Казна» лежит в листе «Ещё».
-// Подписи на узких экранах могут быть короткими или скрытыми, поэтому проверяем aria-label.
-const BOTTOM_NAV_LABELS = ["Главная", "Календарь", "Команда", "Профиль", "Ещё"];
-const BOTTOM_NAV_MORE_LABELS = ["Казна"];
+// Нижняя панель оболочки (ui-kit) как в макете: четыре пункта и «плюс» между ними, листа «Ещё» нет.
+// «Казна» — строкой на экране команды. Подписи проверяем по aria-label.
+const BOTTOM_NAV_LABELS = ["Моё", "Календарь", "Команды", "Профиль"];
 const bottomNav = (page: Page) => page.locator(".ui-sidenav-bottom");
 const bottomNavLabels = (page: Page) =>
   bottomNav(page)
     .locator("a.ui-sidenav-bottom__item, button.ui-sidenav-bottom__more")
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("aria-label")));
-const moreNavLabels = (page: Page) =>
-  page.locator(".ui-sidenav-more a").evaluateAll((nodes) => nodes.map((node) => (node.textContent || "").trim()));
+const moreNavCount = (page: Page) => page.locator(".ui-sidenav-bottom__more, .ui-sidenav-more a").count();
 
 const roleCases = [
   ["PLAYER", "TRAINER", "/guide/player.html", "Инструкция · Игрок"],
@@ -161,7 +159,7 @@ for (const [viewportName, viewport] of viewports) {
       );
 
       expect(await bottomNavLabels(page)).toEqual(BOTTOM_NAV_LABELS);
-      expect(await moreNavLabels(page)).toEqual(BOTTOM_NAV_MORE_LABELS);
+      expect(await moreNavCount(page)).toBe(0);
       expect(await page.evaluate(() => (
         Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) <= window.innerWidth
       ))).toBe(true);
@@ -215,7 +213,7 @@ test("profile guide card fits 320 px and opens from a visible keyboard focus", a
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThanOrEqual(44);
   expect(await bottomNavLabels(page)).toEqual(BOTTOM_NAV_LABELS);
-  expect(await moreNavLabels(page)).toEqual(BOTTOM_NAV_MORE_LABELS);
+  expect(await moreNavCount(page)).toBe(0);
   const widths = await page.evaluate(() => ({
     viewport: innerWidth,
     html: document.documentElement.scrollWidth,

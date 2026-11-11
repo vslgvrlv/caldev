@@ -18,3 +18,4 @@ export { Avatar } from './Avatar';
 export { TeamMark, TeamMarkPair, teamPaint } from './TeamMark';
 export { teamMarkSvg, teamLetters, avatarHtml, avatarPhotoSrc, initialsOf, TEAM_PAINTS, TEAM_SHAPES } from './team-mark';
 export { Screen } from './Screen';
+export { spotColor, paintStrength } from './paint-spot';

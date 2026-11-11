@@ -3,7 +3,7 @@
 .pbth-money__first { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
 .pbth-money__label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ui-muted); }
 .pbth-money__big { font-weight: 800; white-space: nowrap; letter-spacing: 0; }
-.pbth-money__big--xl { font-size: 48px; line-height: 1.05; }
+.pbth-money__big--xl { font-size: 64px; line-height: 1; }
 .pbth-money__big--l { font-size: 28px; line-height: 1.15; }
 .pbth-money__big--m { font-size: 20px; line-height: 1.2; }
 .pbth-money__big--text { font-size: 28px; line-height: 1.15; white-space: normal; }

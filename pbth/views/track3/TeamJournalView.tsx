@@ -1,18 +1,15 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useShell } from '../../shell/context';
 import { platformApi, type JournalItem } from '../../api/track3';
 import { groupByDay, timeLabel } from '../../components/track3/format';
 import { errorText } from '../../lib/notify';
-import { teamCodeOf, teamPath } from '../../lib/team-url';
-import { Glass, Icon, Screen, ScreenBar, TeamMark, teamPaint } from '../../ui';
+import { Glass, Icon, Screen, teamPaint } from '../../ui';
 import './journal.css';
 
 // Журнал команды `/t/:team/journal` — капитану: кто, что и когда сделал.
 // Действия владельца платформы помечены (решение Василия 10.11.2026, п. 11).
 export const TeamJournalView: React.FC = () => {
   const shell = useShell();
-  const navigate = useNavigate();
   const teamId = shell.team?.id ?? null;
   const [items, setItems] = React.useState<JournalItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -36,18 +33,9 @@ export const TeamJournalView: React.FC = () => {
   }, [teamId]);
 
   const team = shell.team;
-  const goBack = () => {
-    if (team) navigate(teamPath(shell.teamCode || teamCodeOf({ teamId: team.id, shortCode: team.shortCode }), 'roster'));
-  };
-
   return (
     <Screen paints={team ? [teamPaint(team.id)] : undefined}>
-      <ScreenBar
-        onBack={goBack}
-        mark={team ? <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={32} /> : undefined}
-        title="Журнал команды"
-        subtitle={team?.name}
-      />
+      {/* Название команды и «журнал команды» — в шапке раздела (оболочка). */}
       <p className="pbth-journal__lead">Последние действия в команде: кто, что и когда.</p>
 
       {error ? (

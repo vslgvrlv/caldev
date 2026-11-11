@@ -11,27 +11,37 @@ export type ShellNavProps = {
   canCreate?: boolean;
 };
 
+/**
+ * Пункты панели как в принятом макете: «Моё», «Календарь», «Команды», «Профиль»;
+ * «плюс» ставится между ними. Листа «Ещё» нет: «Казна» — строкой на экране команды
+ * и в меню события, пункты меню команды — строками на экране команды и в «Командах».
+ */
 export function shellNavItems(teamCode: string | null): BottomNavItem[] {
   const me: BottomNavItem = { href: '/me', label: 'Профиль', icon: 'user' };
   if (!teamCode) return [me];
   return [
-    { href: teamPath(teamCode), label: 'Главная', icon: 'house' },
-    { href: teamPath(teamCode, 'calendar'), label: 'Календарь', icon: 'calendar', short: 'Календ.' },
-    { href: teamPath(teamCode, 'roster'), label: 'Команда', icon: 'users' },
+    { href: teamPath(teamCode), label: 'Моё', icon: 'house' },
+    { href: teamPath(teamCode, 'calendar'), label: 'Календарь', icon: 'calendar' },
+    { href: teamPath(teamCode, 'roster'), label: 'Команды', icon: 'users' },
     me,
-    // Пятый пункт уходит в «Ещё».
-    { href: teamPath(teamCode, 'money'), label: 'Казна', icon: 'wallet', more: true },
   ];
 }
 
+/** Разделы команды, которые подсвечивают «Команды»: состав, казна, заявки, журнал. */
+const TEAM_SECTIONS = new Set(['roster', 'money', 'requests', 'journal']);
+
 /**
- * Адрес для подсветки пункта. ui-kit сопоставляет по префиксу, и «Заявки» или «Журнал» подсвечивали бы «Главную»:
- * у разделов вне панели не подсвечивается ничего.
+ * Адрес для подсветки пункта. ui-kit сопоставляет по префиксу, и любой раздел подсвечивал бы «Моё»:
+ * разделы команды подсвечивают «Команды», экран события и новое событие — ничего.
  */
 export function navActivePath(pathname: string): string {
   const parsed = parseTeamPath(pathname);
   if (!parsed) return pathname;
-  return ['', 'calendar', 'money', 'roster'].includes(parsed.section) ? pathname : '/-';
+  if (parsed.section === '' || parsed.section === 'calendar') return pathname;
+  if (TEAM_SECTIONS.has(parsed.section) && !(parsed.section === 'roster' && parsed.rest.length > 0)) {
+    return teamPath(parsed.team, 'roster');
+  }
+  return '/-';
 }
 
 /** Плавающая стеклянная нижняя панель оболочки: пункты команды, профиль и «плюс». */
@@ -46,11 +56,6 @@ export const ShellNav: React.FC<ShellNavProps> = ({ teamCode, canCreate }) => {
         : undefined,
     [canCreate, teamCode, navigate],
   );
-
-  // Лист «Ещё» ui-kit сам не закрывается после перехода по ссылке в нём.
-  React.useEffect(() => {
-    document.querySelector('.ui-sidenav-more')?.setAttribute('hidden', '');
-  }, [pathname]);
 
   // Набор пунктов и «плюс» ui-kit задаёт при появлении, поэтому при смене команды или права панель строится заново.
   return <BottomNav key={`${teamCode ?? ''}|${action ? 1 : 0}`} items={items} path={navActivePath(pathname)} action={action} onNavigate={navigate} />;

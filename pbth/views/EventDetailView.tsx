@@ -58,6 +58,8 @@ import '../components/event/event.css';
 
 interface EventDetailViewProps {
   event: Event;
+  /** Переход в казну команды события (строка в блоке денег события). */
+  onOpenMoney?: () => void;
   currentUserRole: Role;
   /** Имя своей команды — в расписании счёт показывается как «мы N:N соперник». */
   teamName: string;
@@ -101,6 +103,7 @@ interface EventDetailViewProps {
 export const EventDetailView: React.FC<EventDetailViewProps> = ({
   event,
   currentUserRole,
+  onOpenMoney,
   teamName,
   onBack,
   onRsvp,
@@ -567,7 +570,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       : null;
 
   return (
-    <Screen paints={[paint]}>
+    <Screen paints={[paint, paint, paint]}>
       <div className="pbth-event" style={{ ['--pbth-event-paint' as string]: paint }}>
         <Glass layer={1} className="pbth-event__bar">
           <ScreenBar
@@ -613,7 +616,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
           hideFree={phase === 'past'}
         />
 
-        <EventMoney cost={event.cost} collection={collection} />
+        <EventMoney cost={event.cost} collection={collection} onOpenMoney={onOpenMoney} />
 
         <EventPlace location={event.location} locationUrl={event.locationUrl} description={event.description} />
 
