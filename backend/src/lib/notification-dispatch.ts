@@ -14,7 +14,8 @@ export type NotificationType =
   | "EVENT_AUTO_REMINDER"
   | "EVENT_DEBT_REMINDER"
   | "TEAM_DEBT_REMINDER"
-  | "MEMBER_DEBT_REMINDER";
+  | "MEMBER_DEBT_REMINDER"
+  | "EVENT_ANNOUNCEMENT";
 
 export type DeliveryMode = "PUSH" | "SYNC" | "QUEUE";
 
@@ -69,6 +70,10 @@ export function eventUrlFor(team: { shortCode?: string | null; teamId: string },
   return appUrl(`/t/${encodeURIComponent(teamCodeForUrl(team))}/event/${encodeURIComponent(eventId)}`);
 }
 
+export function calendarUrlFor(team: { shortCode?: string | null; teamId: string }): string {
+  return appUrl(`/t/${encodeURIComponent(teamCodeForUrl(team))}/calendar`);
+}
+
 export function moneyUrlFor(team: { shortCode?: string | null; teamId: string }): string {
   return appUrl(`/t/${encodeURIComponent(teamCodeForUrl(team))}/money`);
 }
@@ -101,6 +106,8 @@ export type DispatchParams = {
   /** Начало события: до него держим пуш и годен ключ ответа из пуша. */
   eventStartAt?: string | Date | null;
   correlationId?: string;
+  /** Без звука: Telegram — `disable_notification`, пуш — `silent`. */
+  silent?: boolean;
 };
 
 function pushTtlSeconds(startAt: string | Date | null | undefined): number {
@@ -118,7 +125,7 @@ function pushTtlSeconds(startAt: string | Date | null | undefined): number {
  */
 export async function dispatchNotification(params: DispatchParams): Promise<{ mode: DeliveryMode }> {
   if (params.pushSubscriptions.length > 0) {
-    const payload: WebPushPayload = { ...params.message.push };
+    const payload: WebPushPayload = { ...params.message.push, ...(params.silent ? { silent: true } : {}) };
     if (payload.actions?.length && params.eventId && params.eventStartAt) {
       payload.rsvp = {
         token: signRsvpToken(
@@ -153,6 +160,7 @@ export async function dispatchNotification(params: DispatchParams): Promise<{ mo
     await sendTelegramBotMessage(params.chatId, params.message.text, {
       ...(params.message.parseMode ? { parseMode: params.message.parseMode } : {}),
       ...(params.message.replyMarkup ? { replyMarkup: params.message.replyMarkup } : {}),
+      ...(params.silent ? { disableNotification: true } : {}),
     });
     return { mode: "SYNC" };
   }
@@ -162,6 +170,7 @@ export async function dispatchNotification(params: DispatchParams): Promise<{ mo
     text: params.message.text,
     parseMode: params.message.parseMode,
     replyMarkup: params.message.replyMarkup,
+    ...(params.silent ? { disableNotification: true } : {}),
     context: {
       type: params.type,
       actorUserId: params.actorUserId ?? undefined,
