@@ -59,6 +59,15 @@ function deliveryStatus(status: string, errorCode: string | null): DeliveryStatu
   return "FAILED";
 }
 
+type BroadcastKind = "REMINDER" | "ANNOUNCEMENT_CREATED" | "ANNOUNCEMENT_RESCHEDULED" | "ANNOUNCEMENT_CANCELLED";
+
+function broadcastKind(kind: string, announcementKind: string | null): BroadcastKind {
+  if (kind !== "EVENT_ANNOUNCEMENT") return "REMINDER";
+  if (announcementKind === "RESCHEDULED") return "ANNOUNCEMENT_RESCHEDULED";
+  if (announcementKind === "CANCELLED") return "ANNOUNCEMENT_CANCELLED";
+  return "ANNOUNCEMENT_CREATED";
+}
+
 remindersRouter.get(
   "/events/:eventId/delivery",
   requireAuth,
@@ -86,6 +95,7 @@ remindersRouter.get(
       has_telegram: boolean;
       has_push: boolean;
       auto_off: boolean;
+      reserve: boolean;
       rsvp_status: "PENDING" | "CONFIRMED" | "DECLINED" | null;
       committed: boolean;
     }>(
@@ -95,6 +105,7 @@ remindersRouter.get(
               (u.telegram_id IS NOT NULL) AS has_telegram,
               EXISTS (SELECT 1 FROM push_subscriptions ps WHERE ps.user_id = tm.user_id) AS has_push,
               (s.auto_event_reminders IS FALSE) AS auto_off,
+              (tm.status = 'RESERVE') AS reserve,
               r.status::text AS rsvp_status,
               (c.id IS NOT NULL) AS committed
          FROM team_memberships tm
@@ -110,17 +121,21 @@ remindersRouter.get(
     const nameById = new Map(membersResult.rows.map((m) => [m.user_id, { name: m.name, nickname: m.nickname }]));
     const pushOn = isWebPushEnabled();
 
-    // Последняя ручная рассылка: по номеру рассылки, у старых строк без
-    // номера — всё, что ушло за пять минут до последней строки.
-    const latest = await query<{ batch_id: string | null; created_at: Date }>(
-      `SELECT batch_id::text AS batch_id, created_at
-         FROM notification_deliveries
-        WHERE event_id = $1 AND kind = 'EVENT_REMINDER'
-        ORDER BY created_at DESC
+    // Последняя рассылка — ручное «Напомнить» или сообщение о новом,
+    // перенесённом, отменённом событии: по номеру рассылки, у старых строк
+    // без номера — всё, что ушло за пять минут до последней строки.
+    const latest = await query<{ batch_id: string | null; created_at: Date; kind: string; announcement_kind: string | null }>(
+      `SELECT d.batch_id::text AS batch_id, d.created_at, d.kind,
+              (SELECT a.kind FROM event_announcements a WHERE a.batch_id = d.batch_id LIMIT 1) AS announcement_kind
+         FROM notification_deliveries d
+        WHERE d.event_id = $1 AND d.kind IN ('EVENT_REMINDER', 'EVENT_ANNOUNCEMENT')
+        ORDER BY d.created_at DESC
         LIMIT 1`,
       [eventId]
     );
     let lastBroadcast: null | {
+      /** Что это была за рассылка — подпись на экране «Кому дошло». */
+      kind: BroadcastKind;
       at: string;
       total: number;
       delivered: number;
@@ -133,11 +148,11 @@ remindersRouter.get(
       const rows = await query<{ user_id: string; status: string; channel: string | null; error_code: string | null; created_at: Date }>(
         last.batch_id
           ? `SELECT user_id, status, channel, error_code, created_at FROM notification_deliveries
-              WHERE event_id = $1 AND kind = 'EVENT_REMINDER' AND batch_id = $2::uuid ORDER BY created_at ASC`
+              WHERE event_id = $1 AND kind = $3 AND batch_id = $2::uuid ORDER BY created_at ASC`
           : `SELECT user_id, status, channel, error_code, created_at FROM notification_deliveries
-              WHERE event_id = $1 AND kind = 'EVENT_REMINDER' AND batch_id IS NULL
+              WHERE event_id = $1 AND kind = $3 AND batch_id IS NULL
                 AND created_at >= $2::timestamptz - INTERVAL '5 minutes' ORDER BY created_at ASC`,
-        [eventId, last.batch_id ?? last.created_at]
+        [eventId, last.batch_id ?? last.created_at, last.kind]
       );
       const items = rows.rows.map((row) => {
         const status = deliveryStatus(row.status, row.error_code);
@@ -152,6 +167,7 @@ remindersRouter.get(
         };
       });
       lastBroadcast = {
+        kind: broadcastKind(last.kind, last.announcement_kind),
         at: new Date(last.created_at).toISOString(),
         total: items.length,
         delivered: items.filter((i) => i.status === "SENT" || i.status === "QUEUED").length,
@@ -178,6 +194,9 @@ remindersRouter.get(
               slot AS last_slot
          FROM event_auto_reminders
         WHERE event_id = $1
+          -- Строки «не два сообщения подряд» (modules/announcements): напоминание
+          -- не уходило, человеку пришло сообщение о новом событии или переносе.
+          AND channel IS DISTINCT FROM 'ANNOUNCEMENT'
         ORDER BY user_id, created_at DESC`,
       [eventId]
     );
@@ -208,6 +227,8 @@ remindersRouter.get(
         nickname: m.nickname,
         rsvpStatus: resolveEffectiveRsvp({ explicit: m.rsvp_status, hasSeries, committedToSeries: m.committed }),
         autoRemindersOff: m.auto_off,
+        // В запасе: автоматические сообщения не приходят (решение Василия 11.11.2026).
+        reserve: m.reserve,
         channels: { telegram: m.has_telegram, push: pushOn && m.has_push },
       })),
     });
