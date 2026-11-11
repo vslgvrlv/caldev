@@ -49,7 +49,7 @@ const f = {
 // встретиться в теле ответа. Ник из одних букв (`ivanpetrov`) — то, что
 // лежит в `users.name` при пустом имени в Telegram.
 const PEOPLE = {
-  captain: { name: "Денис Голев", username: `golevden_${stamp}`, nickname: "Голевнник" },
+  captain: { name: "Артём Громов", username: `gromovart_${stamp}`, nickname: "Громовник" },
   trainer: { name: "Тренер Тренеров", username: `trenerov_${stamp}`, nickname: "Тренерник" },
   player: { name: "Игрок Игроков", username: `igrokov_${stamp}`, nickname: "Игрокник" },
   inactive: { name: "Ушедший Ушедшев", username: `ushedshev_${stamp}`, nickname: "Ушедник" },
