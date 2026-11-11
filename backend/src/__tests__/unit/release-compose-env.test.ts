@@ -25,6 +25,9 @@ describe("release compose: настройки доходят до бэкенда
   it.each([
     "AUTO_REMINDERS_ENABLED",
     "AUTO_REMINDERS_INTERVAL_SECONDS",
+    "EVENT_ANNOUNCEMENTS_ENABLED",
+    "EVENT_ANNOUNCEMENTS_DELAY_SECONDS",
+    "EVENT_ANNOUNCEMENTS_INTERVAL_SECONDS",
     "NOTIFICATIONS_QUEUE_ENABLED",
     "PUSH_NOTIFICATIONS_ENABLED",
     "ADMIN_ROLE_ALLOWLIST_IDS",
@@ -41,5 +44,11 @@ describe("release compose: настройки доходят до бэкенда
   it("у интервала проверки числовое значение по умолчанию, а не пустая строка", () => {
     // Пустая строка даёт Number("") = 0, и проверка шла бы каждые 10 секунд.
     expect(passedThrough("AUTO_REMINDERS_INTERVAL_SECONDS")).toMatch(/:-\d+\}$/);
+  });
+
+  it("сообщения о новых, перенесённых и отменённых событиях выключены по умолчанию, задержка и шаг — числа", () => {
+    expect(passedThrough("EVENT_ANNOUNCEMENTS_ENABLED")).toBe("${EVENT_ANNOUNCEMENTS_ENABLED:-0}");
+    expect(passedThrough("EVENT_ANNOUNCEMENTS_DELAY_SECONDS")).toBe("${EVENT_ANNOUNCEMENTS_DELAY_SECONDS:-180}");
+    expect(passedThrough("EVENT_ANNOUNCEMENTS_INTERVAL_SECONDS")).toBe("${EVENT_ANNOUNCEMENTS_INTERVAL_SECONDS:-30}");
   });
 });
