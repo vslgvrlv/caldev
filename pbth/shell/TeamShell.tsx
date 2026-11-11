@@ -11,7 +11,7 @@ import { TeamsPicker } from '../components/shell/TeamsPicker';
 import { TeamsPickerContext } from './teams-picker-context';
 import { SectionHeader } from './SectionHeader';
 import { hasSectionHead, markTarget, sectionHeadText, sectionPaints } from './section-head';
-import { spotColor, teamPaint } from '../ui';
+import { spotColor, TeamMark, teamPaint } from '../ui';
 import { shellExtensions, type ShellExtContext } from './extensions';
 import { eventCreateAccess } from '../lib/event-create-access';
 import { findTeamByCode, parseTeamPath, teamCodeOf, teamPath } from '../lib/team-url';
@@ -56,8 +56,11 @@ const Frame: React.FC<{ children: React.ReactNode; plain?: boolean }> = ({ child
       style={plain ? { background: 'var(--ui-bg)' } : undefined}
     >
       {!plain && <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>}
+      {/* Стекло под часами и вырезом: прокрученное содержимое не лезет под статус-бар голым. Без выреза высота 0. */}
+      <div className="ui-glass pbth-statusveil" aria-hidden="true" />
+      {/* overflow-x: clip, а не hidden: hidden делает рамку контейнером прокрутки, и липкая шапка экрана не липнет. */}
       <main
-        className={`max-w-md mx-auto min-h-screen relative overflow-hidden flex flex-col${plain ? '' : ' shadow-2xl shadow-black'}`}
+        className={`max-w-md mx-auto min-h-screen relative overflow-x-clip flex flex-col${plain ? '' : ' shadow-2xl shadow-black'}`}
       >
         <OfflineBanner
           snapshotAt={shell.offlineSnapshotAt}
@@ -150,6 +153,11 @@ const SectionHead: React.FC<{
       <SectionHeader
         title={text.title}
         subtitle={text.subtitle}
+        mark={
+          team && parseTeamPath(location.pathname)?.section === 'roster' ? (
+            <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={56} />
+          ) : undefined
+        }
         note={!onMe && team?.via === 'owner' ? 'Владелец платформы' : undefined}
         teams={shell.teams}
         currentCode={onMe ? null : code}
@@ -285,13 +293,13 @@ const TeamShellInner: React.FC = () => {
     </div>
   );
 
-  // Заявки — экран со своей шапкой «назад»: без шапки раздела.
+  // Правило панели: у разделов (шапка раздела) нижняя панель есть, у внутренних экранов с «назад»
+  // (заявки, событие, новое событие, карточка игрока) её нет — путь назад даёт стрелка.
   if (!hasSectionHead(location.pathname)) {
     return (
       <Frame plain>
         <OnboardingNote />
         {content}
-        {nav}
       </Frame>
     );
   }

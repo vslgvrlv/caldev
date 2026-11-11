@@ -33,6 +33,10 @@ describe('знак команды', () => {
   it('две буквы: из короткого кода, иначе из названия', () => {
     expect(teamLetters('Holy Guns', 'hg')).toBe('HG');
     expect(teamLetters('Дневной Дозор')).toBe('ДД');
+    // Кириллическое название с латинским кодом — буквы из названия; кириллический код берётся как есть.
+    expect(teamLetters('Дневной Дозор', 'DD')).toBe('ДД');
+    expect(teamLetters('Ураган', 'УР')).toBe('УР');
+    expect(teamLetters('Ураган', 'URG')).toBe('УР');
     expect(teamLetters('Tornado')).toBe('TO');
     expect(teamLetters('«Сборная Москвы»')).toBe('СМ');
     expect(teamLetters('', '')).toBe('·');

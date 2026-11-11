@@ -3,7 +3,8 @@
 /* Фон и стекло под принятый макет (11.11, эталон ref-moe): тёмный фон с лёгким зелёным тоном, сверху дымка акцента,
    первое пятно краски крупное за шапкой и первым блоком, второе ниже слева, третье в нижнем углу; стекло панелей
    заметно светлее фона, кромка спокойная. Сила пятна у каждой краски своя (ui/paint-spot.ts: краска приходит с альфой),
-   CSS берёт её на 32/24/22 %. Значения — кандидат в тему ui-kit pbth; до переноса живут здесь.
+   CSS берёт её на 32/24/22 %. Второе и третье пятно стоят по длине страницы и не ближе 700/1180px к верху,
+   чтобы на коротком экране не лечь на первое. Значения — кандидат в тему ui-kit pbth; до переноса живут здесь.
    `.pbth-shell` — обёртка разделов оболочки: на ней краски раздела, ниже они пересчитываются в фон. */
 .pbth-ui, .pbth-shell {
   --ui-bg: #070B09;
@@ -15,10 +16,13 @@
   --ui-radius-lg: 18px;
   --ui-backdrop:
     radial-gradient(460px 420px at var(--ui-paint-1-at, 74% 230px), color-mix(in srgb, var(--ui-paint-1, transparent) 32%, transparent), transparent 70%),
-    radial-gradient(400px 380px at var(--ui-paint-2-at, 0% 660px), color-mix(in srgb, var(--ui-paint-2, transparent) 24%, transparent), transparent 70%),
-    radial-gradient(340px 300px at var(--ui-paint-3-at, 100% 100%), color-mix(in srgb, var(--ui-paint-3, transparent) 22%, transparent), transparent 70%),
+    radial-gradient(440px 420px at var(--ui-paint-2-at, 0% max(700px, 50%)), color-mix(in srgb, var(--ui-paint-2, transparent) 24%, transparent), transparent 70%),
+    radial-gradient(420px 380px at var(--ui-paint-3-at, 100% max(1180px, calc(100% - 260px))), color-mix(in srgb, var(--ui-paint-3, transparent) 22%, transparent), transparent 70%),
     radial-gradient(560px 520px at 6% 0, color-mix(in srgb, var(--ui-accent) 12%, transparent), transparent 72%);
 }
+
+/* Фон едет с содержимым: пятна стоят по длине страницы (сверху, на середине, у низа), а не прибиты к окну. */
+.pbth-ui > .ui-backdrop { position: absolute; }
 
 .pbth-ui {
   position: relative;
@@ -79,5 +83,14 @@ button.pbth-row, a.pbth-row { cursor: pointer; }
 }
 
 /* Область касания не меньше 44px: компактные кнопки и крестик окон. Окна рисуются вне .pbth-ui, поэтому крестик без префикса. */
-.pbth-ui .ui-btn--sm { min-width: 44px; min-height: 44px; }
+.pbth-ui .ui-btn--sm { min-width: 44px; min-height: 44px; font-size: 14px; }
 .ui-dialog__x { min-width: 44px; min-height: 44px; }
+
+/* Шторки и окна в стекле ui-kit (ui/Sheet, окно подтверждения): .ui-lglass ставит position: relative,
+   а окну нужен fixed из правил браузера для <dialog> — иначе шторка встаёт наверх страницы. */
+dialog.pbth-sheet { position: fixed; }
+/* Плашка и шторка лежат над содержимым: стекло плотнее и сильнее размыто, чем у панелей, чтобы текст читался. */
+dialog.pbth-sheet, .ui-toast.ui-lglass {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(16, 22, 30, .62), rgba(8, 11, 16, .74));
+  --ui-lglass-blur: 18px;
+}

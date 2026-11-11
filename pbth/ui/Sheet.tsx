@@ -29,6 +29,8 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, subtitle, ch
     const host = document.createElement('div');
     let closedByUs = false;
     const win = dialog.open({
+      // Жидкое стекло ui-kit: экран позади размыт и виден сквозь шторку (макет moe-filter).
+      className: 'ui-lglass pbth-sheet',
       title,
       subtitle,
       content: host,

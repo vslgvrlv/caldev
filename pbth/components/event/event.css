@@ -4,6 +4,8 @@
 .pbth-event > * { margin: 0; }
 
 .pbth-event__bar { padding: 8px 12px; }
+/* Шапка события липнет под вырезом: при прокрутке время и название не уезжают под часы. */
+.pbth-event > .pbth-event__bar { position: sticky; top: calc(var(--pb-safe-top, 0px) + 8px); z-index: 30; }
 .pbth-event__bar .pbth-screenbar { margin-bottom: 0; }
 
 .pbth-event__hero { display: flex; flex-direction: column; gap: 12px; padding: 20px; }

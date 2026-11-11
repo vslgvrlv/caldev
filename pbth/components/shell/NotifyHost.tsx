@@ -42,6 +42,8 @@ export const NotifyHost: React.FC = () => {
         item.id,
         kit.toast.show({ text: item.text, kind: item.kind, timeout: item.kind === 'error' ? ERROR_TOAST_MS : TOAST_MS }),
       );
+      // Плашка — жидкое стекло ui-kit (класс ставится на готовую плашку: у UI.toast нет опции класса).
+      document.querySelectorAll('.ui-toast:not(.ui-lglass)').forEach((el) => el.classList.add('ui-lglass'));
     }
     for (const [id, uiId] of shown.current) {
       if (live.has(id)) continue;
@@ -66,6 +68,8 @@ function openConfirm(kit: Kit, confirm: ConfirmRequest): () => void {  // ui-kit
   text.style.margin = '0';
   let done = false;
   const win = kit.dialog.open({
+    // Стекло ui-kit, как у шторок (ui/Sheet).
+    className: 'ui-lglass pbth-sheet',
     content: text,
     // Esc, подложка и крестик — отказ.
     onClose: () => {

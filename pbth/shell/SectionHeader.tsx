@@ -8,6 +8,8 @@ import './home.css';
 export type SectionHeaderProps = {
   title: string;
   subtitle?: string;
+  /** Крупный знак перед названием (шапка состава команды). */
+  mark?: React.ReactNode;
   /** Тихая строка под подписью: режим, в котором человек смотрит команду («Владелец платформы»). */
   note?: string;
   teams: TeamContext[];
@@ -48,7 +50,7 @@ export function scrollMarkIntoView(row: HTMLElement, mark: HTMLElement) {
  * ряд знаков команд. Название и инструменты всегда в одной строке: не хватает
  * места — «Команды» остаётся значком без подписи.
  */
-export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, note, teams, currentCode, badges, onPickTeam, onOpenTeams, onHeight }) => {
+export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, mark, note, teams, currentCode, badges, onPickTeam, onOpenTeams, onHeight }) => {
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const topRef = React.useRef<HTMLDivElement>(null);
   const titlesRef = React.useRef<HTMLDivElement>(null);
@@ -75,8 +77,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, n
       const btn = tools.querySelector<HTMLElement>('.pbth-sectionhead__teams');
       if (btn && !compactRef.current) labelWidth.current = Math.max(0, btn.offsetWidth - 44);
       const titleWidth = Math.max(0, ...Array.from(titles.children).map((el) => naturalWidth(el as HTMLElement)));
+      const lead = top.querySelector<HTMLElement>('.pbth-sectionhead__lead');
       const next = shouldCompact({
-        rowWidth: top.clientWidth,
+        rowWidth: top.clientWidth - (lead ? lead.offsetWidth + 12 : 0),
         titleWidth,
         toolsWidth: tools.offsetWidth,
         labelWidth: labelWidth.current,
@@ -98,6 +101,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, n
     <div ref={wrapRef} className="pbth-sectionhead">
       <Glass as="header" className="pbth-sectionhead__bar">
         <div ref={topRef} className="pbth-sectionhead__top">
+          {mark ? <span className="pbth-sectionhead__lead">{mark}</span> : null}
           <div ref={titlesRef} className="pbth-sectionhead__titles">
             <h1 className="pbth-sectionhead__title">{title}</h1>
             {subtitle ? <div className="pbth-sectionhead__sub">{subtitle}</div> : null}
