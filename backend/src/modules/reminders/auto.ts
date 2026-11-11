@@ -94,7 +94,10 @@ async function loadCandidateEvents(now: Date): Promise<CandidateEvent[]> {
 /**
  * Кому напоминать: участники команды без ответа («молчат» — нет ответа или
  * «думаю»; согласие на серию считается ответом «иду»), кто не отключил
- * авто-напоминания и кому это напоминание ещё не уходило.
+ * авто-напоминания и кому это напоминание ещё не уходило. Запасным
+ * (`team_memberships.status = 'RESERVE'`) авто-напоминания не уходят
+ * (решение Василия 11.11.2026); в травме и в отпуске — уходят. Ручное
+ * «Напомнить» капитана запасных по-прежнему зовёт.
  */
 async function loadRecipients(event: CandidateEvent, slotKey: string): Promise<Recipient[]> {
   const result = await query<Recipient>(
@@ -108,6 +111,7 @@ async function loadRecipients(event: CandidateEvent, slotKey: string): Promise<R
          ON c.series_id = $3::uuid AND c.user_id = tm.user_id AND c.status = 'COMMITTED'
        LEFT JOIN user_notification_settings s ON s.user_id = tm.user_id
       WHERE tm.team_id = $2
+        AND tm.status <> 'RESERVE'
         AND (r.status = 'PENDING' OR (r.status IS NULL AND c.id IS NULL))
         AND COALESCE(s.auto_event_reminders, TRUE)
         AND NOT EXISTS (

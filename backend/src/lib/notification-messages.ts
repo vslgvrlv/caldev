@@ -230,6 +230,319 @@ export function replaceLastParagraph(
   return { text: `${head}\n\n${newLast}`, entities: kept };
 }
 
+// ── Сообщения о новом, перенесённом и отменённом событии ──────────────────
+// Спека event_announcements (решения Василия 11.11.2026). Тексты — дословно
+// по спеке. У карточек с кнопками «Иду / Не иду» последний абзац — строка
+// ответа: обработчик `rsvp` заменяет ровно его.
+
+export const SERIES_CALLBACK_PREFIX = "series";
+
+/** Строка после нажатия «Иду на все». */
+export const SERIES_COMMITTED_LINE = "Ты ходишь на все занятия. Отказаться от отдельного можно в приложении.";
+
+const WEEKDAY_SHORT: Record<number, string> = { 1: "пн", 2: "вт", 3: "ср", 4: "чт", 5: "пт", 6: "сб", 7: "вс" };
+
+/** [2, 4] → «вт и чт»; [1, 3, 5] → «пн, ср и пт». Дни — ISO, 1 = понедельник. */
+export function formatWeekdays(isoDays: number[]): string {
+  const names = [...new Set(isoDays)]
+    .filter((d) => WEEKDAY_SHORT[d])
+    .sort((a, b) => a - b)
+    .map((d) => WEEKDAY_SHORT[d]);
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} и ${names[names.length - 1]}`;
+}
+
+/** «1 занятие», «3 занятия», «13 занятий». */
+export function sessionsLabel(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  const word =
+    mod10 === 1 && mod100 !== 11 ? "занятие" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "занятия" : "занятий";
+  return `${n} ${word}`;
+}
+
+/** «20:30» по поясу команды. */
+function formatTime(startAt: string | Date, timeZone?: string | null): string {
+  const date = startAt instanceof Date ? startAt : new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ru-RU", { timeZone: safeTimeZone(timeZone), hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+/** День недели по поясу команды, ISO (1 = понедельник). */
+export function localIsoWeekday(startAt: string | Date, timeZone?: string | null): number {
+  const date = startAt instanceof Date ? startAt : new Date(startAt);
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: safeTimeZone(timeZone), weekday: "short" }).format(date);
+  return { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[name] ?? 1;
+}
+
+export function seriesCallbackData(seriesId: string): string {
+  return `${SERIES_CALLBACK_PREFIX}:yes:${seriesId}`;
+}
+
+/** Часть `callback_data` после `series:` → серия. */
+export function parseSeriesCallbackPayload(payload: string): { seriesId: string } | null {
+  const match = /^yes:(.+)$/.exec(String(payload ?? ""));
+  if (!match || !UUID_RE.test(match[1])) return null;
+  return { seriesId: match[1].toLowerCase() };
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function announcementPush(params: {
+  teamName: string;
+  title: string;
+  header: string;
+  lines: string[];
+  url: string;
+  tag: string;
+  withAnswers?: boolean;
+}): PushContent {
+  return {
+    title: `${params.teamName}: ${params.title}`,
+    body: [capitalize(params.header), ...params.lines.map(htmlToPlain)].filter(Boolean).join("\n"),
+    url: params.url,
+    tag: params.tag,
+    ...(params.withAnswers
+      ? {
+          actions: [
+            { action: PUSH_ACTION_YES, title: "Иду" },
+            { action: PUSH_ACTION_NO, title: "Не иду" },
+          ],
+        }
+      : {}),
+  };
+}
+
+function sameText(a?: string | null, b?: string | null): boolean {
+  return String(a ?? "").trim() === String(b ?? "").trim();
+}
+
+/** Новое событие: «Идёшь?» и кнопки «Иду / Не иду». */
+export function buildEventCreatedMessage(params: {
+  card: EventCard;
+  state: "UNANSWERED" | "PENDING";
+  eventUrl: string;
+}): BuiltMessage {
+  const { card } = params;
+  const header = "новое событие";
+  const when = formatEventWhen(card.startAt, card.timezone);
+  const place = locationHtml(card.location, card.locationUrl);
+  const lines = [escapeHtml(card.title), when, ...(place ? [`Место: ${place}`] : [])];
+  const statusLine = params.state === "PENDING" ? rsvpStatusLine("PENDING") : "Идёшь?";
+  return {
+    text: [[`<b>${escapeHtml(card.teamName)}</b> · ${header}`, ...lines].join("\n"), statusLine].join("\n\n"),
+    parseMode: "HTML",
+    replyMarkup: rsvpKeyboard(card.eventId, params.eventUrl),
+    push: announcementPush({
+      teamName: card.teamName,
+      title: card.title,
+      header: `${header}, ${when}${card.location ? ` · ${String(card.location).trim()}` : ""}`,
+      lines: [statusLine],
+      url: params.eventUrl,
+      tag: `event-${card.eventId}`,
+      withAnswers: true,
+    }),
+  };
+}
+
+/** Строка «Было»: прежнее время, прежнее место или оба. */
+function previousLine(params: {
+  timeChanged: boolean;
+  placeChanged: boolean;
+  previousWhen: string;
+  previousLocation?: string | null;
+}): string | null {
+  const parts: string[] = [];
+  if (params.timeChanged) parts.push(params.previousWhen);
+  if (params.placeChanged) {
+    const prev = String(params.previousLocation ?? "").trim();
+    parts.push(prev ? escapeHtml(prev) : "место не указано");
+  }
+  return parts.length ? `Было: ${parts.join(", ")}` : null;
+}
+
+/** Перенос: новое время и место, «Было», строка ответа как в напоминаниях. */
+export function buildEventRescheduledMessage(params: {
+  card: EventCard;
+  previous: { startAt: string | Date; location?: string | null };
+  state: RsvpState;
+  eventUrl: string;
+}): BuiltMessage {
+  const { card } = params;
+  const header = "событие перенесено";
+  const when = formatEventWhen(card.startAt, card.timezone);
+  const place = locationHtml(card.location, card.locationUrl);
+  const was = previousLine({
+    timeChanged: new Date(params.previous.startAt).getTime() !== new Date(card.startAt).getTime(),
+    placeChanged: !sameText(params.previous.location, card.location),
+    previousWhen: formatEventWhen(params.previous.startAt, card.timezone),
+    previousLocation: params.previous.location,
+  });
+  const lines = [escapeHtml(card.title), when, ...(place ? [`Место: ${place}`] : []), ...(was ? [was] : [])];
+  const statusLine = rsvpStatusLine(params.state);
+  return {
+    text: [[`<b>${escapeHtml(card.teamName)}</b> · ${header}`, ...lines].join("\n"), statusLine].join("\n\n"),
+    parseMode: "HTML",
+    replyMarkup: rsvpKeyboard(card.eventId, params.eventUrl),
+    push: announcementPush({
+      teamName: card.teamName,
+      title: card.title,
+      header: `${header}, ${when}${card.location ? ` · ${String(card.location).trim()}` : ""}`,
+      lines: [...(was ? [was] : []), statusLine],
+      url: params.eventUrl,
+      tag: `event-${card.eventId}`,
+      withAnswers: true,
+    }),
+  };
+}
+
+/** Отмена: без кнопок ответа, ссылка на календарь команды. */
+export function buildEventCancelledMessage(params: {
+  card: Pick<EventCard, "eventId" | "title" | "startAt" | "teamName" | "timezone">;
+  calendarUrl: string;
+}): BuiltMessage {
+  const { card } = params;
+  const header = "событие отменено";
+  const when = formatEventWhen(card.startAt, card.timezone);
+  return {
+    text: [`<b>${escapeHtml(card.teamName)}</b> · ${header}`, escapeHtml(card.title), when].join("\n"),
+    parseMode: "HTML",
+    replyMarkup: linkKeyboard("Открыть календарь", params.calendarUrl),
+    push: announcementPush({
+      teamName: card.teamName,
+      title: card.title,
+      header: `${header}, ${when}`,
+      lines: [],
+      url: params.calendarUrl,
+      tag: `event-${card.eventId}`,
+    }),
+  };
+}
+
+/** «вт и чт в 20:30» по занятиям серии. */
+function seriesRhythm(starts: Array<string | Date>, timeZone?: string | null): string {
+  if (!starts.length) return "";
+  const days = starts.map((s) => localIsoWeekday(s, timeZone));
+  return `${formatWeekdays(days)} в ${formatTime(starts[0], timeZone)}`;
+}
+
+/** Новая серия: одно сообщение с кнопками «Иду на все» и «Открыть». */
+export function buildSeriesCreatedMessage(params: {
+  seriesId: string;
+  teamName: string;
+  title: string;
+  location?: string | null;
+  locationUrl?: string | null;
+  timezone?: string | null;
+  /** Занятия серии по порядку. */
+  starts: Array<string | Date>;
+  openUrl: string;
+}): BuiltMessage {
+  const header = "новые занятия";
+  const starts = params.starts;
+  const first = formatShortDate(starts[0], params.timezone);
+  const last = formatShortDate(starts[starts.length - 1], params.timezone);
+  const range = first === last ? first : `с ${first} по ${last}`;
+  const rhythm = `${seriesRhythm(starts, params.timezone)}, ${range} · ${sessionsLabel(starts.length)}`;
+  const place = locationHtml(params.location, params.locationUrl);
+  const lines = [escapeHtml(params.title), rhythm, ...(place ? [`Место: ${place}`] : [])];
+  const statusLine = "Ходишь на все?";
+  return {
+    text: [[`<b>${escapeHtml(params.teamName)}</b> · ${header}`, ...lines].join("\n"), statusLine].join("\n\n"),
+    parseMode: "HTML",
+    replyMarkup: {
+      inline_keyboard: [
+        [{ text: "Иду на все", callback_data: seriesCallbackData(params.seriesId) }],
+        [{ text: "Открыть", url: params.openUrl }],
+      ],
+    },
+    push: announcementPush({
+      teamName: params.teamName,
+      title: params.title,
+      header,
+      lines: [rhythm, ...(params.location ? [`Место: ${String(params.location).trim()}`] : []), statusLine],
+      url: params.openUrl,
+      tag: `series-${params.seriesId}`,
+    }),
+  };
+}
+
+/** Серия перенесена: с какого числа, новое время и место, «Было»; без кнопок ответа. */
+export function buildSeriesRescheduledMessage(params: {
+  teamName: string;
+  title: string;
+  location?: string | null;
+  locationUrl?: string | null;
+  timezone?: string | null;
+  /** Затронутые занятия после переноса, по порядку. */
+  starts: Array<string | Date>;
+  previous: { startAt: string | Date; location?: string | null; weekdays: number[] };
+  openUrl: string;
+  tag?: string;
+}): BuiltMessage {
+  const header = "занятия перенесены";
+  const tz = params.timezone;
+  const newRhythm = seriesRhythm(params.starts, tz);
+  const prevRhythm = `${formatWeekdays(params.previous.weekdays)} в ${formatTime(params.previous.startAt, tz)}`;
+  const timeChanged =
+    newRhythm !== prevRhythm || formatShortDate(params.starts[0], tz) !== formatShortDate(params.previous.startAt, tz);
+  const was = previousLine({
+    timeChanged,
+    placeChanged: !sameText(params.previous.location, params.location),
+    previousWhen: prevRhythm,
+    previousLocation: params.previous.location,
+  });
+  const place = locationHtml(params.location, params.locationUrl);
+  const lines = [
+    escapeHtml(params.title),
+    `с ${formatShortDate(params.starts[0], tz)}: ${newRhythm}`,
+    ...(place ? [`Место: ${place}`] : []),
+    ...(was ? [was] : []),
+  ];
+  return {
+    text: [`<b>${escapeHtml(params.teamName)}</b> · ${header}`, ...lines].join("\n"),
+    parseMode: "HTML",
+    replyMarkup: linkKeyboard("Открыть", params.openUrl),
+    push: announcementPush({
+      teamName: params.teamName,
+      title: params.title,
+      header,
+      lines: lines.slice(1),
+      url: params.openUrl,
+      tag: params.tag ?? "series",
+    }),
+  };
+}
+
+/** Серия отменена: с какого числа и сколько занятий; без кнопок ответа. */
+export function buildSeriesCancelledMessage(params: {
+  teamName: string;
+  title: string;
+  timezone?: string | null;
+  fromStartAt: string | Date;
+  count: number;
+  calendarUrl: string;
+  tag?: string;
+}): BuiltMessage {
+  const header = "занятия отменены";
+  const line = `с ${formatShortDate(params.fromStartAt, params.timezone)} · ${sessionsLabel(params.count)}`;
+  return {
+    text: [`<b>${escapeHtml(params.teamName)}</b> · ${header}`, escapeHtml(params.title), line].join("\n"),
+    parseMode: "HTML",
+    replyMarkup: linkKeyboard("Открыть календарь", params.calendarUrl),
+    push: announcementPush({
+      teamName: params.teamName,
+      title: params.title,
+      header,
+      lines: [line],
+      url: params.calendarUrl,
+      tag: params.tag ?? "series",
+    }),
+  };
+}
+
 export type DebtItem = { title: string; startAt: string | Date; amount: number };
 
 const MAX_DEBT_ITEMS = 8;

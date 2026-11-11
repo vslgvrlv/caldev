@@ -142,6 +142,44 @@ export function autoReminderWindows(startAt: Date, timeZone: string | null | und
   return windows;
 }
 
+// Сообщения о новом, перенесённом и отменённом событии (спека
+// event_announcements, решения Василия 11.11.2026). Уходят через 3 минуты:
+// за это время капитан успевает поправить опечатку или удалить событие.
+// Ночью (22:00–09:00 по поясу команды) сообщение ждёт до 09:00 — но только
+// если от 09:00 до начала события не меньше 6 часов. Иначе (игра в 9:00, сбор
+// в 7:00) ждать нельзя: уходит сразу, без звука.
+export const ANNOUNCEMENT_RULES = {
+  delaySeconds: 180,
+  nightFromHour: 22,
+  morningHour: 9,
+  /** Ждать утра, только если от 09:00 до начала события не меньше стольких часов. */
+  minLeadHours: 6,
+} as const;
+
+export type AnnouncementDue = { dueAt: Date; silent: boolean };
+
+/** Когда слать сообщение о событии и со звуком ли. Для серии `eventStartAt` — первое затронутое занятие. */
+export function announcementDueAt(
+  now: Date,
+  eventStartAt: Date,
+  timeZone: string | null | undefined,
+  delaySeconds: number = ANNOUNCEMENT_RULES.delaySeconds
+): AnnouncementDue {
+  const tz = safeTimeZone(timeZone);
+  const base = new Date(now.getTime() + Math.max(0, delaySeconds) * 1000);
+  const local = localParts(base, tz);
+  const night = local.hour >= ANNOUNCEMENT_RULES.nightFromHour || local.hour < ANNOUNCEMENT_RULES.morningHour;
+  if (!night) return { dueAt: base, silent: false };
+
+  const day = { year: local.year, month: local.month, day: local.day };
+  const morningDay = local.hour >= ANNOUNCEMENT_RULES.nightFromHour ? shiftDay(day, 1) : day;
+  const candidate = zonedTimeToUtc(morningDay.year, morningDay.month, morningDay.day, ANNOUNCEMENT_RULES.morningHour, 0, tz);
+  if (eventStartAt.getTime() - candidate.getTime() >= ANNOUNCEMENT_RULES.minLeadHours * 3_600_000) {
+    return { dueAt: candidate, silent: false };
+  }
+  return { dueAt: base, silent: true };
+}
+
 /** Какое напоминание пора слать сейчас; `null` — никакое. */
 export function dueAutoReminder(
   startAt: Date,

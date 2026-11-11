@@ -83,6 +83,14 @@ describe('push-sw-handler', () => {
     expect(w.shown[0].options.actions.map((a: any) => a.title)).toEqual(['Иду', 'Не иду']);
   });
 
+  it('ночной пуш о событии без звука: silent из данных доходит до showNotification', async () => {
+    const w = makeWorker();
+    await dispatch(w.listeners.push, { data: { json: () => ({ ...eventPush, silent: true }) } });
+    await dispatch(w.listeners.push, { data: { json: () => eventPush } });
+    expect(w.shown[0].options.silent).toBe(true);
+    expect(w.shown[1].options.silent).toBe(false);
+  });
+
   it('пуш без ключа — без кнопок; чужой адрес не открывается', async () => {
     const w = makeWorker();
     await dispatch(w.listeners.push, { data: { json: () => ({ title: 'x', body: 'y', url: 'https://evil.example/x' }) } });

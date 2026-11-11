@@ -51,6 +51,8 @@ export type WebPushPayload = {
   tag?: string;
   actions?: Array<{ action: string; title: string }>;
   rsvp?: { token: string };
+  /** Показать без звука и вибрации (сервис-воркер передаёт в showNotification). */
+  silent?: boolean;
 };
 
 export type WebPushSendOptions = {

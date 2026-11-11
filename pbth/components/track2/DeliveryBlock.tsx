@@ -4,10 +4,12 @@ import { ru } from 'date-fns/locale';
 import { Send } from 'lucide-react';
 import { getEventDelivery, REMINDERS_SENT_EVENT, type EventDeliveryReport } from '../../api/track2';
 import { countLabel } from '../../lib/plural';
+import { broadcastLabel, reserveLine } from './delivery-labels';
 
 // «Кому дошло» на экране события (трек 2): капитан и тренер видят по последней
-// рассылке «Напомнить», кому дошло, кому нет и почему, и сколько раз уже
-// уходило авто-напоминание. Данные — журнал доставки на сервере.
+// рассылке — «Напомнить» или сообщению о новом, перенесённом, отменённом
+// событии, — кому дошло, кому нет и почему, и сколько раз уже уходило
+// авто-напоминание. Данные — журнал доставки на сервере.
 
 const SLOT_LABEL: Record<'EVE' | 'MORNING', string> = { EVE: 'накануне вечером', MORNING: 'утром' };
 
@@ -67,6 +69,7 @@ export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
   const last = report?.lastBroadcast ?? null;
   const auto = report?.auto ?? [];
   const autoOff = (report?.members ?? []).filter((m) => m.autoRemindersOff);
+  const reserveText = reserveLine((report?.members ?? []).filter((m) => m.reserve).map((m) => m.name));
   const delivered = last?.items.filter((i) => i.status === 'SENT' || i.status === 'QUEUED') ?? [];
   const failed = last?.items.filter((i) => i.status === 'FAILED' || i.status === 'NO_CHANNEL') ?? [];
   const autoFailed = auto.filter((a) => a.lastStatus === 'FAILED' || a.lastStatus === 'NO_CHANNEL');
@@ -110,7 +113,7 @@ export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
       {state === 'ready' && last && (
         <div className="space-y-2">
           <p className="text-sm text-white">
-            «Напомнить» {when(last.at)}: дошло {delivered.length} из {last.total}
+            {broadcastLabel(last.kind)} {when(last.at)}: дошло {delivered.length} из {last.total}
             {failed.length ? `, не дошло ${failed.length}` : ''}.
           </p>
           {open && (
@@ -164,6 +167,7 @@ export const DeliveryBlock: React.FC<{ eventId: string }> = ({ eventId }) => {
           {open && autoOff.length > 0 && (
             <p className="text-xs text-pb-subtext">Отключили авто-напоминания: {autoOff.map((m) => m.name).join(', ')}.</p>
           )}
+          {open && reserveText && <p className="text-xs text-pb-subtext">{reserveText}</p>}
         </div>
       )}
     </div>
