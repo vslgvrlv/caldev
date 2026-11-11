@@ -1,0 +1,92 @@
+/* Тема PBTH (Paintball TeamHub): приложение пейнтболистов в телефоне, React + Tailwind.
+   Направление: все пейнтбольные события игрока в одном месте; собранный, резкий, полевой; спорт, не милитари.
+   Мир: тёмное поле вечером; за стеклом пятна красок команд. Яркий момент экрана: главное действие («Иду», плюс) в зелёном.
+   Фирменная деталь: знак-шестиугольник (значок hexagon) и краски команд, которые экран отдаёт фону.
+   Тёмная и единственная: светлой нет, `[data-ui-theme="light"]` не задаётся (режим light даёт тот же тёмный вид).
+   Один акцент — зелёный #00E676, текст на нём тёмный. Стекло ui-kit в два слоя на почти чёрном холодном фоне, плавающая нижняя панель
+   жидкого стекла. Кромки и блики стекла спокойные: подсветка по краям убавлена, источник света не угадывается.
+   Шрифт Manrope (themes/pbth-fonts.css, без CDN), контролы 44px под палец, размеры текста 12/14/16/20/28.
+   Краски экрана продукт задаёт переменными --ui-paint-1..3 (цвет) и --ui-paint-1-at..3-at (положение), см. README, «Тема pbth».
+   Отличие от макета: приглушённый текст светлее (#C0C6CE вместо #A9AFB7), краски фона слабее на 6 п.п. (22/20/18 % вместо 28/24/22):
+   на белой краске команды (#F2F3F5) старые значения давали приглушённому тексту на стекле 2,97:1.
+   Контраст текста к фону и к стеклу поверх пятен красок проверяет tests/theme-pbth.test.js. */
+:root, [data-ui-theme="dark"] {
+  color-scheme: dark;
+  --ui-bg: #06080C;
+  --ui-surface: #11151B;
+  --ui-surface-2: rgba(255, 255, 255, .06);
+  --ui-text: #F2F3F5;
+  --ui-muted: #C0C6CE;
+  --ui-border: rgba(255, 255, 255, .08);
+  --ui-accent: #00E676;
+  --ui-accent-text: #04140B;
+  --ui-danger: #FF5A5F;
+  --ui-success: #00E676;
+  --ui-warning: #FFD23F;
+  --ui-overlay: rgba(2, 4, 8, .45);
+  --ui-overlay-blur: 12px;
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 14px;
+  --ui-font: 'Manrope', system-ui, sans-serif;
+  --ui-font-num: 'Manrope', system-ui, sans-serif;
+  --ui-icon-stroke: 1.75;
+  --ui-violet: var(--ui-accent);
+
+  /* контролы под палец */
+  --ui-ctl-h: 44px;
+  --ui-ctl-radius: 12px;
+  --ui-ctl-pad-x: 16px;
+  --ui-ctl-size: 14px;
+  --ui-btn-size: 14px;
+  --ui-btn-weight: 700;
+  --ui-btn-tracking: 0;
+  --ui-btn-primary-shadow: none;
+  --ui-focus-ring: rgba(0, 230, 118, .28);
+  --ui-seg-radius: 10px;
+  --ui-seg-active-bg: rgba(255, 255, 255, .12);
+  --ui-seg-active-text: var(--ui-text);
+  --ui-seg-hover-bg: rgba(255, 255, 255, .05);
+  --ui-switch-on: var(--ui-accent);
+
+  /* размеры текста модулей: набор 12/14/16/20/28 */
+  --ui-feed-name-size: 14px;
+  --ui-feed-sub-size: 12px;
+  --ui-feed-time-size: 20px;
+  --ui-feed-lead-size: 40px;
+  --ui-sidenav-bottom-label-size: 12px;
+  --ui-sidenav-bottom-active: var(--ui-text);
+  --ui-sidenav-action-ring: 0 0 0 0 transparent;
+  --ui-sidenav-action-glow: 0 0 0 0 transparent;
+
+  /* стекло, первый слой */
+  --ui-glass-bg: rgba(255, 255, 255, .04);
+  --ui-glass-border: rgba(255, 255, 255, .04);
+  --ui-glass-highlight: rgba(255, 255, 255, .03);
+  --ui-glass-blur: 22px;
+  --ui-glass-shadow: 0 14px 40px rgba(0, 0, 0, .42);
+  --ui-glow: transparent;
+  /* второй слой и подъём активного */
+  --ui-glass2-bg: rgba(255, 255, 255, .07);
+  --ui-glass2-border: rgba(255, 255, 255, .06);
+  --ui-glass2-highlight: rgba(255, 255, 255, .06);
+  --ui-glass2-shadow: 0 8px 20px rgba(0, 0, 0, .25);
+  --ui-lift-bg: rgba(255, 255, 255, .11);
+  --ui-lift-border: transparent;
+  --ui-lift-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+
+  /* жидкое стекло (нижняя панель, шторка) */
+  --ui-lglass-tint: linear-gradient(180deg, rgba(150, 175, 205, .09), rgba(50, 64, 84, .14) 22%, rgba(18, 24, 34, .34) 55%, rgba(20, 26, 40, .40));
+  --ui-lglass-blur: 4px;
+  --ui-lglass-sat: 180%;
+  --ui-lglass-bright: .95;
+  --ui-lglass-shadow: 0 24px 48px -16px rgba(0, 0, 0, .75), 0 2px 8px rgba(0, 0, 0, .35),
+                      inset 0 0 0 1px rgba(255, 255, 255, .045), inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 0 30px rgba(140, 175, 215, .045);
+  --ui-lglass-spec: .45;
+
+  /* пятна фона из красок экрана; не заданы — только слабое холодное пятно */
+  --ui-backdrop: radial-gradient(380px 330px at var(--ui-paint-1-at, 68% 330px), color-mix(in srgb, var(--ui-paint-1, transparent) 22%, transparent), transparent 70%),
+                 radial-gradient(360px 320px at var(--ui-paint-2-at, 6% 900px), color-mix(in srgb, var(--ui-paint-2, transparent) 20%, transparent), transparent 70%),
+                 radial-gradient(300px 260px at var(--ui-paint-3-at, 102% 70px), color-mix(in srgb, var(--ui-paint-3, transparent) 18%, transparent), transparent 70%),
+                 radial-gradient(520px 380px at 20% 0, rgba(90, 120, 170, .08), transparent 70%);
+}

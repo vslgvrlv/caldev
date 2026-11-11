@@ -1,0 +1,52 @@
+/* Тема ARC (pos-web). Родные переменные: web/src/app.css (:root) — --arc-bg, --arc-surface, --arc-surface2, --arc-border,
+   --arc-text, --arc-muted, --arc-dim, --arc-green, --arc-green-dark, --arc-amber. Родная тема у ARC тёмная и единственная;
+   светлая (data-ui-theme="light") собрана из той же палитры и в ARC пока не используется. Красного токена нет —
+   берём #f87171, как в Toast.svelte (.toast.error). Шрифт — JetBrains Mono, как у body ARC. */
+:root {
+  --ui-bg: var(--arc-bg, #0c0e12);
+  --ui-surface: var(--arc-surface, #14161c);
+  --ui-surface-2: var(--arc-surface2, #1c1e26);
+  --ui-text: var(--arc-text, #e6e8ee);
+  --ui-muted: var(--arc-muted, #828696);
+  --ui-border: var(--arc-border, #2a2d36);
+  --ui-accent: var(--arc-green, #3b9b5a);
+  --ui-accent-text: #ffffff;
+  --ui-danger: #f87171;
+  --ui-success: var(--arc-green, #3b9b5a);
+  --ui-warning: var(--arc-amber, #a8842e);
+  --ui-overlay: rgba(0, 0, 0, .6);
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 6px;
+  --ui-radius-lg: 10px;
+  --ui-font: "JetBrains Mono", ui-monospace, monospace;
+  --ui-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ui-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  --ui-icon-stroke: 2;
+  color-scheme: dark;
+}
+[data-ui-theme="dark"] { color-scheme: dark; }
+[data-ui-theme="light"] {
+  --ui-bg: #f3f4f6;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #eceef2;
+  --ui-text: #14161c;
+  --ui-muted: #5d6170;
+  --ui-border: #d5d8e0;
+  --ui-accent: #2d7a46;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #c23a3a;
+  --ui-success: #2d7a46;
+  --ui-warning: #8a6a1c;
+  --ui-overlay: rgba(12, 14, 18, .4);
+  --ui-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+  color-scheme: light;
+}
+
+/* Тост ARC (#1284, шаг 4): вид прежнего тоста ARC поверх ядра — без цветной полосы слева, красный фон ошибки,
+   кнопка действия текстом, полоска-таймер и закрытие в тон; стоит над панелью вкладок. Включаются в configure({ progress, closable }). */
+.ui-toast-host { bottom: calc(env(safe-area-inset-bottom) + 76px); gap: 8px; max-width: min(420px, calc(100vw - 24px)); }
+.ui-toast { gap: 12px; padding: 9px 10px 9px 14px; font-size: 12.5px; border-left-width: 1px; border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
+.ui-toast--success, .ui-toast--info { border-left-color: var(--ui-border); }
+.ui-toast--error { background: #241517; border-color: #8a3f3b; }
+.ui-toast__act, .ui-toast__act:hover { min-height: 0; padding: 2px 0; font-size: inherit; font-weight: 700; color: #7aa7c2; background: none; border-color: transparent; }
+.ui-toast__bar { background: #7aa7c2; }

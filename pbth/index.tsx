@@ -2,6 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+// ui-kit 0.43.0 с темой pbth: токены --ui-* и шрифт Manrope (у себя, без CDN).
+// Тема только объявляет переменные: фон, шрифт и цвета нынешних экранов не меняются,
+// новые экраны применяют их через <Screen> (pbth/ui).
+import './vendor/ui-kit/0.43.0/ui-kit.css';
+import './vendor/ui-kit/0.43.0/themes/pbth-fonts.css';
+import './vendor/ui-kit/0.43.0/themes/pbth.css';
 import './index.css';
 import { registerServiceWorker } from './lib/register-sw';
 import { browserChunkReloadDeps, installChunkReloadHandler } from './lib/chunk-reload';
