@@ -116,10 +116,10 @@ export const AddGameSheet: React.FC<{ onClose: () => void; onAdd: (game: GameInp
     <Sheet open onClose={onClose} title="Добавить игру">
       <form className="pbth-event__form" onSubmit={submit}>
         <Field label="Время начала" htmlFor="g-time">
-          <input id="g-time" className="ui-input" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+          <TimeInput id="g-time" value={time} onChange={setTime} required />
         </Field>
         <Field label="Соперник" htmlFor="g-opp">
-          <input id="g-opp" className="ui-input" type="text" placeholder="Название команды" value={opponent} onChange={(e) => setOpponent(e.target.value)} required />
+          <TextInput id="g-opp" placeholder="Название команды" value={opponent} onChange={setOpponent} required />
         </Field>
         <Field label="Пит-зона" htmlFor="g-pit">
           <PitZoneSelect id="g-pit" value={pitZone} onChange={setPitZone} />
@@ -165,10 +165,10 @@ export const GameCardSheet: React.FC<{
     <Sheet open onClose={onClose} title="Карточка игры" subtitle={`Соперник: ${game.opponent}`}>
       <form className="pbth-event__form" onSubmit={(e) => void submit(e)}>
         <Field label="Время игры" htmlFor="gc-time">
-          <input id="gc-time" className="ui-input" type="time" value={time} disabled={locked} onChange={(e) => setTime(e.target.value)} required />
+          <TimeInput id="gc-time" value={time} disabled={locked} onChange={setTime} required />
         </Field>
         <Field label="Соперник" htmlFor="gc-opp">
-          <input id="gc-opp" className="ui-input" type="text" value={opponent} disabled={locked} onChange={(e) => setOpponent(e.target.value)} required />
+          <TextInput id="gc-opp" value={opponent} disabled={locked} onChange={setOpponent} required />
         </Field>
         <Field label="Пит-зона" htmlFor="gc-pit">
           <PitZoneSelect id="gc-pit" value={pitZone} disabled={locked} onChange={setPitZone} />
@@ -177,7 +177,7 @@ export const GameCardSheet: React.FC<{
           <PairSelect id="gc-pair" value={pair} disabled={locked} onChange={setPair} />
         </Field>
         <Field label="Счёт (необязательно)" htmlFor="gc-score">
-          <input id="gc-score" className="ui-input" type="text" placeholder="например 4:2" value={score} disabled={locked} onChange={(e) => setScore(e.target.value)} />
+          <TextInput id="gc-score" placeholder="например 4:2" value={score} disabled={locked} onChange={setScore} />
         </Field>
         <SheetFooter
           cancelLabel="Закрыть"

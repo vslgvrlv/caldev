@@ -3,7 +3,28 @@
 .pbth-form__field .ui-label { margin-bottom: 6px; font-size: 12px; }
 .pbth-form__field .ui-input, .pbth-form__field .ui-select { width: 100%; padding-inline: 14px; }
 .pbth-form__area.ui-input { height: auto; min-height: 88px; padding-block: 12px; resize: none; line-height: 1.4; }
-.pbth-form__native { min-width: 0; color-scheme: dark; }
+.pbth-form__native { color-scheme: dark; }
+
+/* Поля не шире своей колонки при любом значении. В Safari на айфоне у input[type=date|time] своя минимальная
+   ширина и центрированный текст, после ввода поле растягивается за край окна, а окно уезжает вбок. */
+.ui-input, .ui-select, .pbth-form__area { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.ui-input[type="date"], .ui-input[type="time"], .ui-input[type="datetime-local"], .pbth-form__native {
+  display: block; width: 100%; min-width: 0; max-width: 100%; height: var(--ui-ctl-h, 44px); margin: 0;
+  -webkit-appearance: none; appearance: none; text-align: left; line-height: 1.2;
+}
+.ui-input[type="date"]::-webkit-date-and-time-value,
+.ui-input[type="time"]::-webkit-date-and-time-value,
+.ui-input[type="datetime-local"]::-webkit-date-and-time-value { min-height: 1.2em; margin: 0; text-align: left; }
+.ui-input[type="date"]::-webkit-datetime-edit,
+.ui-input[type="time"]::-webkit-datetime-edit,
+.ui-input[type="datetime-local"]::-webkit-datetime-edit { padding: 0; text-align: left; }
+.ui-input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.ui-input[type="time"]::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+
+/* Окна и шторки: одинаковые боковые отступы у заголовка, полей и кнопок; в стороны содержимое не уходит. */
+dialog.pbth-sheet { --ui-dialog-pad-x: 20px; }
+dialog.pbth-sheet .ui-dialog__body { overflow-x: hidden; }
+dialog.pbth-sheet .ui-dialog__body > * { min-width: 0; max-width: 100%; }
 .pbth-form__input--bad.ui-input, .pbth-form__input--bad.ui-select { border-color: var(--ui-danger); }
 .pbth-form__error { margin-top: 6px; font-size: 12px; color: var(--ui-danger); }
 .pbth-form__hint { margin-top: 6px; font-size: 12px; color: var(--ui-muted); }

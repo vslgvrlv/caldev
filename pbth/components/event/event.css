@@ -73,7 +73,7 @@
 .pbth-event__field { display: flex; flex-direction: column; }
 .pbth-event__field .ui-input, .pbth-event__field .ui-select { width: 100%; box-sizing: border-box; }
 .pbth-event__area.ui-input { height: auto; min-height: 88px; padding-block: 12px; resize: none; }
-.pbth-event__two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pbth-event__two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .pbth-event__two > * { min-width: 0; }
 .pbth-event__footer { display: flex; gap: 12px; padding-top: 4px; }
 .pbth-event__footer > .ui-btn { flex: 1 1 0; }
