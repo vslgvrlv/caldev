@@ -61,7 +61,13 @@ const LoginRoute: React.FC = () => {
     const action = resolvePostLoginAction(searchParams.get('next'));
     return <Navigate to={action.kind === 'admin' ? '/admin' : action.path} replace />;
   }
-  return <LoginView onLogin={(target) => void shell.actions.login(target)} onSelectRole={() => void shell.actions.login()} availableRoles={[]} />;
+  return (
+    <LoginView
+      onLogin={(target) => void shell.actions.login(target)}
+      bootstrapDone={shell.authBootstrapDone}
+      sessionUser={shell.user}
+    />
+  );
 };
 
 /** Консоль владельца (трек 3): команды в ней свои — заголовок команды не нужен. */

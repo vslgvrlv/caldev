@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { UserRoleOption, Role } from '../types';
-import { Shield, User as UserIcon, LogOut, Loader2, Send } from 'lucide-react';
-import { roleLabel } from '../lib/labels';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { User } from '../types';
 import { isTelegramMiniApp, readMiniAppInitData } from '../shell/telegram';
-import { api, type AuthMeResponse } from '../api';
+import { api } from '../api';
 import {
   extractAuthError,
   normalizeAuthErrorCode,
@@ -13,10 +11,12 @@ import {
   sendAuthTelemetry,
 } from '../lib/auth-ux';
 import { sanitizeNext } from '../lib/login-next-param';
+import { canContinueToAdmin, resolveLoginSession } from '../lib/login-session';
 import { isInvitePath } from '../lib/post-login';
-import { PairingPanel } from '../components/PairingPanel';
-
-type AuthenticatedMe = Extract<AuthMeResponse, { authenticated: true }>;
+import { formatPairingCountdown, pairingStatusMessage } from '../lib/pairing';
+import { usePairing } from '../lib/use-pairing';
+import { Avatar, Button, Glass, Icon, Screen } from '../ui';
+import './login/login.css';
 
 interface LoginViewProps {
   /**
@@ -25,11 +25,85 @@ interface LoginViewProps {
    * приложения команды, в которой человек ещё не состоит.
    */
   onLogin: (target?: string) => void;
-  onSelectRole: (roleOption: UserRoleOption) => void;
-  availableRoles: UserRoleOption[];
+  /** Оболочка закончила запуск: сессию она уже проверила сама (`/auth/me`). */
+  bootstrapDone: boolean;
+  /** Человек, которого оболочка нашла по сессии при запуске. */
+  sessionUser: User | null;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, availableRoles }) => {
+const PAINTS = ['#00E676', '#4F7CFF'];
+// Зелёное пятно сверху по центру, холодное — слева снизу (тема читает их с корня страницы).
+const PAINT_POSITIONS: Record<string, string> = { '--ui-paint-1-at': '50% 240px', '--ui-paint-2-at': '0% 100%' };
+
+const Spinner: React.FC<{ size?: number }> = ({ size = 18 }) => <Icon name="loader-circle" size={size} className="pbth-login__spin" />;
+
+const PairingSteps: React.FC<{ scope: 'USER' | 'ADMIN'; redirectTo: string; onAuthenticated: (to: string) => void }> = ({
+  scope,
+  redirectTo,
+  onAuthenticated,
+}) => {
+  const { state, code, botUrl, botUsername, secondsLeft, copied, handleCopy, requestCode } = usePairing({
+    scope,
+    redirectTo,
+    onAuthenticated,
+  });
+
+  if (state === 'starting' || state === 'idle') {
+    return (
+      <div className="pbth-login__loading">
+        <Spinner size={22} />
+      </div>
+    );
+  }
+
+  const isDead = state === 'expired' || state === 'denied' || state === 'error';
+
+  if (isDead) {
+    return (
+      <>
+        <p className="pbth-login__note">{pairingStatusMessage(state)}</p>
+        <Button variant="primary" block icon="refresh-cw" className="pbth-login__main" onClick={() => void requestCode()}>
+          Получить новый код
+        </Button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Glass layer={2} className="pbth-login__code-card">
+        <span className="pbth-login__code-label">Код для входа</span>
+        <p className="pbth-login__code">{code}</p>
+        <span className="pbth-login__code-ttl">Действует {formatPairingCountdown(secondsLeft)}</span>
+        <Button variant="ghost" size="sm" icon={copied ? 'check' : 'copy'} onClick={handleCopy}>
+          {copied ? 'Скопировано' : 'Скопировать'}
+        </Button>
+      </Glass>
+
+      <Button as="a" variant="primary" block icon="send" className="pbth-login__main" href={botUrl} target="_blank" rel="noopener noreferrer">
+        Открыть Telegram
+      </Button>
+
+      {/* Инструкция на случай, когда кнопка выше не сработала: именно этот
+          случай — тупик «START BOT» — и был инцидентом. */}
+      <p className="pbth-login__small">
+        Кнопка не сработала? Найди в Telegram @{botUsername} и отправь ему код {code}. Потом нажми «Это я, войти» — прямо в
+        чате.
+      </p>
+
+      <div className="pbth-login__status">
+        <Spinner size={16} />
+        {pairingStatusMessage(state)}
+      </div>
+
+      <Button variant="ghost" size="sm" block icon="refresh-cw" onClick={() => void requestCode()}>
+        Получить новый код
+      </Button>
+    </>
+  );
+};
+
+export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, sessionUser }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authQuery = searchParams.toString();
@@ -39,22 +113,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
   // Пришёл по ссылке-приглашению или по ссылке команды.
   const wantsTeam = isInvitePath(nextParam) || /^\/join\/[^/?#]+/.test(nextParam ?? '');
 
-  const [step, setStep] = useState<'LOGIN' | 'SELECT'>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string>('');
-  const [continuity, setContinuity] = useState<AuthenticatedMe | null>(null);
-  const [continuityChecked, setContinuityChecked] = useState(false);
+  const [switchedAccount, setSwitchedAccount] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [pairing, setPairing] = useState(false);
   const isLocalDev =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
-  const safeAreaFrameStyle = {
-    paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
-    paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
-    paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
-    paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
-  } as const;
+
+  // Пятна фона: положение задаём на корне страницы рядом с красками `Backdrop`.
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.entries(PAINT_POSITIONS).forEach(([k, v]) => root.style.setProperty(k, v));
+    return () => Object.keys(PAINT_POSITIONS).forEach((k) => root.style.removeProperty(k));
+  }, []);
 
   // Surface URL-borne auth errors (?auth_error=...&detail=...) once.
   useEffect(() => {
@@ -74,28 +147,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     });
   }, [authQuery, wantsAdmin]);
 
-  // Continuity check: if there's already a session, render "Continue as X"
-  // instead of provider buttons. Owner gets here after Yandex/TG login when
-  // they revisit /login while still signed in.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const me = await api.getAuthMe();
-        if (cancelled) return;
-        if (me.authenticated) {
-          setContinuity(me);
-        }
-      } catch {
-        // ignore — fall back to provider buttons
-      } finally {
-        if (!cancelled) setContinuityChecked(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Сессия, найденная при запуске: вместо кнопок входа — «Продолжить как X».
+  // Оболочка уже спросила `/auth/me`, второй запрос с экрана входа не нужен.
+  const session = resolveLoginSession({ bootstrapDone, user: switchedAccount ? null : sessionUser });
 
   const checkAuthenticated = async (): Promise<boolean> => {
     const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
@@ -120,8 +174,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     return initData;
   };
 
-  const handleContinueExisting = () => {
-    if (!continuity) return;
+  const handleContinueExisting = async () => {
+    if (session.kind !== 'session') return;
     sessionStorage.setItem('pbth:post-auth-app', wantsAdmin ? '0' : '1');
 
     // Smart routing: if /admin requested AND scope is admin-eligible, go to
@@ -129,9 +183,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     // for the admin path. handleLogin → tryEnterUserApp → selectRole('USER')
     // would demote the just-elevated ADMIN session back to USER and bounce to
     // /app. AdminConsoleView's own bootstrap owns the admin entry flow.
-    if (wantsAdmin && continuity.adminScope && continuity.adminScope !== 'NONE') {
-      navigate('/admin', { replace: true });
-      return;
+    if (wantsAdmin) {
+      let me = null;
+      try {
+        me = await api.getAuthMe();
+      } catch {
+        // нет ответа — идём как обычный пользователь
+      }
+      if (canContinueToAdmin(me)) {
+        navigate('/admin', { replace: true });
+        return;
+      }
     }
 
     onLogin(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect);
@@ -149,7 +211,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     } catch {
       // ignore
     } finally {
-      setContinuity(null);
+      setSwitchedAccount(true);
       setSwitchingAccount(false);
       setAuthError('');
     }
@@ -209,7 +271,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
           onLogin(targetRedirect);
           return;
         }
-        setAuthError('Вход не завершился. Повторите попытку из Telegram Mini App.');
+        setAuthError('Вход не завершился. Попробуй ещё раз из Telegram Mini App.');
         sendAuthTelemetry({
           scope: telemetryScope,
           flow: 'MINIAPP',
@@ -256,203 +318,109 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onSelectRole, ava
     );
   };
 
-  if (step === 'SELECT') {
-    return (
-      <div
-        className="min-h-screen bg-pb-background flex flex-col items-center justify-center animate-fade-in"
-        style={safeAreaFrameStyle}
-      >
-        <h2 className="text-2xl font-bold text-white mb-2">Выберите профиль</h2>
-        <p className="text-pb-subtext text-center mb-8">
-          К вашему Telegram аккаунту привязано несколько ролей.
-        </p>
-
-        <div className="w-full max-w-sm space-y-3">
-          {availableRoles.map((option, idx) => (
-            <button
-              key={idx}
-              onClick={() => onSelectRole(option)}
-              className="w-full bg-pb-surface border border-white/10 p-4 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-colors active:scale-[0.99]"
-            >
-              <div className="flex items-center space-x-4">
-                <div
-                  className={`w-11 h-11 rounded-full flex items-center justify-center ${
-                    option.role === Role.ADMIN || option.role === Role.CAPTAIN
-                      ? 'bg-pb-primary/20 text-pb-primary'
-                      : 'bg-white/10 text-pb-subtext'
-                  }`}
-                >
-                  {option.role === Role.ADMIN || option.role === Role.CAPTAIN ? (
-                    <Shield size={22} />
-                  ) : (
-                    <UserIcon size={22} />
-                  )}
-                </div>
-                <div className="text-left">
-                  <div className="font-bold text-white">{option.teamName}</div>
-                  <div className="text-xs text-pb-subtext uppercase tracking-wider font-bold">{roleLabel(option.role)}</div>
-                </div>
-              </div>
-              <div className="w-2 h-2 rounded-full bg-pb-primary"></div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   const yandexEnabled = (import.meta as any).env?.VITE_AUTH_YANDEX_ENABLED === '1';
-  // Вход (решение Василия 10.11.2026, п. 6): у нового человека путь один —
-  // Telegram. Яндекс остаётся тихой ссылкой для тех, кто уже привязал его в
-  // профиле: войти им впервые нельзя. Адрес возврата (`?next=`) едет в
-  // `redirectTo` и при отказе Яндекса не теряется (caldev#128).
-  const yandexLink = (
-    <div className="pt-3 text-center">
-      <button
-        onClick={handleYandexLogin}
-        disabled={isLoading}
-        className="text-sm text-pb-subtext underline underline-offset-4 hover:text-white disabled:opacity-60"
-      >
-        Войти через Яндекс
-      </button>
-      <p className="mt-1 text-xs text-pb-subtext/70 leading-relaxed">
-        Работает у тех, кто привязал Яндекс в профиле. Первый вход — через Telegram.
-      </p>
-    </div>
-  );
-  const telegramButton = (
-    <button
-      onClick={handleTelegramLogin}
-      disabled={isLoading}
-      className="w-full bg-pb-primary hover:bg-pb-primary/90 text-pb-background font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.99] disabled:opacity-60"
-    >
-      {isLoading ? (
-        <Loader2 size={18} className="animate-spin" />
-      ) : (
-        <>
-          <Send size={18} />
-          <span>Войти через Telegram</span>
-        </>
-      )}
-    </button>
-  );
+  const showProviders = session.kind === 'anonymous' && !pairing;
+  const sessionName = session.kind === 'session' ? session.user.name || session.user.nickname || 'Игрок' : '';
 
   return (
-    <div
-      className="min-h-screen bg-pb-background flex flex-col items-center justify-center animate-fade-in"
-      style={safeAreaFrameStyle}
-    >
-      <Link
-        to="/"
-        className="absolute text-pb-subtext hover:text-white flex items-center gap-2 px-4 py-3 transition-colors text-sm"
-        style={{ top: 'calc(var(--pb-safe-top) + 0.5rem)', left: 'calc(var(--pb-safe-left) + 0.5rem)' }}
-      >
-        На главную
-      </Link>
-
-      <div className="text-center mb-10">
-        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-pb-primary/15 flex items-center justify-center">
-          <Shield size={32} className="text-pb-primary" strokeWidth={2.5} />
-        </div>
-        <h1 className="text-3xl font-bold text-white tracking-tight">PaintBall Team Hub</h1>
-        <p className="text-pb-subtext mt-2 text-sm">
-          {wantsAdmin ? 'Вход владельца платформы' : 'Управляй командой, тренировками и победами.'}
+    <Screen paints={PAINTS} className="pbth-login">
+      <div className="pbth-login__hero">
+        <Link to="/" className="ui-glass pbth-login__mark" aria-label="На главную">
+          <Icon name="hexagon" size={48} />
+        </Link>
+        <h1 className="pbth-login__title">Paintball TeamHub</h1>
+        <p className="pbth-login__tagline">
+          {wantsAdmin ? 'Вход владельца платформы' : 'Все твои игры и тренировки в одном месте'}
         </p>
       </div>
 
-      <div className="w-full max-w-sm">
+      <Glass layer={1} className="pbth-login__panel">
         {authError && (
-          <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {authError}
+          <Glass layer={2} className="pbth-login__alert" role="alert">
+            <Icon name="circle-alert" size={18} />
+            <span>{authError}</span>
+          </Glass>
+        )}
+
+        {session.kind === 'checking' && (
+          <div className="pbth-login__loading">
+            <Spinner size={22} />
           </div>
         )}
 
-        {/* Continuity: pre-existing session detected. Single big "Continue as X"
-            CTA + small "Switch account" link. Hides provider buttons. */}
-        {continuity && (
-          <div className="space-y-3">
-            <button
-              onClick={handleContinueExisting}
-              className="w-full bg-pb-surface hover:bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3 transition-colors active:scale-[0.99]"
-            >
-              <div className="w-10 h-10 rounded-full bg-pb-primary/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {continuity.user?.avatar ? (
-                  <img
-                    src={continuity.user.avatar}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <UserIcon size={20} className="text-pb-primary" />
-                )}
+        {/* Сессия уже есть: одно «Продолжить как X» и тихая «Сменить аккаунт». */}
+        {session.kind === 'session' && (
+          <>
+            <div className="pbth-login__who">
+              {session.user.avatar ? (
+                <img className="pbth-login__photo" src={session.user.avatar} alt="" loading="eager" decoding="async" />
+              ) : (
+                <Avatar name={sessionName} size={40} />
+              )}
+              <div className="pbth-login__who-text">
+                <span className="pbth-login__who-label">Продолжить как</span>
+                <span className="pbth-login__who-name">{sessionName}</span>
               </div>
-              <div className="text-left flex-1 min-w-0">
-                <div className="text-pb-subtext text-xs">Продолжить как</div>
-                <div className="text-white font-semibold truncate">
-                  {continuity.user?.name || continuity.user?.nickname || 'Игрок'}
-                </div>
-              </div>
-              <span className="text-pb-primary text-sm font-semibold">Войти →</span>
-            </button>
-            <button
-              onClick={handleSwitchAccount}
-              disabled={switchingAccount}
-              className="w-full text-pb-subtext hover:text-white text-sm py-2 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-            >
-              <LogOut size={14} />
+            </div>
+            <Button variant="primary" block className="pbth-login__main" onClick={handleContinueExisting}>
+              Войти
+            </Button>
+            <Button variant="ghost" size="sm" block icon="log-out" onClick={handleSwitchAccount} disabled={switchingAccount}>
               {switchingAccount ? 'Выходим...' : 'Сменить аккаунт'}
-            </button>
-          </div>
+            </Button>
+          </>
         )}
 
         {pairing && (
-          <PairingPanel
-            scope={wantsAdmin ? 'ADMIN' : 'USER'}
-            redirectTo={targetRedirect}
-            onAuthenticated={handlePaired}
-          />
+          <PairingSteps scope={wantsAdmin ? 'ADMIN' : 'USER'} redirectTo={targetRedirect} onAuthenticated={handlePaired} />
         )}
 
-        {continuityChecked && !continuity && !pairing && (
-          <div>
-            {wantsTeam && (
-              <p className="mb-3 text-sm text-center text-pb-subtext">
-                Войди через Telegram — после входа заявка уйдёт капитану.
-              </p>
+        {showProviders && (
+          <>
+            {wantsTeam && <p className="pbth-login__note">Войди через Telegram — после входа заявка уйдёт капитану.</p>}
+            <Button
+              variant="primary"
+              block
+              icon={isLoading ? 'loader-circle' : 'send'}
+              className="pbth-login__main"
+              onClick={handleTelegramLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Входим...' : 'Войти через Telegram'}
+            </Button>
+            {/* Вход (решение Василия 10.11.2026, п. 6): у нового человека путь один —
+                Telegram. Яндекс — тихая ссылка для тех, кто уже привязал его в
+                профиле. Адрес возврата (`?next=`) едет в `redirectTo` (caldev#128). */}
+            {yandexEnabled && (
+              <>
+                <Button variant="ghost" block className="pbth-login__quiet" onClick={handleYandexLogin} disabled={isLoading}>
+                  Войти через Яндекс
+                </Button>
+                <p className="pbth-login__small">Работает, если ты уже привязал Яндекс в профиле. Первый вход — через Telegram.</p>
+              </>
             )}
-            {telegramButton}
-            {yandexEnabled && yandexLink}
-          </div>
+          </>
         )}
+      </Glass>
 
-        {!continuityChecked && (
-          <div className="flex justify-center py-6">
-            <Loader2 size={22} className="animate-spin text-pb-subtext" />
-          </div>
-        )}
-
-        {isLocalDev && continuityChecked && !continuity && !pairing && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleLocalDevLogin('9000000101')}
-              className="bg-pb-surface border border-pb-primary/40 text-pb-primary text-sm font-semibold py-2.5 rounded-xl hover:bg-pb-primary/10 transition-colors"
-            >
+      <div className="pbth-login__foot">
+        <p className="pbth-login__small">Входя, ты принимаешь правила и политику конфиденциальности</p>
+        <nav className="pbth-login__links" aria-label="Документы">
+          <Link to="/terms">Правила</Link>
+          <Link to="/privacy">Конфиденциальность</Link>
+          <Link to="/support">Поддержка</Link>
+        </nav>
+        {isLocalDev && showProviders && (
+          <div className="pbth-login__dev">
+            <Button variant="ghost" size="sm" onClick={() => handleLocalDevLogin('9000000101')}>
               Dev капитан
-            </button>
-            <button
-              onClick={() => handleLocalDevLogin('9000000103')}
-              className="bg-pb-surface border border-white/20 text-pb-subtext text-sm font-semibold py-2.5 rounded-xl hover:bg-white/10 transition-colors"
-            >
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleLocalDevLogin('9000000103')}>
               Dev игрок
-            </button>
+            </Button>
           </div>
         )}
-
-        <p className="text-xs text-center text-pb-subtext/70 mt-6 leading-relaxed">
-          Войдя, ты принимаешь <Link to="/terms" className="underline hover:text-pb-subtext">условия</Link> и{' '}
-          <Link to="/privacy" className="underline hover:text-pb-subtext">политику конфиденциальности</Link>.
-        </p>
       </div>
-    </div>
+    </Screen>
   );
 };
