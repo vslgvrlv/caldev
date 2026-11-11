@@ -49,30 +49,9 @@ export function calendarDayHeading(date: Date, count: number): { title: string; 
   };
 }
 
-/**
- * Краски фона: команды событий показанного месяца. Первой идёт команда ближайшего
- * к `now` предстоящего события, затем остальные по возрастанию; без повторов, до трёх.
- * Прошедшие события месяца идут после предстоящих, чтобы фон не пустовал.
- */
-export function monthPaints(
-  events: Event[],
-  year: number,
-  month: number,
-  now: number,
-  paintOf: (teamId: string) => string,
-): string[] {
-  const inMonth = sortEventsByStart(events).filter(
-    (event) => event.startDate.getFullYear() === year && event.startDate.getMonth() + 1 === month,
-  );
-  const upcoming = inMonth.filter((event) => event.startDate.getTime() >= now);
-  const past = inMonth.filter((event) => event.startDate.getTime() < now).reverse();
-  const result: string[] = [];
-  for (const event of [...upcoming, ...past]) {
-    const paint = paintOf(event.teamId);
-    if (!result.includes(paint)) result.push(paint);
-    if (result.length === 3) break;
-  }
-  return result;
+/** Подпись шапки раздела: «ноябрь 2026» — месяц, показанный в сетке. */
+export function monthCaption(year: number, month: number): string {
+  return format(new Date(year, month - 1, 1), 'LLLL yyyy', { locale: ru });
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

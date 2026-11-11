@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, monthPaints, parseIso } from '../../lib/calendar-days';
+import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, monthCaption, parseIso } from '../../lib/calendar-days';
 import { EventType, RSVPStatus, type Event } from '../../types';
 
 const at = (day: number, h = 10, month = 11) => new Date(2026, month - 1, day, h, 0);
@@ -59,16 +59,10 @@ describe('события дня и заголовок', () => {
   });
 });
 
-describe('краски фона месяца', () => {
-  const now = at(11, 12).getTime();
-  it('первой идёт команда ближайшего предстоящего события', () => {
-    const events = [ev('past', at(3), 'c'), ev('next', at(12), 'b'), ev('far', at(20), 'a')];
-    expect(monthPaints(events, 2026, 11, now, paint)).toEqual(['#4FC3F7', '#FF8A1F', '#FF6B57']);
-  });
-  it('события других месяцев не считаются; без событий — пусто; не больше трёх', () => {
-    expect(monthPaints([ev('x', at(5, 10, 12))], 2026, 11, now, paint)).toEqual([]);
-    const many = ['a', 'b', 'c', 'd'].map((t, i) => ev(t, at(12 + i), t));
-    expect(monthPaints(many, 2026, 11, now, paint)).toHaveLength(3);
+describe('подпись шапки', () => {
+  it('месяц и год строчными', () => {
+    expect(monthCaption(2026, 11)).toBe('ноябрь 2026');
+    expect(monthCaption(2027, 1)).toBe('январь 2027');
   });
 });
 

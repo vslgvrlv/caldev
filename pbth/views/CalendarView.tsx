@@ -6,10 +6,11 @@ import { useShell } from '../shell/context';
 import { canCommitToSeries } from '../lib/events';
 import { eventTeamCode, resolveEventTeamName } from '../lib/event-team';
 import { answerStatus, eventSubline, feedTitle, timeLabel } from '../lib/home-feed';
-import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, isoOfDate, monthPaints, parseIso } from '../lib/calendar-days';
+import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, isoOfDate, monthCaption, parseIso } from '../lib/calendar-days';
 import { canAnswerRsvp } from '../lib/rsvp';
 import { eventPath } from '../lib/team-url';
 import { useRowPress } from './Dashboard';
+import { useSectionSubtitle } from '../shell/section-subtitle';
 import '../shell/home.css';
 import './calendar-view.css';
 
@@ -19,8 +20,6 @@ interface CalendarViewProps {
   onEventClick: (event: Event) => void;
   onEventLongPress: (event: Event) => void;
   onCommitSeries: (seriesId: string) => void;
-  /** Шапка раздела оболочки: живёт внутри экрана, потому что краски фона задаёт он. */
-  header?: React.ReactNode;
   /** Текущее время для тестов и снимков; по умолчанию часы устройства. */
   nowOverride?: number;
 }
@@ -97,7 +96,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onEventClick,
   onEventLongPress,
   onCommitSeries,
-  header,
   nowOverride,
 }) => {
   const now = React.useMemo(() => nowOverride ?? Date.now(), [nowOverride]);
@@ -106,7 +104,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [selected, setSelected] = React.useState(todayIso);
 
   const marks = React.useMemo(() => calendarMarks(events, teamPaint), [events]);
-  const paints = React.useMemo(() => monthPaints(events, shown.year, shown.month, now, teamPaint), [events, shown, now]);
+  // Шапка раздела и фон — оболочки; подпись шапки следует за показанным месяцем.
+  useSectionSubtitle(monthCaption(shown.year, shown.month));
   const dayEvents = React.useMemo(() => eventsOfDay(events, selected), [events, selected]);
   const heading = calendarDayHeading(parseIso(selected) ?? new Date(now), dayEvents.length);
 
@@ -120,10 +119,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   );
 
   return (
-    <Screen paints={paints}>
+    <Screen>
       <div className="pbth-home">
-        {header}
-
         <Glass as="section" className="pbth-cal" aria-label="Календарь">
           <Month
             year={shown.year}
