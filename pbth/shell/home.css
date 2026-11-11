@@ -76,6 +76,7 @@
 .pbth-day__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 8px 0; }
 .pbth-day__title { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; }
 .pbth-day__sub { font-size: 14px; color: var(--ui-muted); text-align: right; }
+.pbth-day__list .ui-feed__time { color: var(--ui-text); font-weight: 700; }
 .pbth-day__list a.ui-feed__row { -webkit-touch-callout: none; user-select: none; }
 
 .pbth-empty { padding: 20px 16px; }
@@ -84,3 +85,7 @@
 
 .pbth-teams { display: flex; flex-direction: column; }
 .pbth-teams__label { padding: 12px 4px 4px; font-size: 12px; color: var(--ui-muted); }
+
+/* ui-kit резервирует место под плавающую панель отступом у body: страница получает лишний прокрут и полосу цвета body.
+   Место под панель оставляют сами экраны (нижний отступ в <Screen>, в рамках старых экранов, в SlotsFrame). */
+html body:has(.ui-sidenav-bottom--floating) { padding-bottom: 0; }

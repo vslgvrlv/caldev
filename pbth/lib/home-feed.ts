@@ -100,6 +100,17 @@ export function eventSubline(event: Pick<Event, 'type' | 'location'>): string {
   return [type, place ? `«${place.replace(/[«»]/g, '')}»` : ''].filter(Boolean).join(' · ');
 }
 
+/**
+ * Название строки ленты. Событие без своего названия («Тренировка») подписывается командой;
+ * у игрока из нескольких команд к названию добавляется команда: «Holy Guns · Кубок Москвы».
+ */
+export function feedTitle(event: Pick<Event, 'type' | 'title'>, teamName: string, multiTeam: boolean): string {
+  const title = (event.title || '').trim();
+  const generic = !title || title.toLowerCase() === (EVENT_LABELS[event.type] ?? '').toLowerCase();
+  if (generic) return teamName || title;
+  return multiTeam && teamName ? `${teamName} · ${title}` : title;
+}
+
 /** Значок типа события из набора ui-kit. */
 export function eventTypeIcon(type: EventType): string {
   switch (type) {

@@ -6,6 +6,7 @@ import {
   dayHeading,
   endLabel,
   eventSubline,
+  feedTitle,
   groupEventsByDay,
   heroDateLabel,
   homePaints,
@@ -91,6 +92,13 @@ describe('время, место, ответ', () => {
   it('подпись: тип и место в кавычках', () => {
     expect(eventSubline({ type: EventType.TOURNAMENT, location: 'Гвардеец' })).toBe('Турнир · «Гвардеец»');
     expect(eventSubline({ type: EventType.TRAINING, location: '' })).toBe('Тренировка');
+  });
+
+  it('название строки: без своего названия — команда; из нескольких команд — команда и название', () => {
+    expect(feedTitle({ type: EventType.TRAINING, title: 'Тренировка' }, 'Дневной Дозор', true)).toBe('Дневной Дозор');
+    expect(feedTitle({ type: EventType.TOURNAMENT, title: 'Кубок Москвы, 3 этап' }, 'Holy Guns', true)).toBe('Holy Guns · Кубок Москвы, 3 этап');
+    expect(feedTitle({ type: EventType.TOURNAMENT, title: 'Кубок Москвы, 3 этап' }, 'Holy Guns', false)).toBe('Кубок Москвы, 3 этап');
+    expect(feedTitle({ type: EventType.TRAINING, title: '' }, '', false)).toBe('');
   });
 
   it('отметка ответа: иду зелёная, не иду приглушённая, без ответа нет; у чужой команды нет', () => {

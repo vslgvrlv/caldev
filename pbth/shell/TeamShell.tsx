@@ -20,7 +20,11 @@ import type { Team } from '../types';
 // шапкой и кнопкой «назад», как раньше: их липкая шапка учитывает вырез экрана,
 // и вторая шапка над ней ломала бы прокрутку.
 
-const SECTION_SAFE_TOP = { '--pb-safe-top': '0px' } as React.CSSProperties;
+const SECTION_SAFE_TOP = {
+  '--pb-safe-top': '0px',
+  // Старые экраны уходят под плавающую нижнюю панель: запас под неё и под вырез снизу.
+  paddingBottom: 'calc(var(--pb-safe-bottom) + 16px)',
+} as React.CSSProperties;
 
 function isRecordScreen(pathname: string): boolean {
   const parsed = parseTeamPath(pathname);
@@ -184,7 +188,7 @@ export const MeShell: React.FC<{ children: React.ReactNode }> = ({ children }) =
       <AppGateScreens>
         {shell.user && shell.team ? (
           <Frame>
-            <div className="flex-1">
+            <div className="flex-1" style={{ paddingBottom: 'calc(var(--pb-safe-bottom) + 16px)' }}>
               <Suspense fallback={<ContentLoader />}>{children}</Suspense>
             </div>
             <ShellNav teamCode={shell.teamCode} />
