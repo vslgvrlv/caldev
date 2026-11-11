@@ -10,6 +10,14 @@ import { resolveTeamAccess } from "../../lib/team-access.js";
 import { canManageEvent, resolveEventAccess, teamRoleOf } from "../../lib/event-access.js";
 import { resolveEffectiveRsvp } from "../../lib/series-commitment.js";
 import { canMarkAttendance } from "../../lib/attendance-permissions.js";
+import {
+  announceEventCancelled,
+  announceEventChanged,
+  announceEventCreated,
+  announceSeriesCancelled,
+  announceSeriesChanged,
+  announceSeriesCreated,
+} from "../announcements/enqueue.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
@@ -381,6 +389,7 @@ eventsRouter.post(
           ]
         );
         const seriesId = seriesInsert.rows[0].id;
+        let firstEventId: string | null = null;
 
         for (const occurrence of occurrences) {
           const created = await client.query<{ id: string }>(
@@ -402,7 +411,7 @@ eventsRouter.post(
               "NOT_CALCULATED",
             ]
           );
-
+          firstEventId ??= created.rows[0].id;
         }
 
         await rememberPlace(client, teamId, payload.location, payload.locationAddress, payload.locationUrl);
@@ -414,6 +423,18 @@ eventsRouter.post(
           occurrences: occurrences.length,
           actorTeamRole: effectiveRole === "ADMIN" ? "ADMIN" : ctx?.role || null,
         });
+        // Сообщение игрокам о новой серии — одно на всю серию, через 3 минуты.
+        // Ошибка постановки в очередь запрос не роняет (ловится внутри).
+        if (firstEventId) {
+          await announceSeriesCreated({
+            teamId,
+            seriesId,
+            firstEventId,
+            starts: occurrences.map((o) => o.start),
+            untilDate: payload.recurrence.untilDate,
+            actorUserId: req.authUser!.id,
+          });
+        }
         return res.status(201).json({
           success: true,
           recurring: true,
@@ -475,6 +496,8 @@ eventsRouter.post(
         teamId,
         actorTeamRole: effectiveRole === "ADMIN" ? "ADMIN" : ctx?.role || null,
       });
+      // Сообщение игрокам о новом событии — через 3 минуты (modules/announcements).
+      await announceEventCreated({ teamId, eventId: event.id, startAt: startDate, actorUserId: req.authUser!.id });
 
       const teamMeta = await query<{ timezone: string }>(`SELECT timezone FROM teams WHERE id = $1`, [teamId]);
       const teamTimezone = teamMeta.rows[0]?.timezone || "Europe/Moscow";
@@ -637,6 +660,7 @@ eventsRouter.patch(
           baseCostStatus: baseEvent.cost_status,
         });
 
+        let anchorNextStart = new Date(baseEvent.start_at);
         for (const row of futureRows.rows) {
           const rowStart = new Date(row.start_at);
           const rowEnd = row.end_at ? new Date(row.end_at) : null;
@@ -663,6 +687,7 @@ eventsRouter.patch(
             await client.query("ROLLBACK");
             return res.status(400).json({ detail: "Event end time must be after start time" });
           }
+          if (row.id === eventId) anchorNextStart = nextStart;
 
           await client.query(
             `UPDATE events
@@ -705,6 +730,19 @@ eventsRouter.patch(
           seriesId: baseEvent.series_id,
           affectedCount: futureRows.rowCount,
           actorTeamRole,
+        });
+        // Перенос времени или места у серии — одно сообщение на серию.
+        await announceSeriesChanged({
+          teamId: baseEvent.team_id,
+          seriesId: baseEvent.series_id,
+          anchorEventId: eventId,
+          beforeStarts: futureRows.rows.map((row) => new Date(row.start_at)),
+          before: { startAt: new Date(baseEvent.start_at), location: baseEvent.location },
+          after: {
+            startAt: anchorNextStart,
+            location: payload.location === undefined ? baseEvent.location : payload.location,
+          },
+          actorUserId: req.authUser!.id,
         });
         return res.json({ success: true, updated: futureRows.rowCount, scope: "future" });
       }
@@ -846,6 +884,16 @@ eventsRouter.patch(
       await writeAudit(req.authUser!.id, "events.update.single", {
         eventId,
         actorTeamRole,
+      });
+      // Перенос времени или места — сообщение тем, кого это касается.
+      // Правка названия, описания или стоимости — без сообщения.
+      await announceEventChanged({
+        teamId: baseEvent.team_id,
+        eventId,
+        seriesId: baseEvent.series_id,
+        before: { startAt: new Date(baseEvent.start_at), location: baseEvent.location },
+        after: { startAt: nextStart, location: payload.location === undefined ? baseEvent.location : payload.location },
+        actorUserId: req.authUser!.id,
       });
       return res.json({ success: true, updated: 1, scope: "single" });
     } catch (error) {
@@ -1144,8 +1192,10 @@ eventsRouter.delete(
       series_id: string | null;
       type: string;
       start_at: string;
+      title: string;
+      location: string | null;
     }>(
-      `SELECT id, team_id, series_id::text, type::text, start_at
+      `SELECT id, team_id, series_id::text, type::text, start_at, title, location
        FROM events
        WHERE id = $1 AND is_cancelled = FALSE`,
       [eventId]
@@ -1218,6 +1268,17 @@ eventsRouter.delete(
         affectedCount: result.rowCount,
         actorTeamRole,
       });
+      // Отмена «это и все следующие» — одно сообщение на серию.
+      await announceSeriesCancelled({
+        teamId: event.team_id,
+        seriesId: event.series_id,
+        anchorEventId: eventId,
+        title: event.title,
+        startAt: new Date(event.start_at),
+        location: event.location,
+        count: result.rowCount ?? 0,
+        actorUserId: req.authUser!.id,
+      });
       return res.json({ success: true, deleted: result.rowCount, scope: "future" });
     }
 
@@ -1235,6 +1296,15 @@ eventsRouter.delete(
     await writeAudit(req.authUser!.id, "events.delete.single", {
       eventId,
       actorTeamRole,
+    });
+    await announceEventCancelled({
+      teamId: event.team_id,
+      eventId,
+      seriesId: event.series_id,
+      title: event.title,
+      startAt: new Date(event.start_at),
+      location: event.location,
+      actorUserId: req.authUser!.id,
     });
     return res.json({ success: true, deleted: 1, scope: "single" });
   })

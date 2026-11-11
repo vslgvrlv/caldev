@@ -22,13 +22,21 @@ export type TelegramNotificationJobPayload = {
   parseMode?: "HTML" | "MarkdownV2";
   /** Кнопки под сообщением («Иду / Не иду», «Открыть событие»). */
   replyMarkup?: Record<string, unknown>;
+  /** Без звука (`disable_notification`). */
+  disableNotification?: boolean;
   context?: {
     actorUserId?: string;
     recipientUserId?: string;
     teamId?: string;
     eventId?: string;
     correlationId?: string;
-    type?: "EVENT_REMINDER" | "EVENT_DEBT_REMINDER" | "TEAM_DEBT_REMINDER" | "MEMBER_DEBT_REMINDER" | "EVENT_AUTO_REMINDER";
+    type?:
+      | "EVENT_REMINDER"
+      | "EVENT_DEBT_REMINDER"
+      | "TEAM_DEBT_REMINDER"
+      | "MEMBER_DEBT_REMINDER"
+      | "EVENT_AUTO_REMINDER"
+      | "EVENT_ANNOUNCEMENT";
   };
 };
 
@@ -70,6 +78,7 @@ async function processTelegramJob(job: any) {
     await sendTelegramBotMessage(payload.chatId, payload.text, {
       ...(payload.parseMode ? { parseMode: payload.parseMode } : {}),
       ...(payload.replyMarkup ? { replyMarkup: payload.replyMarkup } : {}),
+      ...(payload.disableNotification ? { disableNotification: true } : {}),
     });
     logger.info("notifications.queue.job_sent", {
       jobId: job?.id,

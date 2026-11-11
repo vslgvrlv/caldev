@@ -1,9 +1,10 @@
 import React from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Loader2, LogIn } from 'lucide-react';
 import { useShell } from '../../shell/context';
 import { track1Api, type JoinRequest, type TeamBrief } from '../../api/track1';
-import { JoinRequestStatusCard } from '../../components/track1/JoinRequestStatusCard';
+import { InviteActions, InviteFrame, InviteHero, InviteNotNow } from '../../components/track1/InviteFrame';
+import { eventDetailsText, eventWhenText, requestSentText } from '../../lib/invite-copy';
+import { Button, Glass, Icon, Row } from '../../ui';
 import { teamCodeOf, teamPath } from '../../lib/team-url';
 import { errorText } from '../../lib/notify';
 
@@ -24,19 +25,6 @@ type State =
   | { kind: 'anonymous'; team: TeamBrief }
   | { kind: 'member'; team: TeamBrief }
   | { kind: 'request'; request: JoinRequest };
-
-const frameStyle = {
-  paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
-  paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
-  paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
-  paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
-} as const;
-
-const Frame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-screen bg-pb-background flex items-center justify-center text-white" style={frameStyle}>
-    <div className="w-full max-w-sm">{children}</div>
-  </div>
-);
 
 export const JoinByCodeView: React.FC = () => {
   const { code: rawCode } = useParams();
@@ -132,69 +120,103 @@ export const JoinByCodeView: React.FC = () => {
 
   if (state.kind === 'loading' || state.kind === 'member' || entering) {
     return (
-      <Frame>
-        <div className="flex justify-center">
-          <Loader2 className="animate-spin text-pb-primary" size={40} />
-        </div>
-      </Frame>
+      <InviteFrame>
+        <InviteHero title={entering ? 'Открываем команду' : 'Открываем ссылку'} />
+      </InviteFrame>
     );
   }
 
   if (state.kind === 'invalid') {
     return (
-      <Frame>
-        <div className="text-center">
-          <h1 className="text-xl font-bold mb-2">Ссылка не работает</h1>
-          <p className="text-pb-subtext text-sm">
-            Капитан мог выпустить новую ссылку. Попроси у него свежую или код команды.
-          </p>
-        </div>
-      </Frame>
+      <InviteFrame>
+        <InviteHero title="Ссылка не работает">
+          Капитан мог выпустить новую ссылку. Попроси у него свежую или код команды.
+        </InviteHero>
+        <InviteActions>
+          <Button variant="glass2" block onClick={() => navigate('/')}>
+            На главную
+          </Button>
+        </InviteActions>
+      </InviteFrame>
     );
   }
 
   if (state.kind === 'error') {
     return (
-      <Frame>
-        <div className="text-center">
-          <h1 className="text-xl font-bold mb-2">Не открылось</h1>
-          <p className="text-pb-subtext text-sm mb-5">{state.text}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl"
-          >
+      <InviteFrame>
+        <InviteHero title="Не открылось">{state.text}</InviteHero>
+        <InviteActions>
+          <Button variant="glass2" block onClick={() => window.location.reload()}>
             Обновить
-          </button>
-        </div>
-      </Frame>
+          </Button>
+        </InviteActions>
+      </InviteFrame>
     );
   }
 
   if (state.kind === 'anonymous') {
     const next = encodeURIComponent(`/join/${code}`);
     return (
-      <Frame>
-        <div className="bg-pb-surface border border-white/10 rounded-2xl p-5">
-          <div className="text-pb-subtext text-sm mb-1">Тебя зовут в команду</div>
-          <h1 className="text-2xl font-bold mb-3">{state.team.name}</h1>
-          <p className="text-pb-subtext text-sm mb-5">
-            Войди через Telegram — капитан получит заявку и примет тебя в состав.
-          </p>
-          <button
-            onClick={() => navigate(`/login?next=${next}`)}
-            className="w-full bg-pb-primary text-pb-background font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
-          >
-            <LogIn size={18} />
-            Войти и подать заявку
-          </button>
-        </div>
-      </Frame>
+      <InviteFrame teamId={state.team.id}>
+        <InviteHero team={state.team} title={`Тебя зовут в ${state.team.name}`}>
+          Команда принимает по заявке. Капитан ответит на неё.
+        </InviteHero>
+        <InviteActions>
+          <Button variant="primary" block onClick={() => navigate(`/login?next=${next}`)}>
+            Подать заявку
+          </Button>
+          <InviteNotNow onClick={() => navigate('/')} />
+        </InviteActions>
+      </InviteFrame>
+    );
+  }
+
+  const { request } = state;
+  const openApp = (
+    <InviteActions>
+      <Button variant="primary" block onClick={() => navigate('/app')}>
+        Открыть приложение
+      </Button>
+    </InviteActions>
+  );
+
+  if (request.status === 'DECLINED' || request.status === 'CANCELLED') {
+    return (
+      <InviteFrame teamId={request.team.id}>
+        <InviteHero team={request.team} title={request.status === 'DECLINED' ? 'Заявку отклонили' : 'Заявка отменена'}>
+          Если это ошибка — напиши капитану, пусть пришлёт ссылку ещё раз.
+        </InviteHero>
+        {openApp}
+      </InviteFrame>
+    );
+  }
+
+  if (request.status === 'APPROVED') {
+    return (
+      <InviteFrame teamId={request.team.id}>
+        <InviteHero team={request.team} title="Тебя приняли">
+          Открываем команду…
+        </InviteHero>
+      </InviteFrame>
     );
   }
 
   return (
-    <Frame>
-      <JoinRequestStatusCard request={state.request} />
-    </Frame>
+    <InviteFrame teamId={request.team.id}>
+      <InviteHero team={request.team} checked title="Заявка у капитана">
+        Капитан увидит заявку и ответит. Мы пришлём уведомление.
+      </InviteHero>
+      <Glass layer={2} className="pbth-invite__facts">
+        <Row lead={<Icon name="clock" size={24} />} title={request.team.name} sub={requestSentText(request.createdAt)} />
+        {request.nextEvent ? (
+          <Row
+            lead={<Icon name="calendar" size={24} />}
+            title={eventWhenText(request.nextEvent.startAt, request.nextEvent.timezone)}
+            sub={eventDetailsText(request.nextEvent.title, request.nextEvent.location)}
+          />
+        ) : null}
+      </Glass>
+      {openApp}
+    </InviteFrame>
   );
 };

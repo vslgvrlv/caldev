@@ -42,6 +42,8 @@ export type EventDeliveryReport = {
   eventId: string;
   autoRemindersEnabled: boolean;
   lastBroadcast: null | {
+    /** Вид рассылки; старый сервер не присылает — значит «Напомнить». */
+    kind?: 'REMINDER' | 'ANNOUNCEMENT_CREATED' | 'ANNOUNCEMENT_RESCHEDULED' | 'ANNOUNCEMENT_CANCELLED';
     at: string;
     total: number;
     delivered: number;
@@ -65,6 +67,8 @@ export type EventDeliveryReport = {
     nickname: string;
     rsvpStatus: 'UNANSWERED' | 'PENDING' | 'CONFIRMED' | 'DECLINED';
     autoRemindersOff: boolean;
+    /** В запасе: автоматические сообщения не приходят. */
+    reserve?: boolean;
     channels: { telegram: boolean; push: boolean };
   }>;
 };

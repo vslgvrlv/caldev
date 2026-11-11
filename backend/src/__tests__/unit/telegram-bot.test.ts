@@ -55,4 +55,16 @@ describe("telegram bot helpers", () => {
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://relay.example.com/tg-relay/bot123456:dummy-token/sendMessage");
   });
+
+  it("без звука — disable_notification только когда попросили", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendTelegramBotMessage("123", "тихо", { disableNotification: true });
+    await sendTelegramBotMessage("123", "громко");
+
+    const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String((call[1] as RequestInit).body)));
+    expect(bodies[0].disable_notification).toBe(true);
+    expect("disable_notification" in bodies[1]).toBe(false);
+  });
 });

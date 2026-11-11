@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { api, type TeamInviteInfoResponse } from '../api';
 import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } from '../lib/auth-ux';
 import { describeInviteProblem } from '../lib/invite-problem';
+import { inviteValidUntil } from '../lib/invite-copy';
 import { roleLabel } from '../lib/labels';
+import { Button, Glass, Icon, Row } from '../ui';
+import { InviteActions, InviteFrame, InviteHero, InviteNotNow } from '../components/track1/InviteFrame';
 
 // Одноразовое приглашение (капитана) уже сработало — трек 1. Общий разбор
 // ошибок приглашения этот код не знает.
@@ -114,11 +116,8 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
     };
   }, [inviteId]);
 
-  // Note: login from invite is now routed through the unified /login screen
-  // (with ?next=/invite/<id>) so the user can pick Yandex or Telegram, see
-  // continuity if already signed in, etc. The old inline Telegram-only
-  // handoff was a parallel auth path — removed in favour of one source of
-  // truth for provider choice.
+  // Вход с экрана приглашения идёт через общий /login (?next=/invite/<id>):
+  // человек выбирает Яндекс или Telegram там, а не в параллельной ветке.
 
   const handleAccept = async () => {
     if (!inviteId) return;
@@ -162,66 +161,82 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-pb-background flex items-center justify-center text-white">
-        <Loader2 className="animate-spin text-pb-primary" size={46} />
-      </div>
+      <InviteFrame>
+        <InviteHero title="Открываем приглашение" />
+      </InviteFrame>
     );
   }
 
-  const title = inviteInfo?.teamName ? `Приглашение в команду «${inviteInfo.teamName}»` : 'Приглашение в команду';
+  // Приглашение не открылось или не работает: тот же каркас, спокойный текст и одно действие.
+  if (unusable || !inviteInfo) {
+    return (
+      <InviteFrame>
+        <InviteHero title={unusable ? 'Приглашение не работает' : 'Не открылось'}>{statusText}</InviteHero>
+        <InviteActions>
+          {unusable ? (
+            <Button variant="glass2" block onClick={() => navigate('/')}>
+              На главную
+            </Button>
+          ) : (
+            <Button variant="glass2" block onClick={() => window.location.reload()}>
+              Обновить
+            </Button>
+          )}
+        </InviteActions>
+      </InviteFrame>
+    );
+  }
+
   // Поля одноразового приглашения (трек 1) — тип общего клиента их ещё не знает.
-  const inviteExtra = inviteInfo as (TeamInviteInfoResponse & { singleUse?: boolean; note?: string | null }) | null;
-  const roleHint = `Роль в команде: ${roleLabel(inviteInfo?.role || 'PLAYER').toLowerCase()}`;
-  const safeAreaCardViewportStyle = {
-    paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
-    paddingRight: 'calc(var(--pb-safe-right) + 1.5rem)',
-    paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
-    paddingLeft: 'calc(var(--pb-safe-left) + 1.5rem)',
-  } as const;
+  const inviteExtra = inviteInfo as TeamInviteInfoResponse & { singleUse?: boolean; note?: string | null };
+  const team = { id: inviteInfo.teamId, name: inviteInfo.teamName };
+  const until = inviteValidUntil(inviteInfo.expiresAt);
+  const acceptLabel = accepted ? 'Готово' : isSubmitting ? 'Вступаем…' : 'Вступить';
 
   return (
-    <div
-      className="min-h-screen bg-pb-background flex items-center justify-center text-white"
-      style={safeAreaCardViewportStyle}
-    >
-      <div className="w-full max-w-sm bg-pb-surface border border-white/10 rounded-2xl p-5">
-        <h1 className="text-xl font-bold mb-2">{title}</h1>
-        {!unusable && <p className="text-pb-subtext text-sm mb-2">{roleHint}</p>}
-        {!unusable && inviteExtra?.note && <p className="text-white text-sm mb-2">{inviteExtra.note}</p>}
-        {!unusable && inviteExtra?.singleUse && (
-          <p className="text-pb-subtext text-xs mb-2">Приглашение одноразовое: сработает только у одного человека.</p>
-        )}
-        {inviteInfo?.expiresAt && (
-          <p className="text-pb-subtext text-xs mb-4">
-            Действует до: {new Date(inviteInfo.expiresAt).toLocaleString('ru-RU')}
-          </p>
-        )}
+    <InviteFrame teamId={team.id}>
+      <InviteHero team={team} title={`Тебя зовут в ${team.name}`}>
+        Тренировки, турниры и спарринги команды будут у тебя в ленте.
+      </InviteHero>
 
-        {statusText && (
-          <div className="mb-4 text-sm text-pb-subtext bg-black/30 rounded-xl px-3 py-2">
-            {statusText}
-          </div>
-        )}
+      <Glass layer={2} className="pbth-invite__facts">
+        <Row
+          lead={<Icon name="shield" size={24} />}
+          title={`Роль: ${roleLabel(inviteInfo.role).toLowerCase()}`}
+          sub={inviteExtra.singleUse ? 'Приглашение одноразовое: сработает у одного человека' : undefined}
+        />
+        {inviteExtra.note ? <Row lead={<Icon name="message-circle" size={24} />} title={inviteExtra.note} /> : null}
+      </Glass>
 
-        {unusable ? null : !isAuthenticated ? (
-          <Link
-            to={`/login?next=${encodeURIComponent(`/invite/${inviteId}`)}`}
-            className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-pb-primary/90 transition-colors"
-          >
-            <LogIn size={18} />
-            Войти и принять приглашение
-          </Link>
+      <InviteActions>
+        {isAuthenticated ? (
+          <Button variant="primary" block disabled={isSubmitting || accepted} onClick={handleAccept}>
+            {acceptLabel}
+          </Button>
         ) : (
-          <button
-            onClick={handleAccept}
-            disabled={isSubmitting || accepted}
-            className="w-full bg-pb-primary text-pb-background font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
+          <Button
+            variant="primary"
+            block
+            as={Link}
+            to={`/login?next=${encodeURIComponent(`/invite/${inviteId}`)}`}
           >
-            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : accepted ? <CheckCircle2 size={18} /> : <UserPlus size={18} />}
-            {accepted ? 'Готово' : 'Принять приглашение'}
-          </button>
+            Вступить
+          </Button>
         )}
-      </div>
-    </div>
+        <InviteNotNow onClick={() => navigate('/')} />
+      </InviteActions>
+
+      {statusText ? (
+        <p className="pbth-invite__note" role="status">
+          {statusText}
+        </p>
+      ) : null}
+      {until ? (
+        <div className="pbth-invite__until">
+          <Icon name="clock" size={16} />
+          {until}
+        </div>
+      ) : null}
+    </InviteFrame>
   );
 };

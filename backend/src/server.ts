@@ -5,6 +5,7 @@ import { logger } from "./lib/logger.js";
 import { startNotificationQueue, stopNotificationQueue } from "./lib/notification-queue.js";
 import { pruneExpiredAuthArtifacts } from "./lib/replay-guard.js";
 import { startAutoReminders, stopAutoReminders } from "./modules/reminders/auto.js";
+import { startEventAnnouncements, stopEventAnnouncements } from "./modules/announcements/send.js";
 
 async function start() {
   await pool.query("SELECT 1");
@@ -20,6 +21,9 @@ async function start() {
   // Авто-напоминания о явке (трек 2): таймер в этом процессе, без очереди;
   // включаются переменной AUTO_REMINDERS_ENABLED=1 (см. modules/reminders/auto.ts).
   startAutoReminders();
+  // Сообщения о новом, перенесённом и отменённом событии: тоже таймер в этом
+  // процессе; включаются EVENT_ANNOUNCEMENTS_ENABLED=1 (modules/announcements).
+  startEventAnnouncements();
 
   const server = app.listen(env.port, () => {
     logger.info("server.started", { port: env.port, nodeEnv: env.nodeEnv });
@@ -34,6 +38,7 @@ async function start() {
     server.close(async () => {
       try {
         stopAutoReminders();
+        stopEventAnnouncements();
         await stopNotificationQueue();
         clearInterval(authCleanupTimer);
         await pool.end();
