@@ -76,6 +76,12 @@ services:
       # строка превратилась бы в проверку каждые 10 секунд.
       AUTO_REMINDERS_ENABLED: ${AUTO_REMINDERS_ENABLED:-0}
       AUTO_REMINDERS_INTERVAL_SECONDS: ${AUTO_REMINDERS_INTERVAL_SECONDS:-300}
+      # Сообщения о новом, перенесённом и отменённом событии
+      # (backend/src/modules/announcements). Выключены по умолчанию; задержка
+      # и шаг проверки — всегда с числовым значением по умолчанию.
+      EVENT_ANNOUNCEMENTS_ENABLED: ${EVENT_ANNOUNCEMENTS_ENABLED:-0}
+      EVENT_ANNOUNCEMENTS_DELAY_SECONDS: ${EVENT_ANNOUNCEMENTS_DELAY_SECONDS:-180}
+      EVENT_ANNOUNCEMENTS_INTERVAL_SECONDS: ${EVENT_ANNOUNCEMENTS_INTERVAL_SECONDS:-30}
       OPENAPI_TOKEN: ${OPENAPI_TOKEN:-}
       DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-0}
       DEV_AUTH_SECRET: ${DEV_AUTH_SECRET:-}

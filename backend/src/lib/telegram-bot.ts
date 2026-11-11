@@ -10,6 +10,8 @@ type TelegramSendMessageResponse = {
 type TelegramSendMessageOptions = {
   parseMode?: "HTML" | "MarkdownV2";
   replyMarkup?: Record<string, unknown>;
+  /** Без звука: ночное сообщение о событии, которое нельзя отложить до утра. */
+  disableNotification?: boolean;
 };
 
 type TelegramSendMessagePayload = {
@@ -18,6 +20,7 @@ type TelegramSendMessagePayload = {
   disable_web_page_preview: boolean;
   parse_mode?: "HTML" | "MarkdownV2";
   reply_markup?: Record<string, unknown>;
+  disable_notification?: boolean;
 };
 
 export function buildTelegramSendMessagePayload(
@@ -31,6 +34,7 @@ export function buildTelegramSendMessagePayload(
     disable_web_page_preview: true,
     ...(options?.parseMode ? { parse_mode: options.parseMode } : {}),
     ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+    ...(options?.disableNotification ? { disable_notification: true } : {}),
   };
 }
 
