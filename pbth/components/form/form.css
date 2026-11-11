@@ -9,8 +9,8 @@
    ширина и центрированный текст, после ввода поле растягивается за край окна, а окно уезжает вбок. */
 .ui-input, .ui-select, .pbth-form__area { box-sizing: border-box; min-width: 0; max-width: 100%; }
 .ui-input[type="date"], .ui-input[type="time"], .ui-input[type="datetime-local"], .pbth-form__native {
-  display: block; width: 100%; min-width: 0; max-width: 100%; height: var(--ui-ctl-h, 44px); margin: 0;
-  -webkit-appearance: none; appearance: none; text-align: left; line-height: 1.2;
+  width: 100%; min-width: 0; max-width: 100%; height: var(--ui-ctl-h, 44px); margin: 0;
+  -webkit-appearance: none; appearance: none; text-align: left;
 }
 .ui-input[type="date"]::-webkit-date-and-time-value,
 .ui-input[type="time"]::-webkit-date-and-time-value,

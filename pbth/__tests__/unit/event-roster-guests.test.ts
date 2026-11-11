@@ -3,8 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SlotGuest } from '../../api/track4';
 import { RosterBlock } from '../../components/event/RosterBlock';
-import { buildRoster } from '../../lib/event-view';
-import type { EventAttendee } from '../../types';
+import { buildRoster, type EventAttendee } from '../../lib/event-view';
 
 const person = (userId: string, extra: Partial<EventAttendee> = {}): EventAttendee =>
   ({ userId, name: `Игрок ${userId}`, nickname: userId, avatar: null, role: 'PLAYER', rsvpStatus: 'CONFIRMED', memberStatus: 'ACTIVE', ...extra }) as EventAttendee;

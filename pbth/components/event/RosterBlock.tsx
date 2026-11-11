@@ -64,14 +64,14 @@ export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin
       <h2 className="pbth-event__h pbth-event__h--nowrap">{rosterHeadline(roster)}</h2>
       {roster.bar ? (
         <div
-          className="pbth-event__bar"
+          className="pbth-event__meter"
           role="progressbar"
           aria-label={rosterBarLabel(roster.bar)}
           aria-valuemin={0}
           aria-valuemax={roster.bar.capacity}
           aria-valuenow={roster.bar.going}
         >
-          <span className="pbth-event__barfill" style={{ width: `${roster.bar.percent}%` }} />
+          <span className="pbth-event__meterfill" style={{ width: `${roster.bar.percent}%` }} />
         </div>
       ) : (
         <div className="pbth-event__dots" aria-hidden="true">
