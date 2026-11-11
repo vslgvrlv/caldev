@@ -58,7 +58,7 @@ export const CreateEventView: React.FC<CreateEventViewProps> = ({ onBack, onCrea
   const [repeatUntil, setRepeatUntil] = useState('');
   const [errors, setErrors] = useState<CreateEventErrors>({});
 
-  const paints = useMemo(() => (team ? [teamPaint(team.id)] : undefined), [team]);
+  const paints = useMemo(() => (team ? [teamPaint(team.id), teamPaint(team.id), teamPaint(team.id)] : undefined), [team]);
 
   const setField = (key: keyof CreateEventDraft) => (value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));

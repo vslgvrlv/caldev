@@ -19,3 +19,6 @@
   pointer-events: none;
 }
 .pbth-newevent__barglass { padding: 8px; pointer-events: auto; }
+
+/* Плашки сообщений (NotifyHost) лежат над закреплённой панелью действия, а не поверх кнопки. */
+body:has(.pbth-newevent__bar) .ui-toast-host { bottom: calc(var(--pb-safe-bottom, 0px) + 88px); }
