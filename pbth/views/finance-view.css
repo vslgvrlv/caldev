@@ -3,6 +3,7 @@
 .pbth-money__first { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
 .pbth-money__label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ui-muted); }
 .pbth-money__big { font-size: clamp(36px, 12vw, 48px); font-weight: 800; line-height: 1.05; letter-spacing: 0; overflow-wrap: anywhere; }
+.pbth-money__big--text { font-size: 30px; line-height: 1.15; }
 .pbth-money__sub { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
 .pbth-money__sub-label { font-size: 14px; color: var(--ui-muted); }
 .pbth-money__sub-value { font-size: 20px; font-weight: 800; }

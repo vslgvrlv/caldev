@@ -158,7 +158,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             )}
             {/* Запись траты — только капитан */}
             {vm.canManage && (
-              <Button variant="primary" icon="receipt" block onClick={() => setIsModalOpen(true)}>
+              <Button variant="primary" icon="plus" block onClick={() => setIsModalOpen(true)}>
                 Записать трату
               </Button>
             )}
@@ -264,7 +264,7 @@ function MyDebtCard({ myDebt }: { myDebt: MyDebt }) {
         <div className="pbth-money__label">
           <Icon name="circle-check" size={20} /> Мой долг
         </div>
-        <div className="pbth-money__big">У тебя нет долга</div>
+        <div className="pbth-money__big pbth-money__big--text">У тебя нет долга</div>
       </Glass>
     );
   }
@@ -329,7 +329,7 @@ function TransactionRow({ t }: { t: Transaction }) {
       <Avatar name={line.title} />
     ) : (
       <span className="pbth-money__ico ui-glass2">
-        <Icon name={line.kind === 'expense' ? 'receipt' : 'coins'} size={20} />
+        <Icon name={line.kind === 'expense' ? 'wallet' : 'coins'} size={20} />
       </span>
     );
   return (
