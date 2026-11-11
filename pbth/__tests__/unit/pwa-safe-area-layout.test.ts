@@ -9,7 +9,8 @@ const createEventViewPath = fileURLToPath(new URL("../../views/CreateEventView.t
 const playerProfileViewPath = fileURLToPath(new URL("../../views/PlayerProfileView.tsx", import.meta.url));
 const eventExpensesSheetPath = fileURLToPath(new URL("../../components/EventExpensesSheet.tsx", import.meta.url));
 const eventCollectionSheetPath = fileURLToPath(new URL("../../components/EventCollectionSheet.tsx", import.meta.url));
-const dashboardViewPath = fileURLToPath(new URL("../../views/Dashboard.tsx", import.meta.url));
+// Главная живёт в <Screen>: верхний отступ под статус-бар задаёт его раскладка.
+const dashboardViewPath = fileURLToPath(new URL("../../ui/pbth-ui.css", import.meta.url));
 const calendarViewPath = fileURLToPath(new URL("../../views/CalendarView.tsx", import.meta.url));
 const financeViewPath = fileURLToPath(new URL("../../views/FinanceView.tsx", import.meta.url));
 const teamViewPath = fileURLToPath(new URL("../../views/TeamView.tsx", import.meta.url));
@@ -39,10 +40,11 @@ describe("pwa safe-area layouts", () => {
   });
 
   it("pads primary app tabs below the standalone status bar", () => {
-    [dashboardViewPath, calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
+    [calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });
+    expect(readFileSync(dashboardViewPath, "utf8")).toContain("calc(var(--pb-safe-top, 0px)");
   });
 
   it("keeps auth entry screens safe-area aware in standalone mode", () => {

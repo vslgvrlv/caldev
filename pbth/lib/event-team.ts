@@ -1,4 +1,5 @@
 import type { Event, Team, TeamContext } from '../types';
+import { teamCodeOf } from './team-url';
 
 /**
  * Название команды, которой принадлежит событие.
@@ -18,4 +19,15 @@ export function resolveEventTeamName(
   if (fromTeams) return fromTeams;
   if (activeTeam && activeTeam.id === event.teamId) return activeTeam.name;
   return activeTeam?.name ?? '';
+}
+
+/** Код команды события для адреса: из события, запасной вариант — список команд человека, затем `fallback`. */
+export function eventTeamCode(
+  event: Pick<Event, 'teamId' | 'teamShortCode'>,
+  teams: Pick<TeamContext, 'teamId' | 'shortCode'>[],
+  fallback = '',
+): string {
+  if (event.teamShortCode) return teamCodeOf({ teamId: event.teamId, shortCode: event.teamShortCode });
+  const fromTeams = teams.find((team) => team.teamId === event.teamId);
+  return fromTeams ? teamCodeOf({ teamId: fromTeams.teamId, shortCode: fromTeams.shortCode }) : fallback;
 }

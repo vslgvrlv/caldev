@@ -84,3 +84,15 @@ describe('Mini App — по данным запуска, а не по налич
     expect(readMiniAppInitData()).toBe('query_id=2&hash=def');
   });
 });
+
+describe('нижняя панель: подсветка пункта', () => {
+  it('разделы вне панели (заявки, журнал) не подсвечивают ничего, разделы панели — свой пункт', async () => {
+    const { navActivePath } = await import('../../components/shell/ShellNav');
+    expect(navActivePath('/t/hg')).toBe('/t/hg');
+    expect(navActivePath('/t/hg/calendar')).toBe('/t/hg/calendar');
+    expect(navActivePath('/t/hg/roster')).toBe('/t/hg/roster');
+    expect(navActivePath('/me')).toBe('/me');
+    expect(navActivePath('/t/hg/requests')).toBe('/-');
+    expect(navActivePath('/t/hg/journal')).toBe('/-');
+  });
+});

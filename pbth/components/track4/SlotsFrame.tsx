@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useShell } from '../../shell/context';
-import { BottomNav } from '../BottomNav';
+import { ShellNav } from '../shell/ShellNav';
 
 // Рамка экранов `/teams`: тот же фон и колонка, что у экранов команды, своя
 // шапка с «назад» и нижняя навигация в последнюю открытую команду.
@@ -48,10 +48,10 @@ export const SlotsFrame: React.FC<{ title: string; onBack?: () => void; children
           </button>
           <h1 className="text-lg font-bold truncate">{title}</h1>
         </header>
-        <div className="flex-1 px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(85px + 1.5rem)' }}>
+        <div className="flex-1 px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(110px + 1.5rem)' }}>
           {children}
         </div>
-        <BottomNav teamCode={shell.teamCode} />
+        <ShellNav teamCode={shell.teamCode} />
       </main>
     </div>
   );
