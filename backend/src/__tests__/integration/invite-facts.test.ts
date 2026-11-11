@@ -49,7 +49,7 @@ const f = {
 // встретиться в теле ответа. Ник из одних букв (`ivanpetrov`) — то, что
 // лежит в `users.name` при пустом имени в Telegram.
 const PEOPLE = {
-  captain: { name: "Денис Голев", username: `golevden_${stamp}`, nickname: "Голевнник" },
+  captain: { name: "Артём Громов", username: `gromovart_${stamp}`, nickname: "Громовник" },
   trainer: { name: "Тренер Тренеров", username: `trenerov_${stamp}`, nickname: "Тренерник" },
   player: { name: "Игрок Игроков", username: `igrokov_${stamp}`, nickname: "Игрокник" },
   inactive: { name: "Ушедший Ушедшев", username: `ushedshev_${stamp}`, nickname: "Ушедник" },
@@ -57,7 +57,14 @@ const PEOPLE = {
   badTrainer: { name: "+7 999 123-45-67", username: `phoneman_${stamp}`, nickname: "phonenick" },
 } as const;
 type Person = keyof typeof PEOPLE;
-const PERSON_STRINGS = Object.values(PEOPLE).flatMap((p) => [p.name, p.username, p.nickname, ...p.name.split(/\s+/)]);
+// Отдельные слова имени короче пяти знаков («999», «+7») не ищем: такие подстроки
+// случайно встречаются в id и датах ответа, и тест мерцал. Полное имя, ник и username ищутся целиком.
+const PERSON_STRINGS = Object.values(PEOPLE).flatMap((p) => [
+  p.name,
+  p.username,
+  p.nickname,
+  ...p.name.split(/\s+/).filter((word) => word.length >= 5),
+]);
 
 // Свободный текст событий: ни одно из этого не уходит наружу.
 const EVENT_TEXT = ["Ближайшая тренировка", "Турнир позже", "Закрытое собрание", "Ремонт маркеров", "Личное", "Арена", "maps.example", "secret?x=1", "Гараж", "Дом капитана", "секретное описание"];
