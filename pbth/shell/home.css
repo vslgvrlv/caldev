@@ -21,21 +21,35 @@
   -webkit-font-smoothing: antialiased;
 }
 .pbth-sectionhead__bar {
-  padding: calc(var(--pb-safe-top) + 14px) 16px 8px;
+  padding: calc(var(--pb-safe-top) + 10px) 16px 6px;
   border-top-left-radius: clamp(0px, calc(var(--ui-radius-lg) - var(--pb-safe-top) * 100), var(--ui-radius-lg));
   border-top-right-radius: clamp(0px, calc(var(--ui-radius-lg) - var(--pb-safe-top) * 100), var(--ui-radius-lg));
 }
 .pbth-sectionhead__top { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .pbth-sectionhead__titles { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-.pbth-sectionhead__title { margin: 0; overflow: hidden; font-size: 28px; font-weight: 800; line-height: 1.15; white-space: nowrap; text-overflow: ellipsis; }
-.pbth-sectionhead__sub { margin-top: 2px; overflow: hidden; font-size: 14px; color: var(--ui-muted); white-space: nowrap; text-overflow: ellipsis; }
+.pbth-sectionhead__title {
+  display: -webkit-box;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.pbth-sectionhead__sub { width: max-content; max-width: 100%; margin-top: 2px; overflow: hidden; font-size: 14px; color: var(--ui-muted); white-space: nowrap; text-overflow: ellipsis; }
 .pbth-sectionhead__note { margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
 .pbth-sectionhead__tools { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 4px; margin-right: -8px; }
 .pbth-sectionhead__teams { white-space: nowrap; }
+.pbth-sectionhead__badge { position: relative; display: inline-flex; }
+.pbth-sectionhead__badge > .ui-sidenav__badge { position: absolute; top: 2px; right: 0; pointer-events: none; }
 .pbth-sectionhead__marks {
   display: flex;
-  gap: 2px;
-  margin: 8px -6px 0;
+  gap: 0;
+  margin: 6px -7px 0;
   padding: 0 0 4px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -69,7 +83,9 @@
 
 /* Раздел под шапкой: экран отступает на её высоту (замер в оболочке), свой отступ под вырез ему уже не нужен. */
 .pbth-shell__body { padding-top: var(--pbth-head-h, calc(var(--pb-safe-top) + 150px)); --pb-safe-top: 0px; }
-.pbth-shell__body > .pbth-ui { min-height: calc(100dvh - var(--pbth-head-h, 150px)); }
+.pbth-shell__body { z-index: 1; }
+.pbth-shell:has(.pbth-ui) > .pbth-shell__paints { display: none; }
+.pbth-shell__body .pbth-ui { min-height: calc(100dvh - var(--pbth-head-h, 150px)); }
 
 .pbth-hero { display: flex; flex-direction: column; gap: 16px; padding: 20px 16px 16px; }
 .pbth-hero__head { display: flex; align-items: center; gap: 16px; cursor: pointer; -webkit-touch-callout: none; user-select: none; }

@@ -21,6 +21,19 @@ export type SectionHeaderProps = {
   onHeight?: (px: number) => void;
 };
 
+/** Ширина текста в одну строку: длинное название в шапке переносится, но решение о месте считается по одной строке. */
+function naturalWidth(el: HTMLElement): number {
+  const { whiteSpace, width, display } = el.style;
+  el.style.whiteSpace = 'nowrap';
+  el.style.width = 'max-content';
+  el.style.display = 'block';
+  const w = el.scrollWidth;
+  el.style.whiteSpace = whiteSpace;
+  el.style.width = width;
+  el.style.display = display;
+  return w;
+}
+
 /** Прокручивает ряд знаков так, чтобы текущая команда была видна целиком. */
 export function scrollMarkIntoView(row: HTMLElement, mark: HTMLElement) {
   const left = mark.offsetLeft - row.offsetLeft;
@@ -61,7 +74,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, n
     const measure = () => {
       const btn = tools.querySelector<HTMLElement>('.pbth-sectionhead__teams');
       if (btn && !compactRef.current) labelWidth.current = Math.max(0, btn.offsetWidth - 44);
-      const titleWidth = Math.max(0, ...Array.from(titles.children).map((el) => (el as HTMLElement).scrollWidth));
+      const titleWidth = Math.max(0, ...Array.from(titles.children).map((el) => naturalWidth(el as HTMLElement)));
       const next = shouldCompact({
         rowWidth: top.clientWidth,
         titleWidth,
@@ -117,7 +130,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, n
                   aria-label={`Команда ${t.teamName}`}
                   onClick={() => onPickTeam(t)}
                 >
-                  <TeamMark teamId={t.teamId} name={t.teamName} code={t.shortCode} size={32} />
+                  <TeamMark teamId={t.teamId} name={t.teamName} code={t.shortCode} size={30} />
                 </button>
               );
             })}

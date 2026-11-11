@@ -86,6 +86,8 @@ const SectionFrame: React.FC<{ paints: string[]; head: (onHeight: (px: number) =
   }, []);
   return (
     <div ref={ref} className="pbth-shell min-h-screen text-white" style={{ background: 'var(--ui-bg)', ...paintVars(paints) }}>
+      {/* Фон раздела для экранов в старом виде; экран в <Screen> рисует его сам (тогда этот скрыт, см. home.css). */}
+      <div className="ui-backdrop pbth-shell__paints" aria-hidden="true" />
       {head(onHeight)}
       <main className="pbth-shell__body max-w-md mx-auto min-h-screen relative flex flex-col">
         <OfflineBanner

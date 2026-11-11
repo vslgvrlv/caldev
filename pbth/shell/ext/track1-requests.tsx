@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Inbox } from 'lucide-react';
 import type { ShellExtContext, ShellExtension } from '../extensions';
 import { teamPath } from '../../lib/team-url';
+import { Button } from '../../ui';
 import { onJoinRequestsChanged, track1Api } from '../../api/track1';
 
 // Трек 1: заявки на вступление в меню команды и значок с их числом в шапке.
@@ -39,17 +40,17 @@ const RequestsBadge: React.FC<ShellExtContext> = (ctx) => {
 
   if (count === 0) return null;
   return (
-    <button
-      type="button"
-      onClick={() => navigate(teamPath(ctx.teamCode, 'requests'))}
-      className="relative w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 text-white"
-      aria-label={`Заявки в команду: ${count}`}
-    >
-      <Inbox size={20} />
-      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-pb-primary text-pb-background text-[11px] font-bold flex items-center justify-center">
+    <span className="pbth-sectionhead__badge">
+      <Button
+        variant="ghost"
+        icon="inbox"
+        aria-label={`Заявки в команду: ${count}`}
+        onClick={() => navigate(teamPath(ctx.teamCode, 'requests'))}
+      />
+      <span className="ui-sidenav__badge" aria-hidden="true">
         {count}
       </span>
-    </button>
+    </span>
   );
 };
 
