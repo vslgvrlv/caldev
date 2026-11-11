@@ -50,6 +50,7 @@ describe('formatRubSigned', () => {
 describe('bigSumSize', () => {
   it('огромный → 28 → 20 по длине строки', () => {
     expect(bigSumSize(formatRub(32000))).toBe('xl');
+    expect(bigSumSize(formatRub(132000))).toBe('l');
     expect(bigSumSize(formatRub(1234567))).toBe('l');
     expect(bigSumSize(formatRub(1234567.5))).toBe('l');
     expect(bigSumSize(formatRub(-1234567890.5))).toBe('m');

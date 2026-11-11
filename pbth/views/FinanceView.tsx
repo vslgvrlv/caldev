@@ -4,7 +4,7 @@ import { api } from '../api';
 import { buildTreasuryViewModel, type Debtor, type MyDebt } from '../lib/treasury-view';
 import { formatRub, formatRubSigned } from '../lib/format-rub';
 import { bigSumSize, groupTransactionsByDay, transactionLine } from '../lib/money-view';
-import { Avatar, Button, Glass, Icon, Row, Screen, ScreenBar, Sheet, TeamMark, teamPaint } from '../ui';
+import { Avatar, Button, Glass, Icon, Row, Screen, Sheet, teamPaint } from '../ui';
 import './finance-view.css';
 
 // Казна (решение Василия 10.11.2026, п. 9): недоделанное убрано, остались
@@ -137,10 +137,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   return (
     <Screen paints={[teamPaint(team.id)]}>
       <div className="pbth-money">
-        <ScreenBar
-          mark={<TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={32} />}
-          title="Казна"
-        />
+        {/* «Казна» и название команды — в шапке раздела (оболочка). */}
 
         {/* Баланс команды — только капитан */}
         {vm.showBalance && (

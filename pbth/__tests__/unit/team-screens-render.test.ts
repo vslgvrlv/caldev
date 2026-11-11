@@ -37,7 +37,8 @@ describe('состав: что видит каждая роль', () => {
     expect(html).toContain('Капитан');
     expect(html).toContain('Руководство');
     expect(html).toContain('Резерв');
-    expect(html).toContain('2 участника · ты капитан');
+    // Число участников и роль — в подписи шапки раздела (оболочка), на экране их нет.
+    expect(html).not.toContain('2 участника · ты капитан');
     expect(html).toContain('placeholder="Поиск игрока"');
     expect(html).toContain('Игрок · Травма');
     expect(html).toContain('· ты');

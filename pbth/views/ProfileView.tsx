@@ -73,8 +73,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="pbth-small">Имя и ник берутся из Telegram.</div>
       </div>
 
-      {guestBookings}
-
+      {/* Порядок как в макете (14-profile-full): аватар, имя, ник, «Мои команды», дальше настройки. */}
       {ownTeams.length > 0 && (
         <>
           <Section title="Мои команды" aside={ownTeams.length} />
@@ -92,6 +91,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </Glass>
         </>
       )}
+
+      {guestBookings}
 
       <Section title="Уведомления" />
       <Glass className="pbth-team__panel pbth-switchpanel">

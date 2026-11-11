@@ -51,8 +51,11 @@ export function transactionLine(t: Transaction): TransactionLine {
   };
 }
 
-/** Размер крупной суммы по длине строки: огромный → 28 → 20, чтобы сумма с «₽» была в одну строку на 360. */
+/**
+ * Размер крупной суммы по длине строки: огромный (64px, как в макете) → 28 → 20, чтобы сумма с «₽»
+ * была в одну строку на 360: «32 000 ₽» (8 знаков) в 64px занимает ~272px из 296.
+ */
 export function bigSumSize(text: string): 'xl' | 'l' | 'm' {
   const len = Array.from(text).length;
-  return len <= 9 ? 'xl' : len <= 16 ? 'l' : 'm';
+  return len <= 8 ? 'xl' : len <= 16 ? 'l' : 'm';
 }

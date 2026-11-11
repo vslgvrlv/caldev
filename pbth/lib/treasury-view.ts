@@ -94,3 +94,25 @@ export function buildTreasuryViewModel(input: {
     myDebt,
   };
 }
+
+/**
+ * Подпись строки «Казна» на экране команды: капитану — остаток казны, игроку и
+ * тренеру — свой долг. Нет данных — подписи нет: «долгов нет» там, где ничего
+ * не пришло, было бы враньём.
+ */
+export function treasuryRowSub(input: {
+  role: Role;
+  budget?: number | null;
+  members: TreasuryMember[];
+  currentUserId?: string | null;
+  formatRub: (value: unknown) => string;
+}): string | undefined {
+  const vm = buildTreasuryViewModel({ role: input.role, members: input.members, currentUserId: input.currentUserId });
+  if (vm.showBalance) {
+    if (!isKnownBalance(input.budget)) return undefined;
+    return `остаток ${input.formatRub(input.budget)}`;
+  }
+  if (vm.myDebt.kind === 'debt') return `твой долг ${input.formatRub(vm.myDebt.amount)}`;
+  if (vm.myDebt.kind === 'clear') return 'долгов нет';
+  return undefined;
+}
