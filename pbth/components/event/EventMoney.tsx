@@ -15,10 +15,12 @@ type Props = {
   cost?: number | null;
   /** «Сбор по событию»: показывается, только пока он включён флагом (капитан, тренер). */
   collection: CollectionSummary | null;
+  /** Переход в казну команды события: строка «Казна команды» под суммой. */
+  onOpenMoney?: () => void;
 };
 
 /** Деньги события: сумма с человека и, где разрешено, сводка сбора. */
-export const EventMoney: React.FC<Props> = ({ cost, collection }) => {
+export const EventMoney: React.FC<Props> = ({ cost, collection, onOpenMoney }) => {
   const hasCost = Number(cost) > 0;
   if (!hasCost && !collection) return null;
   return (
@@ -31,6 +33,18 @@ export const EventMoney: React.FC<Props> = ({ cost, collection }) => {
             </Glass>
           }
           title={`${formatRub(Number(cost))} с человека`}
+        />
+      ) : null}
+      {onOpenMoney ? (
+        <Row
+          lead={
+            <Glass layer={2} className="pbth-event__icon">
+              <Icon name="wallet" size={20} />
+            </Glass>
+          }
+          title="Казна команды"
+          chevron
+          onClick={onOpenMoney}
         />
       ) : null}
       {collection ? (

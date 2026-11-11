@@ -6,7 +6,8 @@ import { parseTeamCreationRequests } from '../../api/track3';
 import { dayLabel, groupByDay, plural, sinceLabel } from '../../components/track3/format';
 import ownerExt from '../../shell/ext/track3-journal';
 import type { ShellExtContext } from '../../shell/extensions';
-import { TeamHeader } from '../../components/shell/TeamHeader';
+import { SectionHeader } from '../../shell/SectionHeader';
+import { sectionHeadText } from '../../shell/section-head';
 import { Role, type TeamContext } from '../../types';
 
 const now = new Date('2026-11-11T12:00:00');
@@ -42,15 +43,22 @@ describe('меню команды: журнал и консоль', () => {
 
 describe('шапка команды владельца', () => {
   it('в чужой команде вместо «Капитан» — «Владелец платформы»', () => {
+    const team = { name: 'Бета', role: Role.CAPTAIN, via: 'owner' as const };
+    const text = sectionHeadText('/t/beta/roster', { now: now.getTime(), team, membersCount: 5 });
+    expect(text.title).toBe('Бета');
+    expect(text.subtitle).toBe('5 участников · ты владелец платформы');
     const html = renderToStaticMarkup(
       React.createElement(
         MemoryRouter,
         null,
-        React.createElement(TeamHeader, {
-          user: { id: 'u', name: 'Вася', nickname: 'vasya' } as any,
-          team: { id: 't2', name: 'Бета', shortCode: 'BETA', role: Role.CAPTAIN, budget: 0, via: 'owner' },
-          teamCode: 'beta',
+        React.createElement(SectionHeader, {
+          title: text.title,
+          subtitle: text.subtitle,
+          note: 'Владелец платформы',
           teams: [own, foreign],
+          currentCode: 'beta',
+          onPickTeam: () => {},
+          onOpenTeams: () => {},
         }),
       ),
     );

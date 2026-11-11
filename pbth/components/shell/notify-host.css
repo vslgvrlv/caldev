@@ -1,8 +1,6 @@
-/* Плашки ui-kit в теме pbth: фон плашки (--ui-surface-2) там полупрозрачный, поэтому на ней берётся
-   плотная поверхность; над плавающей нижней панелью плашка не лежит. Только токены и отступ. */
-.ui-toast-host {
-  --ui-surface-2: var(--ui-surface);
-}
+/* Плашки ui-kit в теме pbth — жидкое стекло ui-kit (класс ставит NotifyHost), без цветной полосы слева:
+   кромку даёт само стекло. Над плавающей нижней панелью плашка не лежит. */
+.ui-toast-host .ui-toast.ui-lglass { border-width: 0; }
 body:has(.ui-sidenav-bottom--floating) .ui-toast-host {
   bottom: calc(var(--ui-sidenav-bottom-h) + var(--ui-sidenav-bottom-gap) * 2 + env(safe-area-inset-bottom, 0px) + 8px);
 }

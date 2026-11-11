@@ -32,7 +32,7 @@ interface DashboardProps {
   /** Команды человека: по ним подписываем, чьё событие в общей ленте. */
   teams: TeamContext[];
   events: Event[];
-  /** Шапка экрана (`HomeHeader`): живёт внутри экрана, потому что краски фона задаёт он. */
+  /** Своя шапка над лентой. В оболочке не задаётся: шапку раздела «Моё» и фон даёт оболочка (`SectionHeader`). */
   header?: React.ReactNode;
   /** Команда, чья это главная: знак на подсказках капитану. */
   currentTeam?: { id: string; name: string; shortCode?: string } | null;
@@ -296,7 +296,7 @@ const DayPanel: React.FC<{
   );
 };
 
-/** Главная: ближайшее событие крупно, ниже события всех команд игрока по дням. */
+/** «Моё»: ближайшее событие крупно, ниже события всех команд игрока по дням. */
 export const Dashboard: React.FC<DashboardProps> = ({
   teams,
   events,
