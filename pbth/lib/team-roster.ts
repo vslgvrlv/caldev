@@ -8,7 +8,8 @@ import { countLabel, pluralRu } from './plural';
 
 export type RosterMode = 'roster' | 'attendance';
 
-const NBSP = ' ';
+const NBSP = '\u00a0';
+const RUB = `${NBSP}\u20bd`;
 
 function rank(member: TeamMember): number {
   if (member.role === Role.ADMIN || member.role === Role.CAPTAIN) return 0;
@@ -66,9 +67,9 @@ export function attendanceLabel(member: TeamMember): { percent: string; detail: 
 export function formatBalance(value: number | null | undefined): string {
   const n = Math.round(Number(value) || 0);
   const digits = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
-  if (n > 0) return `+${digits}${NBSP}₽`;
-  if (n < 0) return `−${digits}${NBSP}₽`;
-  return `0${NBSP}₽`;
+  if (n > 0) return `+${digits}${RUB}`;
+  if (n < 0) return `\u2212${digits}${RUB}`;
+  return `0${RUB}`;
 }
 
 /** Когда пришла заявка: «только что», «15 минут назад», «час назад», «вчера», «12 ноября». */

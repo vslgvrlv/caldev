@@ -102,7 +102,7 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
                   key={status}
                   variant="glass2"
                   icon={member.status === status ? 'check' : undefined}
-                  aria-pressed={member.status === status}
+                  aria-current={member.status === status ? 'true' : undefined}
                   onClick={() => void setStatus(status)}
                 >
                   {label}

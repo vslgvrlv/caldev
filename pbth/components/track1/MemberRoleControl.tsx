@@ -73,14 +73,14 @@ export const MemberRoleControl: React.FC<{ member: TeamMember }> = ({ member }) 
         />
       </Glass>
       <Sheet open={open} onClose={() => setOpen(false)} title="Роль в команде" subtitle={member.name}>
-        <div className="pbth-sheetlist">
+        <div className="pbth-btnlist">
           {choices.map((choice) => (
             <Button
               key={choice}
               variant={choice === current ? 'light' : 'glass2'}
               block
               icon={choice === current ? 'check' : undefined}
-              aria-pressed={choice === current}
+              aria-current={choice === current ? 'true' : undefined}
               disabled={busy !== null}
               onClick={() => void change(choice)}
             >

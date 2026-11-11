@@ -192,7 +192,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
 
       <Sheet open={quickMember !== null} onClose={() => setQuickMember(null)} title={quickMember?.name} subtitle="Быстрые действия">
         {quickMember && (
-          <div className="pbth-sheetlist">
+          <div className="pbth-btnlist">
             {STATUS_CHOICES.map(({ status, label }) => (
               <Button
                 key={status}

@@ -279,6 +279,8 @@ export const ProfileScreen: React.FC = () => {
       canEnterAdmin={shell.canEnterAdmin}
       onEnterAdmin={() => navigate('/admin')}
       guestBookings={<GuestBookingsBlock />}
+      teams={shell.teams}
+      onOpenTeam={(t) => navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode })))}
     />
   );
 };

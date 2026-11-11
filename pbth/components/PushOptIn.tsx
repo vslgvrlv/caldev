@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Bell, BellOff } from "lucide-react";
 import {
   isPushSupported,
   getPushPermission,
@@ -8,6 +7,7 @@ import {
   unsubscribeFromPush,
   getCurrentSubscription,
 } from "../lib/push/push-manager";
+import { SwitchRow } from "./profile/SwitchRow";
 
 // Переключатель push-уведомлений в профиле (#36): заменяет Telegram bot как
 // основной транспорт напоминаний. На устройствах без поддержки Push API
@@ -58,40 +58,16 @@ export const PushOptIn: React.FC = () => {
   };
 
   return (
-    <div className="bg-pb-surface rounded-2xl p-4 border border-white/5 space-y-3">
-      <button
-        onClick={handleToggle}
+    <>
+      <SwitchRow
+        icon={isSubscribed ? "bell" : "bell-off"}
+        title="Push-уведомления"
+        sub={isSubscribed ? "Включены на этом устройстве" : "Напоминания о событиях и оплате"}
+        checked={isSubscribed}
         disabled={isLoading}
-        className="w-full flex items-center justify-between gap-3 text-left disabled:opacity-60"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-pb-primary/15 flex items-center justify-center flex-shrink-0">
-            {isSubscribed ? (
-              <Bell size={20} className="text-pb-primary" strokeWidth={2.5} />
-            ) : (
-              <BellOff size={20} className="text-pb-subtext" strokeWidth={2.5} />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="text-white font-bold text-sm">Push-уведомления</div>
-            <div className="text-pb-subtext text-xs">
-              {isSubscribed ? "Включены на этом устройстве" : "Напоминания о событиях и оплате"}
-            </div>
-          </div>
-        </div>
-        <div
-          className={`w-11 h-6 rounded-full flex-shrink-0 relative transition-colors ${
-            isSubscribed ? "bg-pb-primary" : "bg-white/10"
-          }`}
-        >
-          <div
-            className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
-              isSubscribed ? "translate-x-5" : "translate-x-0.5"
-            }`}
-          />
-        </div>
-      </button>
-      {error && <p className="text-xs text-pb-danger">{error}</p>}
-    </div>
+        onChange={() => void handleToggle()}
+      />
+      {error && <p className="pbth-warn">{error}</p>}
+    </>
   );
 };
