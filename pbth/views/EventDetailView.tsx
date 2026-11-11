@@ -504,7 +504,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       icon: 'bell',
       title: 'Напомнить',
       sub: 'не ответившим',
-      disabled: isReminding || roster.silent.length === 0,
+      disabled: isReminding || roster.silent.length === 0 || phase === 'past',
       onClick: handleRemindSilent,
     });
   }
@@ -596,15 +596,16 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             onAttendeeClick(p.userId, { name: p.name, nickname: p.nickname, avatar: p.avatar, role: p.role })
           }
           onJoin={canAnswer && answer === 'none' ? () => handleStatusChange(RSVPStatus.CONFIRMED) : undefined}
-          onRemindSilent={perms.canRemind ? handleRemindSilent : undefined}
+          onRemindSilent={perms.canRemind && phase !== 'past' ? handleRemindSilent : undefined}
           reminding={isReminding}
+          hideFree={phase === 'past'}
         />
 
         <EventMoney cost={event.cost} collection={collection} />
 
         <EventPlace location={event.location} locationUrl={event.locationUrl} description={event.description} />
 
-        {showSchedule ? (
+        {showSchedule && (sortedSchedule.length > 0 || perms.canAddGame) ? (
           <GameSchedule
             games={sortedSchedule}
             teamName={teamName}

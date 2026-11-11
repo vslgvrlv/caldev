@@ -78,7 +78,7 @@
 .pbth-event__list { display: flex; flex-direction: column; max-height: 52vh; overflow-y: auto; }
 .pbth-event__menu { display: flex; flex-direction: column; gap: 8px; }
 .pbth-event__menu .ui-btn { justify-content: flex-start; width: 100%; }
-.pbth-event__blockhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pbth-event__blockhead { flex-wrap: wrap; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .pbth-event__actions { display: flex; gap: 4px; }
 .pbth-event__inline { display: inline-flex; align-items: center; gap: 8px; }
 .pbth-event__chips { display: flex; flex-wrap: wrap; gap: 8px; }

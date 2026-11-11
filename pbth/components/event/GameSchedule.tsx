@@ -26,7 +26,7 @@ const GameLine: React.FC<{ teamName: string; opponent: string; score?: string | 
   return (
     <span className="pbth-event__gameline">
       <span>{teamName}</span>
-      <span className={`ui-chip ${tone}`}>{parsed ? `${parsed.ours}:${parsed.theirs}` : 'счёта нет'}</span>
+      <span className={`ui-chip ${tone}`}>{parsed ? `${parsed.ours}:${parsed.theirs}` : '—'}</span>
       <span>{opponent}</span>
     </span>
   );

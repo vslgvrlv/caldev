@@ -10,6 +10,8 @@ type Props = {
   onJoin?: () => void;
   onRemindSilent?: () => void;
   reminding?: boolean;
+  /** Событие прошло: свободные места не показываются. */
+  hideFree?: boolean;
 };
 
 const PersonRow: React.FC<{ person: RosterPerson; onPerson: Props['onPerson']; trailing: React.ReactNode }> = ({
@@ -47,7 +49,7 @@ const GoingTag: React.FC<{ self: boolean }> = ({ self }) => (
 );
 
 /** «Идут N из M»: точки, идущие плотными строками по пятёркам, молчуны и отказавшиеся свёрнуто. */
-export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin, onRemindSilent, reminding }) => (
+export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin, onRemindSilent, reminding, hideFree }) => (
   <Glass layer={1} className="pbth-event__panel" data-testid="event-roster">
     <div className="pbth-event__head">
       <h2 className="pbth-event__h">{rosterHeadline(roster)}</h2>
@@ -84,7 +86,7 @@ export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin
             {five.people.map((p) => (
               <PersonRow key={p.userId} person={p} onPerson={onPerson} trailing={<GoingTag self={p.isSelf} />} />
             ))}
-            {Array.from({ length: five.free }, (_, i) => (
+            {Array.from({ length: hideFree ? 0 : five.free }, (_, i) => (
               <Row
                 key={`free-${i}`}
                 lead={

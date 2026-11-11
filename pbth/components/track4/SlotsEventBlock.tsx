@@ -213,19 +213,23 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
               key={guest.userId}
               lead={<Avatar name={guest.name} size={40} />}
               title={guest.name}
-              sub={slotPriceLabel(guest.price)}
+              sub={`${slotPriceLabel(guest.price)} · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
               trailing={
                 <span className="pbth-event__inline">
-                  <span className="pbth-event__tile-sub">оплатил</span>
                   <Switch
                     checked={guest.paid}
                     disabled={busy}
                     label={`${guest.name}: оплатил`}
                     onChange={(paid) => void run(() => slotsApi.setPaid(event.id, guest.userId, paid))}
                   />
-                  <Button variant="glass2" size="sm" disabled={busy} onClick={() => void removeGuest(guest.userId, guest.name)}>
-                    Снять
-                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="x"
+                    aria-label={`Снять ${guest.name}`}
+                    disabled={busy}
+                    onClick={() => void removeGuest(guest.userId, guest.name)}
+                  />
                 </span>
               }
             />
