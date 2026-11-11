@@ -1,5 +1,24 @@
 /* Раскладка нового слоя. Вид (цвет, стекло, шрифт) даёт тема ui-kit через токены --ui-*. */
 
+/* Фон и стекло под принятый макет (11.11, эталон ref-moe): тёмный фон с лёгким зелёным тоном, сверху дымка акцента,
+   первое пятно краски крупное за шапкой и первым блоком, второе ниже слева, третье в нижнем углу; стекло панелей
+   заметно светлее фона, кромка спокойная. Сила пятна у каждой краски своя (ui/paint-spot.ts: краска приходит с альфой),
+   CSS берёт её на 32/24/22 %. Значения — кандидат в тему ui-kit pbth; до переноса живут здесь.
+   `.pbth-shell` — обёртка разделов оболочки: на ней краски раздела, ниже они пересчитываются в фон. */
+.pbth-ui, .pbth-shell {
+  --ui-bg: #070B09;
+  --ui-glass-bg: rgba(255, 255, 255, .06);
+  --ui-glass-border: rgba(255, 255, 255, .08);
+  --ui-glass-highlight: rgba(255, 255, 255, .06);
+  --ui-glass2-bg: rgba(255, 255, 255, .08);
+  --ui-glass2-border: rgba(255, 255, 255, .07);
+  --ui-backdrop:
+    radial-gradient(460px 420px at var(--ui-paint-1-at, 66% 200px), color-mix(in srgb, var(--ui-paint-1, transparent) 32%, transparent), transparent 70%),
+    radial-gradient(400px 380px at var(--ui-paint-2-at, 0% 660px), color-mix(in srgb, var(--ui-paint-2, transparent) 24%, transparent), transparent 70%),
+    radial-gradient(340px 300px at var(--ui-paint-3-at, 100% 100%), color-mix(in srgb, var(--ui-paint-3, transparent) 22%, transparent), transparent 70%),
+    radial-gradient(640px 460px at 10% 0, color-mix(in srgb, var(--ui-accent) 7%, transparent), transparent 70%);
+}
+
 .pbth-ui {
   position: relative;
   min-height: 100vh;

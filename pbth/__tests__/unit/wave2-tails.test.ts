@@ -1,4 +1,5 @@
 import React from 'react';
+import { sectionHeadText } from '../../shell/section-head';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { SlotOffer } from '../../api/track4';
@@ -235,10 +236,12 @@ describe('11. склонения', () => {
     expect(pluralRu(111, 'день', 'дня', 'дней')).toBe('дней');
   });
 
-  it('шапка состава', () => {
-    expect(renderTeam(Role.CAPTAIN, 1)).toContain('1 участник · ты капитан<');
-    expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 участника · ты капитан<');
-    expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 участников · ты капитан<');
+  it('шапка состава (подпись шапки раздела «Команды»)', () => {
+    const sub = (count: number) =>
+      sectionHeadText('/t/hg/roster', { now: Date.now(), team: { name: 'Holy Guns', role: Role.CAPTAIN }, membersCount: count }).subtitle;
+    expect(sub(1)).toBe('1 участник · ты капитан');
+    expect(sub(2)).toBe('2 участника · ты капитан');
+    expect(sub(5)).toBe('5 участников · ты капитан');
   });
 });
 
