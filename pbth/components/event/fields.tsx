@@ -1,15 +1,7 @@
 import React from 'react';
 import { Button } from '../../ui';
 
-/** Поле формы окна: подпись ui-kit и элемент под ней. */
-export const Field: React.FC<{ label: string; htmlFor?: string; children: React.ReactNode }> = ({ label, htmlFor, children }) => (
-  <div className="pbth-event__field">
-    <label className="ui-label" htmlFor={htmlFor}>
-      {label}
-    </label>
-    {children}
-  </div>
-);
+export { Field } from '../form';
 
 /** Низ окна: «Отмена» и главное действие. */
 export const SheetFooter: React.FC<{

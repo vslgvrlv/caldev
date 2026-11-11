@@ -27,11 +27,10 @@ const termsViewPath = fileURLToPath(new URL("../../views/TermsView.tsx", import.
 
 describe("pwa safe-area layouts", () => {
   it("uses explicit top inset math for sticky in-app headers", () => {
-    [createEventViewPath].forEach((path) => {
-      const source = readFileSync(path, "utf8");
-      expect(source).toContain("calc(var(--pb-safe-top)");
-      expect(source).not.toContain(" pb-safe-top");
-    });
+    // Экран «Новое событие» живёт в <Screen>: верх задаёт его раскладка, главная кнопка закреплена над вырезом снизу.
+    expect(readFileSync(createEventViewPath, "utf8")).toContain("<Screen");
+    const css = readFileSync(fileURLToPath(new URL("../../views/create-event-view.css", import.meta.url)), "utf8");
+    expect(css).toContain("calc(var(--pb-safe-bottom");
   });
 
   it("keeps the event screen below the standalone status bar through the shared Screen layer", () => {

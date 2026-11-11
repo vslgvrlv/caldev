@@ -1,0 +1,24 @@
+/* Раскладка экрана «Новое событие». Вид (стекло, кнопки, поля) даёт ui-kit. */
+.pbth-newevent .pbth-ui__content { padding-bottom: calc(var(--pb-safe-bottom, 0px) + 104px); }
+.pbth-newevent__form { display: flex; flex-direction: column; gap: 12px; }
+.pbth-newevent__types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pbth-newevent__types > .ui-btn { justify-content: flex-start; min-width: 0; padding-inline: 12px; }
+.pbth-newevent__two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.pbth-newevent__two > * { min-width: 0; }
+.pbth-newevent__repeat { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.pbth-newevent__repeatlabel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pbth-newevent__repeattitle { font-size: 14px; font-weight: 700; }
+.pbth-newevent__repeathint { font-size: 12px; color: var(--ui-muted); }
+.pbth-newevent__days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.pbth-newevent__days > .ui-btn { min-width: 0; padding-inline: 0; justify-content: center; }
+/* Главное действие закреплено над вырезом на стеклянной подложке и не перекрывает поля: низ содержимого уже отодвинут. */
+.pbth-newevent__bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  box-sizing: border-box; max-width: 480px; margin: 0 auto;
+  padding: 0 12px calc(var(--pb-safe-bottom, 0px) + 8px);
+  pointer-events: none;
+}
+.pbth-newevent__barglass { padding: 8px; pointer-events: auto; }
+
+/* Плашки сообщений (NotifyHost) лежат над закреплённой панелью действия, а не поверх кнопки. */
+body:has(.pbth-newevent__bar) .ui-toast-host { bottom: calc(var(--pb-safe-bottom, 0px) + 88px); }

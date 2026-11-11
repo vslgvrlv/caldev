@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, Link2, Plus, X } from 'lucide-react';
 import { api, type SavedPlace } from '../api';
+import { Button, Glass, Icon } from '../ui';
+import { Field, TextInput } from './form';
 
 interface LocationAutocompleteInputProps {
   name: string;
@@ -76,83 +77,60 @@ export const LocationAutocompleteInput: React.FC<LocationAutocompleteInputProps>
   };
 
   return (
-    <div className="space-y-2" ref={containerRef}>
-      <label className="text-pb-subtext text-xs uppercase font-bold tracking-wider flex items-center">
-        <MapPin size={14} className="mr-1" /> Место проведения
-      </label>
-
-      <div className="relative">
-        <input
+    <div className="pbth-place" ref={containerRef}>
+      <Field label="Место" htmlFor="place-name">
+        <TextInput
+          id="place-name"
           value={name}
-          onChange={(e) => handleNameChange(e.target.value)}
+          onChange={handleNameChange}
           onFocus={() => setOpen(true)}
           placeholder="Адрес или название клуба"
           autoComplete="off"
-          className="w-full bg-pb-surface border border-white/10 rounded-xl p-4 text-white focus:border-pb-primary focus:outline-none transition-colors placeholder:text-white/20"
         />
+      </Field>
 
-        {open && matches.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full rounded-xl border border-white/10 bg-pb-surface shadow-lg overflow-hidden">
-            {matches.map((place) => (
-              <button
-                key={place.id}
-                type="button"
-                onClick={() => selectPlace(place)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
-              >
-                <MapPin size={16} className="mt-0.5 shrink-0 text-pb-primary" />
-                <div className="min-w-0">
-                  <div className="font-semibold text-white truncate">{place.name}</div>
-                  {place.address && (
-                    <div className="text-pb-subtext text-xs truncate">{place.address}</div>
-                  )}
-                </div>
-                {place.yandexUrl && (
-                  <Link2 size={14} className="ml-auto mt-1 shrink-0 text-pb-subtext" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {open && matches.length > 0 && (
+        <Glass layer={2} className="pbth-place__list">
+          {matches.map((place) => (
+            <button key={place.id} type="button" className="pbth-place__item" onClick={() => selectPlace(place)}>
+              <Icon name="map-pin" size={18} />
+              <span className="pbth-place__text">
+                <span className="pbth-place__name">{place.name}</span>
+                {place.address && <span className="pbth-place__addr">{place.address}</span>}
+              </span>
+              {place.yandexUrl && <Icon name="link" size={16} />}
+            </button>
+          ))}
+        </Glass>
+      )}
 
-      {/* New place — offer to attach a Yandex Maps link so future reminders are clickable */}
+      {/* Новое место: можно приложить ссылку на Яндекс.Карты, чтобы напоминания вели на карту */}
       {query.length > 0 && !exactMatch && (
-        <div className="space-y-2">
+        <>
           {url ? (
-            <div className="flex items-center gap-2 rounded-lg bg-pb-primary/10 border border-pb-primary/30 px-3 py-2">
-              <Link2 size={14} className="shrink-0 text-pb-primary" />
-              <span className="text-pb-primary text-xs truncate flex-1">{url}</span>
-              <button
-                type="button"
+            <Glass layer={2} className="pbth-place__url">
+              <Icon name="link" size={16} />
+              <span className="pbth-place__urltext">{url}</span>
+              <Button
+                variant="ghost"
+                icon="x"
+                aria-label="Убрать ссылку"
                 onClick={() => {
                   onChange({ name, address, url: '' });
                   setShowNewUrl(false);
                 }}
-                aria-label="Убрать ссылку"
-                className="-my-3.5 -mr-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-pb-subtext hover:text-white"
-              >
-                <X size={14} />
-              </button>
-            </div>
+              />
+            </Glass>
           ) : showNewUrl ? (
-            <input
-              value={url}
-              onChange={(e) => onChange({ name, address, url: e.target.value })}
-              placeholder="Ссылка на Яндекс.Карты (необязательно)"
-              autoComplete="off"
-              className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-pb-primary focus:outline-none placeholder:text-white/20"
-            />
+            <Field label="Ссылка на Яндекс.Карты" htmlFor="place-url" hint="Необязательно">
+              <TextInput id="place-url" value={url} onChange={(v) => onChange({ name, address, url: v })} placeholder="https://yandex.ru/maps/…" autoComplete="off" />
+            </Field>
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowNewUrl(true)}
-              className="flex min-h-[44px] items-center gap-1.5 text-pb-subtext text-xs hover:text-pb-primary transition-colors"
-            >
-              <Plus size={14} /> Добавить ссылку на Яндекс.Карты
-            </button>
+            <Button variant="ghost" icon="plus" onClick={() => setShowNewUrl(true)}>
+              Добавить ссылку на Яндекс.Карты
+            </Button>
           )}
-        </div>
+        </>
       )}
     </div>
   );
