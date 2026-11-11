@@ -25,11 +25,17 @@ const termsViewPath = fileURLToPath(new URL("../../views/TermsView.tsx", import.
 
 describe("pwa safe-area layouts", () => {
   it("uses explicit top inset math for sticky in-app headers", () => {
-    [eventDetailViewPath, createEventViewPath, playerProfileViewPath].forEach((path) => {
+    [createEventViewPath, playerProfileViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
       expect(source).not.toContain(" pb-safe-top");
     });
+  });
+
+  it("keeps the event screen below the standalone status bar through the shared Screen layer", () => {
+    const screenCss = readFileSync(fileURLToPath(new URL("../../ui/pbth-ui.css", import.meta.url)), "utf8");
+    expect(screenCss).toContain("calc(var(--pb-safe-top");
+    expect(readFileSync(eventDetailViewPath, "utf8")).toContain("<Screen");
   });
 
   it("keeps event finance sheet headers below the standalone status bar", () => {

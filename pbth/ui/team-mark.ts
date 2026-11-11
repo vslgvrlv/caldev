@@ -121,6 +121,19 @@ export function teamMarkSvg({ teamId, name, code, size = 40, paint }: TeamMarkSp
   );
 }
 
+/**
+ * Адрес фотографии для круга аватара или `null` — тогда остаются инициалы.
+ * Берём только http(s), data:image и пути приложения; пустое значение и
+ * внешний генератор ui-avatars.com не используем.
+ */
+export function avatarPhotoSrc(src?: string | null): string | null {
+  const value = String(src ?? '').trim();
+  if (!value) return null;
+  if (/ui-avatars\.com/i.test(value)) return null;
+  if (/^(https?:\/\/|data:image\/|\/(?!\/))/i.test(value)) return value;
+  return null;
+}
+
 /** Инициалы человека: первые буквы имени и фамилии. */
 export function initialsOf(name?: string | null): string {
   const words = (name ?? '').split(/\s+/).filter(Boolean);

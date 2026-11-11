@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-11-11T09:36:14.206Z",
+  "generated": "2026-11-11T10:07:57.344Z",
   "counts": {
     "components/CaptainReportModal.tsx::dialog": 1,
     "components/EventCollectionSheet.tsx::dialog": 1,
@@ -18,7 +18,6 @@
     "lib/finance-transaction-modal-layout.ts::dialog": 1,
     "lib/mobile-bottom-sheet-layout.ts::dialog": 1,
     "public/guide/player.html::control": 4,
-    "views/CreateEventView.tsx::native-dialog": 5,
-    "views/EventDetailView.tsx::native-dialog": 16
+    "views/CreateEventView.tsx::native-dialog": 5
   }
 }

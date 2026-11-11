@@ -129,7 +129,8 @@ export const LocationAutocompleteInput: React.FC<LocationAutocompleteInputProps>
                   onChange({ name, address, url: '' });
                   setShowNewUrl(false);
                 }}
-                className="text-pb-subtext hover:text-white"
+                aria-label="Убрать ссылку"
+                className="-my-3.5 -mr-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-pb-subtext hover:text-white"
               >
                 <X size={14} />
               </button>
@@ -146,7 +147,7 @@ export const LocationAutocompleteInput: React.FC<LocationAutocompleteInputProps>
             <button
               type="button"
               onClick={() => setShowNewUrl(true)}
-              className="flex items-center gap-1.5 text-pb-subtext text-xs hover:text-pb-primary transition-colors"
+              className="flex min-h-[44px] items-center gap-1.5 text-pb-subtext text-xs hover:text-pb-primary transition-colors"
             >
               <Plus size={14} /> Добавить ссылку на Яндекс.Карты
             </button>
