@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-11-11T13:39:44.241Z",
+  "generated": "2026-11-11T15:39:45.335Z",
   "counts": {
     "components/CaptainReportModal.tsx::dialog": 1,
     "components/EventCollectionSheet.tsx::dialog": 1,
@@ -16,7 +16,6 @@
     "components/track1/QrCode.tsx::icon": 1,
     "lib/event-charge-modal.ts::dialog": 1,
     "lib/finance-transaction-modal-layout.ts::dialog": 1,
-    "lib/mobile-bottom-sheet-layout.ts::dialog": 1,
-    "public/guide/player.html::control": 4
+    "lib/mobile-bottom-sheet-layout.ts::dialog": 1
   }
 }
