@@ -74,13 +74,13 @@ describe('казна игрока: старый ответ (приходит в�
     expect(html).toContain('500 ₽');
     expect(html).toContain('Должники');
     expect(html).toContain('Анна');
-    expect(html).toContain('Должен 1 200 ₽');
+    expect(html).toContain('1 200 ₽');
   });
 
   it('не показывает баланс команды и историю, хотя они пришли', () => {
-    expect(html).not.toContain('Общий баланс');
+    expect(html).not.toContain('Остаток казны');
     expect(html).not.toContain('32 000');
-    expect(html).not.toContain('История');
+    expect(html).not.toContain('Операции');
     expect(html).not.toContain('Аренда площадки');
     expect(html).not.toContain('Взнос Анны');
   });
@@ -104,15 +104,15 @@ describe('казна игрока: новый ответ (чужие деньг�
     expect(html).toContain('Казна');
     expect(html).toContain('Твой долг');
     expect(html).toContain('500 ₽');
-    expect(html).toContain('Должники (2)');
-    expect(html).toContain('Должен 1 200 ₽');
+    expect(html).toContain('Должники · 2');
+    expect(html).toContain('1 200 ₽');
   });
 
   // Этот экран на старой верстке выглядел так: «Общий баланс 0 ₽», «История
   // пуста». Ноль — не баланс команды, а то, что сервер её больше не отдаёт.
   it('не выдаёт пустые заглушки за ответ', () => {
-    expect(html).not.toContain('Общий баланс');
-    expect(html).not.toContain('История');
+    expect(html).not.toContain('Остаток казны');
+    expect(html).not.toContain('Операции');
     expect(html).not.toContain('Долгов нет');
     expect(html).not.toContain('Все молодцы');
     expect(html).not.toMatch(/(^|[^\d])0 ₽/);
@@ -163,12 +163,14 @@ describe('казна капитана', () => {
   const html = render({ currentUserRole: Role.CAPTAIN, currentUserId: 'cap' });
 
   it('держит баланс, журнал и запись трат', () => {
-    expect(html).toContain('Общий баланс');
-    expect(html).toContain('32 000');
+    expect(html).toContain('Остаток казны');
+    expect(html).toContain('32 000 ₽');
+    expect(html).toContain('Долг игроков');
+    expect(html).toContain('1 700 ₽');
     expect(html).toContain('Записать трату');
-    expect(html).toContain('История');
+    expect(html).toContain('Операции');
     expect(html).toContain('Аренда площадки');
-    expect(html).toContain('Должники (2)');
+    expect(html).toContain('Должники · 2');
   });
 
   it('«Создать сбор» убран: он не создавал долг и выглядел как приход', () => {
@@ -181,15 +183,17 @@ describe('казна капитана', () => {
     expect(html).toContain('Начисление');
     expect(html).not.toContain('+3500');
     expect(html).not.toContain('+3 500');
-    // А настоящие приход и расход остаются со знаками.
+    expect(html).toContain('3 500 ₽');
+    // А настоящие приход и расход остаются со знаками; минус — настоящий (U+2212).
     expect(html).toContain('+1 500 ₽');
-    expect(html).toContain('-6 000 ₽');
+    expect(html).toContain('\u22126 000 ₽');
+    expect(html).not.toContain('-6 000');
   });
 
   it('должники: сумма и «Напомнить» каждому и всем', () => {
-    const debts = render({ currentUserRole: Role.CAPTAIN, currentUserId: 'cap', initialTab: 'DEBTS' });
+    const debts = render({ currentUserRole: Role.CAPTAIN, currentUserId: 'cap' });
     expect(debts).toContain('Напомнить всем должникам');
-    expect(debts).toContain('Должен 1 200 ₽');
+    expect(debts).toContain('1 200 ₽');
     // Кнопка «Напомнить» у каждого из двух должников (общая — «…всем должникам»).
     expect(debts.match(/Напомнить(?! всем)/g)).toHaveLength(2);
   });
@@ -199,7 +203,6 @@ describe('казна капитана', () => {
       currentUserRole: Role.CAPTAIN,
       currentUserId: 'cap',
       members: [member('cap', 'Капитан'), member('anna', 'Анна')],
-      initialTab: 'DEBTS',
     });
     expect(debts).toContain('Данные о долгах не загрузились');
     expect(debts).not.toContain('Все молодцы');
@@ -211,10 +214,10 @@ describe('казна тренера', () => {
   // как игроку: долги, а не баланс и история.
   it('видит то же, что игрок, и ничего не меняет', () => {
     const html = render({ currentUserRole: Role.TRAINER, currentUserId: 'coach', members: newMembers, transactions: [], team: team(Role.TRAINER, 0) });
-    expect(html).toContain('Должники (2)');
-    expect(html).toContain('Должен 1 200 ₽');
-    expect(html).not.toContain('Общий баланс');
-    expect(html).not.toContain('История');
+    expect(html).toContain('Должники · 2');
+    expect(html).toContain('1 200 ₽');
+    expect(html).not.toContain('Остаток казны');
+    expect(html).not.toContain('Операции');
     expect(html).not.toContain('Записать трату');
     expect(html).not.toContain('Напомнить');
   });
