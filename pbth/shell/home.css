@@ -41,7 +41,7 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
-.pbth-sectionhead__sub { width: max-content; max-width: 100%; margin-top: 2px; overflow: hidden; font-size: 14px; color: var(--ui-muted); white-space: nowrap; text-overflow: ellipsis; }
+.pbth-sectionhead__sub { max-width: 100%; margin-top: 2px; font-size: 14px; color: var(--ui-muted); overflow-wrap: anywhere; }
 .pbth-sectionhead__note { margin-top: 2px; font-size: 12px; color: var(--ui-muted); }
 .pbth-sectionhead__tools { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 4px; margin-right: -8px; }
 .pbth-sectionhead__teams { white-space: nowrap; }

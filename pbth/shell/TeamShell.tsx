@@ -155,7 +155,7 @@ const SectionHead: React.FC<{
         subtitle={text.subtitle}
         mark={
           team && parseTeamPath(location.pathname)?.section === 'roster' ? (
-            <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={56} />
+            <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={48} />
           ) : undefined
         }
         note={!onMe && team?.via === 'owner' ? 'Владелец платформы' : undefined}

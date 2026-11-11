@@ -570,7 +570,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       : null;
 
   return (
-    <Screen paints={[paint]}>
+    <Screen paints={[paint, paint, paint]}>
       <div className="pbth-event" style={{ ['--pbth-event-paint' as string]: paint }}>
         <Glass layer={1} className="pbth-event__bar">
           <ScreenBar

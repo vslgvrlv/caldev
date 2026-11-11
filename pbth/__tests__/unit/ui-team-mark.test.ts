@@ -78,3 +78,11 @@ describe('аватар', () => {
     expect(html).toContain('>КМ<');
   });
 });
+
+describe('буквы знака по шкале текста', () => {
+  it('12 в ряду шапки, 14 в строке, 20 у крупного знака, 28 у огромного', async () => {
+    const { markLetterSize, teamMarkSvg } = await import('../../ui/team-mark');
+    expect([24, 30, 32, 40, 48, 56, 64, 72, 96].map(markLetterSize)).toEqual([12, 12, 12, 14, 14, 20, 20, 20, 28]);
+    expect(teamMarkSvg({ teamId: 't', name: 'Holy Guns', size: 30 })).toContain('font-size="12"');
+  });
+});
