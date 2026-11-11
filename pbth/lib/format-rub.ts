@@ -33,7 +33,7 @@ export function formatRub(value: unknown): string {
   const n = toFinite(value);
   if (n === null) return DASH;
   const cents = absCents(n);
-  return `${n < 0 && cents > 0 ? MINUS : ''}${body(cents)}${NBSP}₽`;
+  return `${n < 0 && cents > 0 ? MINUS : ''}${body(cents)}${NBSP}₽`; // ui-kit-allow: UI.stat.fmt(v,'money') округляет до целых и теряет копейки
 }
 
 /** Как formatRub, но положительной сумме добавляет «+»: «+1 800 ₽». Ноль — без знака. */
