@@ -1,10 +1,9 @@
 import React, { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
 import { useShell } from './context';
 import { AppGateScreens, RequireAuth } from './gates';
 import { setRequestTeam } from '../api';
-import { BottomNav } from '../components/BottomNav';
+import { ShellNav } from '../components/shell/ShellNav';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { TeamHeader } from '../components/shell/TeamHeader';
 import { ContentLoader, ScreenLoader } from '../components/shell/ScreenLoader';
@@ -21,7 +20,11 @@ import type { Team } from '../types';
 // шапкой и кнопкой «назад», как раньше: их липкая шапка учитывает вырез экрана,
 // и вторая шапка над ней ломала бы прокрутку.
 
-const SECTION_SAFE_TOP = { '--pb-safe-top': '0px' } as React.CSSProperties;
+const SECTION_SAFE_TOP = {
+  '--pb-safe-top': '0px',
+  // Старые экраны уходят под плавающую нижнюю панель: запас под неё и под вырез снизу.
+  paddingBottom: 'calc(var(--pb-safe-bottom) + 16px)',
+} as React.CSSProperties;
 
 function isRecordScreen(pathname: string): boolean {
   const parsed = parseTeamPath(pathname);
@@ -30,12 +33,22 @@ function isRecordScreen(pathname: string): boolean {
   return parsed.section === 'roster' && parsed.rest.length > 0;
 }
 
-const Frame: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// `plain` — новая главная: тёмный фон темы и краски за стеклом вместо старой подложки.
+const Frame: React.FC<{ children: React.ReactNode; plain?: boolean }> = ({ children, plain }) => {
   const shell = useShell();
   return (
-    <div className="min-h-screen bg-pb-background bg-splatter bg-fixed bg-no-repeat bg-center bg-cover text-white font-sans selection:bg-pb-primary selection:text-pb-background">
-      <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>
-      <main className="max-w-md mx-auto min-h-screen relative shadow-2xl shadow-black overflow-hidden flex flex-col">
+    <div
+      className={
+        plain
+          ? 'min-h-screen text-white font-sans'
+          : 'min-h-screen bg-pb-background bg-splatter bg-fixed bg-no-repeat bg-center bg-cover text-white font-sans selection:bg-pb-primary selection:text-pb-background'
+      }
+      style={plain ? { background: 'var(--ui-bg)' } : undefined}
+    >
+      {!plain && <div className="fixed inset-0 bg-pb-background/72 -z-10 pointer-events-none"></div>}
+      <main
+        className={`max-w-md mx-auto min-h-screen relative overflow-hidden flex flex-col${plain ? '' : ' shadow-2xl shadow-black'}`}
+      >
         <OfflineBanner
           snapshotAt={shell.offlineSnapshotAt}
           pending={shell.outboxState.pending}
@@ -85,7 +98,7 @@ const TeamShellInner: React.FC = () => {
           code={code}
           onOpenOwn={() => navigate(shell.teamCode ? teamPath(shell.teamCode) : '/app', { replace: true })}
         />
-        <BottomNav teamCode={shell.teamCode} />
+        <ShellNav teamCode={shell.teamCode} />
       </Frame>
     );
   }
@@ -131,14 +144,16 @@ const TeamShellInner: React.FC = () => {
 
   const canCreate = ready && shell.team ? eventCreateAccess(shell.team.role).canCreate : false;
   const section = parseTeamPath(location.pathname)?.section ?? '';
+  // Главная рисует свою шапку внутри экрана (краски фона зависят от событий).
+  const home = section === '';
 
   return (
-    <Frame>
-      {shell.user && headerTeam && (
+    <Frame plain={home}>
+      {!home && shell.user && headerTeam && (
         <TeamHeader user={shell.user} team={headerTeam} teamCode={code} teams={shell.teams} />
       )}
       <OnboardingNote />
-      <div className="flex-1" style={SECTION_SAFE_TOP}>
+      <div className="flex-1" style={home ? undefined : SECTION_SAFE_TOP}>
         {ready ? (
           <Suspense fallback={<ContentLoader />}>
             <Outlet />
@@ -148,22 +163,7 @@ const TeamShellInner: React.FC = () => {
         )}
       </div>
 
-      {canCreate && section !== 'requests' && section !== 'journal' && (
-        // Fixed над нижней навигацией (85px) и в пределах колонки приложения.
-        <div className="fixed inset-x-0 z-50 pointer-events-none" style={{ bottom: 'calc(85px + 1rem)' }}>
-          <div className="max-w-md mx-auto px-4 flex justify-end">
-            <button
-              aria-label="Создать событие"
-              onClick={() => navigate(teamPath(code, 'new'))}
-              className="pointer-events-auto w-14 h-14 bg-pb-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,230,118,0.5)] active:scale-95 transition-transform hover:bg-white text-pb-background"
-            >
-              <Plus size={32} strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <BottomNav teamCode={code} />
+      <ShellNav teamCode={code} canCreate={canCreate && section !== 'requests' && section !== 'journal'} />
     </Frame>
   );
 };
@@ -188,10 +188,10 @@ export const MeShell: React.FC<{ children: React.ReactNode }> = ({ children }) =
       <AppGateScreens>
         {shell.user && shell.team ? (
           <Frame>
-            <div className="flex-1">
+            <div className="flex-1" style={{ paddingBottom: 'calc(var(--pb-safe-bottom) + 16px)' }}>
               <Suspense fallback={<ContentLoader />}>{children}</Suspense>
             </div>
-            <BottomNav teamCode={shell.teamCode} />
+            <ShellNav teamCode={shell.teamCode} />
           </Frame>
         ) : shell.teamLoad === 'error' ? (
           <DataUnavailableScreen onRetry={() => window.location.reload()} onLogin={() => window.location.assign('/login')} />

@@ -1,0 +1,66 @@
+/* Раскладка экрана входа. Вид (стекло, кнопки, шрифт, краски) даёт ui-kit. */
+
+.pbth-login .pbth-ui__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: calc(var(--pb-safe-top) + 48px);
+  padding-bottom: calc(var(--pb-safe-bottom) + 16px);
+}
+
+.pbth-login__hero {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.pbth-login__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 16px;
+  border-radius: 28px;
+  color: var(--ui-accent);
+  text-decoration: none;
+}
+.pbth-login__title { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; }
+.pbth-login__tagline { margin: 0; max-width: 20em; font-size: 16px; line-height: 1.4; color: var(--ui-muted); }
+
+.pbth-login__panel { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.pbth-login__main { --ui-ctl-h: 56px; font-size: 16px; }
+.pbth-login__note { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ui-muted); text-align: center; }
+.pbth-login__small { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ui-muted); text-align: center; }
+.pbth-login__alert { display: flex; align-items: flex-start; gap: 8px; padding: 12px; font-size: 14px; line-height: 1.4; }
+.pbth-login__alert .ui-icon { flex: none; margin-top: 1px; color: var(--ui-danger); }
+
+.pbth-login__who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pbth-login__who-text { display: flex; flex-direction: column; min-width: 0; }
+.pbth-login__who-label { font-size: 12px; color: var(--ui-muted); }
+.pbth-login__who-name { overflow: hidden; font-size: 16px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.pbth-login__photo { display: block; flex: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+
+.pbth-login__code-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 12px; text-align: center; }
+.pbth-login__code-label, .pbth-login__code-ttl { font-size: 12px; color: var(--ui-muted); }
+.pbth-login__code { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.2; letter-spacing: .06em; white-space: nowrap; }
+.pbth-login__status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; color: var(--ui-muted); }
+
+.pbth-login__spin { animation: pbth-login-spin 1s linear infinite; }
+@keyframes pbth-login-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pbth-login__spin { animation: none; } }
+
+.pbth-login__loading { display: flex; justify-content: center; padding: 20px 0; color: var(--ui-muted); }
+
+.pbth-login__foot { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 12px; }
+.pbth-login__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; }
+.pbth-login__links a { font-size: 12px; color: var(--ui-muted); text-decoration: underline; text-underline-offset: 3px; }
+.pbth-login__dev { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
+.pbth-login__quiet { color: var(--ui-muted); }
+
+/* Области касания не меньше 44px; текст остаётся мелким, растёт только зона нажатия. */
+.pbth-login .ui-btn--sm { min-height: 44px; }
+.pbth-login__links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
