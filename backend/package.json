@@ -14,6 +14,7 @@
     "db:migrate:prod": "node dist/db/migrate.js",
     "db:seed": "tsx src/db/seeds/seed.ts",
     "db:seed:demo": "tsx src/db/seeds/seed.ts",
+    "db:seed:scenarios": "tsx src/db/seeds/scenarios.ts",
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "npm run check",
     "test": "vitest run",

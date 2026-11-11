@@ -7,6 +7,7 @@ Express + Postgres backend for Paintball Team Hub.
 - `npm run dev` - run backend on `PORT` (default 8000)
 - `npm run db:migrate` - apply SQL migrations
 - `npm run db:seed` - insert demo seed
+- `npm run db:seed:scenarios -- --owner-telegram-id <id> [--dry-run | --remove]` - test scenarios for one existing account (needs `SEED_SCENARIOS_ALLOW=local|staging`, refuses production); see `docs/scenarios.md`
 - `npm run build` - compile TypeScript
 - `npm run check` - typecheck
 - `npm run lint` - lint gate (currently type-safe lint baseline)
