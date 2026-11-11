@@ -10,7 +10,8 @@ import {
   type EditPatch,
 } from '../../lib/event-view';
 import { LocationAutocompleteInput } from '../LocationAutocompleteInput';
-import { Field, SheetFooter } from './fields';
+import { Field, TextInput, DateInput, TimeInput, MoneyInput } from '../form';
+import { SheetFooter } from './fields';
 
 type GameInput = Omit<Game, 'id'>;
 
@@ -24,8 +25,7 @@ export const EditEventSheet: React.FC<{
 }> = ({ event, isSeries, onClose, onSave }) => {
   const [draft, setDraft] = React.useState<EditDraft>(() => buildEditDraft(event));
   const [busy, setBusy] = React.useState(false);
-  const set = (key: keyof EditDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setDraft((prev) => ({ ...prev, [key]: e.target.value }));
+  const set = (key: keyof EditDraft) => (value: string) => setDraft((prev) => ({ ...prev, [key]: value }));
 
   const save = async () => {
     const result = validateEditDraft(draft);
@@ -49,7 +49,7 @@ export const EditEventSheet: React.FC<{
     <Sheet open onClose={onClose} title="Изменить событие" subtitle={isSeries ? 'Изменится только это занятие серии.' : 'Изменения увидит вся команда.'}>
       <div className="pbth-event__form">
         <Field label="Название" htmlFor="ev-title">
-          <input id="ev-title" className="ui-input" type="text" value={draft.title} onChange={set('title')} placeholder="Название события" />
+          <TextInput id="ev-title" value={draft.title} onChange={set('title')} placeholder="Название события" />
         </Field>
         <LocationAutocompleteInput
           name={draft.location}
@@ -58,21 +58,21 @@ export const EditEventSheet: React.FC<{
           onChange={({ name, address, url }) => setDraft((prev) => ({ ...prev, location: name, locationAddress: address, locationUrl: url }))}
         />
         <Field label="Дата" htmlFor="ev-date">
-          <input id="ev-date" className="ui-input" type="date" value={draft.date} onChange={set('date')} />
+          <DateInput id="ev-date" value={draft.date} onChange={set('date')} />
         </Field>
         <div className="pbth-event__two">
           <Field label="Начало" htmlFor="ev-start">
-            <input id="ev-start" className="ui-input" type="time" value={draft.startTime} onChange={set('startTime')} />
+            <TimeInput id="ev-start" value={draft.startTime} onChange={set('startTime')} />
           </Field>
           <Field label="Окончание" htmlFor="ev-end">
-            <input id="ev-end" className="ui-input" type="time" value={draft.endTime} onChange={set('endTime')} />
+            <TimeInput id="ev-end" value={draft.endTime} onChange={set('endTime')} />
           </Field>
         </div>
-        <Field label="Стоимость, ₽" htmlFor="ev-cost">
-          <input id="ev-cost" className="ui-input" type="number" inputMode="numeric" value={draft.cost} onChange={set('cost')} placeholder="0" />
+        <Field label="Стоимость" htmlFor="ev-cost">
+          <MoneyInput id="ev-cost" value={draft.cost} onChange={set('cost')} placeholder="0" />
         </Field>
         <Field label="Описание" htmlFor="ev-desc">
-          <textarea id="ev-desc" className="ui-input pbth-event__area" rows={3} value={draft.description} onChange={set('description')} placeholder="План, снаряжение, заметки…" />
+          <TextInput id="ev-desc" multiline rows={3} value={draft.description} onChange={set('description')} placeholder="План, снаряжение, заметки…" />
         </Field>
         <SheetFooter onCancel={onClose} submitLabel={busy ? 'Сохраняем…' : 'Сохранить'} onSubmit={() => void save()} busy={busy} />
       </div>

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Loader2, LogOut, Plus } from 'lucide-react';
 import { useShell } from '../../shell/context';
 import {
   parseJoinCodeInput,
@@ -9,7 +8,10 @@ import {
   type TeamCreationRequest,
 } from '../../api/track1';
 import { errorText, notify } from '../../lib/notify';
+import { Button, Glass, Icon, Row } from '../../ui';
 import { JoinRequestStatusCard } from './JoinRequestStatusCard';
+import { InviteActions, InviteFrame, InviteHero } from './InviteFrame';
+import './invite-frame.css';
 
 // Экран «нет команды» (трек 1). Раньше здесь был тупик с одной кнопкой
 // «Выйти». Теперь: ввести код команды, попросить новую команду и видеть,
@@ -21,27 +23,21 @@ import { JoinRequestStatusCard } from './JoinRequestStatusCard';
 // Опрос идёт через общий ограничитель записи (120 в минуту на адрес), поэтому редкий.
 const POLL_MS = 10000;
 
-const frameStyle = {
-  paddingTop: 'calc(var(--pb-safe-top) + 1.5rem)',
-  paddingRight: 'calc(var(--pb-safe-right) + 1.25rem)',
-  paddingBottom: 'calc(var(--pb-safe-bottom) + 1.5rem)',
-  paddingLeft: 'calc(var(--pb-safe-left) + 1.25rem)',
-} as const;
-
-const TeamRequestLine: React.FC<{ request: TeamCreationRequest }> = ({ request }) => {
+const TeamRequestRow: React.FC<{ request: TeamCreationRequest }> = ({ request }) => {
   const text =
     request.status === 'PENDING'
-      ? 'Заявка на команду ждёт одобрения. Как только её одобрят, ты станешь капитаном.'
+      ? 'Ждёт одобрения. Как только её одобрят, ты станешь капитаном.'
       : request.status === 'DECLINED'
-        ? 'Заявку на команду отклонили. Напиши в поддержку, если это ошибка.'
+        ? 'Заявку отклонили. Напиши в поддержку, если это ошибка.'
         : request.status === 'APPROVED'
           ? 'Команда создана, ты капитан.'
           : 'Заявка отменена.';
   return (
-    <div className="rounded-2xl border border-white/10 bg-pb-surface p-4 text-left">
-      <div className="text-white font-semibold">«{request.name}»</div>
-      <p className="mt-1 text-sm text-pb-subtext">{text}</p>
-    </div>
+    <Row
+      lead={<Icon name={request.status === 'DECLINED' ? 'circle-x' : 'clock'} size={24} />}
+      title={`Команда «${request.name}»`}
+      sub={text}
+    />
   );
 };
 
@@ -137,109 +133,113 @@ export const NoTeamScreen: React.FC<{
 
   if (entering) {
     return (
-      <div className="min-h-screen bg-pb-background flex items-center justify-center">
-        <Loader2 className="animate-spin text-pb-primary" size={40} />
-      </div>
+      <InviteFrame>
+        <InviteHero title="Открываем команду" />
+      </InviteFrame>
     );
   }
 
+  const mainJoin = visibleJoins[0];
+  const moreJoins = visibleJoins.slice(1);
+  const waiting = mainJoin?.status === 'PENDING';
+  const codeVariant = waiting ? 'glass2' : 'primary';
+
   return (
-    <div className="min-h-screen bg-pb-background flex items-center justify-center text-white" style={frameStyle}>
-      <div className="w-full max-w-sm space-y-4">
-        <div className="text-center">
-          <div className="text-2xl font-bold mb-2">{userName ? `${userName}, ты вошёл` : 'Ты вошёл'}</div>
-          <p className="text-pb-subtext text-sm">Пока ты не в команде. Вступи по коду или ссылке капитана — или создай свою.</p>
-        </div>
+    <InviteFrame teamId={mainJoin?.team.id}>
+      {mainJoin ? (
+        <JoinRequestStatusCard request={mainJoin} />
+      ) : (
+        <InviteHero title="У тебя пока нет команды">
+          Вступи по коду или ссылке капитана — или создай свою.
+        </InviteHero>
+      )}
 
-        {visibleJoins.map((request) => (
-          <JoinRequestStatusCard key={request.id} request={request} />
-        ))}
-        {visibleTeams.map((request) => (
-          <TeamRequestLine key={request.id} request={request} />
-        ))}
-
-        {mode === 'code' ? (
-          <form onSubmit={submitCode} className="rounded-2xl border border-white/10 bg-pb-surface p-4 space-y-3">
-            <label className="block text-sm font-semibold" htmlFor="team-code">
-              Код команды
-            </label>
-            <input
-              id="team-code"
-              autoFocus
-              autoCapitalize="characters"
-              autoComplete="off"
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              placeholder="Например, K7Q3MP или ссылка"
-              className="w-full bg-black/30 text-white px-3 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-pb-primary uppercase tracking-widest placeholder:normal-case placeholder:tracking-normal placeholder:text-pb-subtext/60"
+      {moreJoins.length > 0 || visibleTeams.length > 0 ? (
+        <Glass layer={2} className="pbth-invite__facts">
+          {moreJoins.map((request) => (
+            <Row
+              key={request.id}
+              lead={<Icon name={request.status === 'DECLINED' ? 'circle-x' : 'clock'} size={24} />}
+              title={request.team.name}
+              sub={request.status === 'DECLINED' ? 'Заявку отклонили' : 'Заявка у капитана'}
             />
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setMode('none')} className="py-3 rounded-xl bg-white/10 font-semibold">
-                Отмена
-              </button>
-              <button type="submit" className="py-3 rounded-xl bg-pb-primary text-pb-background font-bold">
-                Дальше
-              </button>
-            </div>
-          </form>
-        ) : mode === 'create' ? (
-          <form onSubmit={submitTeam} className="rounded-2xl border border-white/10 bg-pb-surface p-4 space-y-3">
-            <label className="block text-sm font-semibold" htmlFor="team-name">
-              Название команды
-            </label>
-            <input
-              id="team-name"
-              autoFocus
-              maxLength={60}
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Например, Дневной Дозор"
-              className="w-full bg-black/30 text-white px-3 py-3 rounded-xl border border-white/10 focus:outline-none focus:border-pb-primary placeholder:text-pb-subtext/60"
-            />
-            <p className="text-xs text-pb-subtext">Команду одобрит владелец PBTH, обычно в тот же день. Ты станешь её капитаном.</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setMode('none')} className="py-3 rounded-xl bg-white/10 font-semibold">
-                Отмена
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="py-3 rounded-xl bg-pb-primary text-pb-background font-bold flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {submitting && <Loader2 size={16} className="animate-spin" />}
-                Отправить
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="space-y-2">
-            <button
-              onClick={() => setMode('code')}
-              className="w-full bg-pb-primary text-pb-background font-bold py-3.5 rounded-xl flex items-center justify-center gap-2"
-            >
-              <KeyRound size={18} />
-              Ввести код команды
-            </button>
-            {!pendingTeamRequest && (
-              <button
-                onClick={() => setMode('create')}
-                className="w-full bg-white/10 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2"
-              >
-                <Plus size={18} />
-                Создать команду
-              </button>
-            )}
-          </div>
-        )}
+          ))}
+          {visibleTeams.map((request) => (
+            <TeamRequestRow key={request.id} request={request} />
+          ))}
+        </Glass>
+      ) : null}
 
-        <button
-          onClick={onLogout}
-          className="w-full text-pb-subtext text-sm py-2 flex items-center justify-center gap-2"
-        >
-          <LogOut size={14} />
+      {mode === 'code' ? (
+        <form onSubmit={submitCode} className="pbth-noteam__form">
+          <label className="pbth-noteam__label" htmlFor="team-code">
+            Код команды
+          </label>
+          <input
+            id="team-code"
+            className="ui-input"
+            autoFocus
+            autoCapitalize="characters"
+            autoComplete="off"
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            placeholder="Например, K7Q3MP или ссылка"
+          />
+          <Button type="submit" variant="primary" block>
+            Дальше
+          </Button>
+          <Button variant="ghost" block onClick={() => setMode('none')}>
+            Отмена
+          </Button>
+        </form>
+      ) : mode === 'create' ? (
+        <form onSubmit={submitTeam} className="pbth-noteam__form">
+          <label className="pbth-noteam__label" htmlFor="team-name">
+            Название команды
+          </label>
+          <input
+            id="team-name"
+            className="ui-input"
+            autoFocus
+            maxLength={60}
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            placeholder="Например, Дневной Дозор"
+          />
+          <p className="pbth-noteam__hint">Команду одобрит владелец PBTH, обычно в тот же день. Ты станешь её капитаном.</p>
+          <Button
+            type="submit"
+            variant="primary"
+            block
+            disabled={submitting}
+            icon={submitting ? 'loader-circle' : undefined}
+            className={submitting ? 'pbth-spinbtn' : undefined}
+          >
+            Отправить
+          </Button>
+          <Button variant="ghost" block onClick={() => setMode('none')}>
+            Отмена
+          </Button>
+        </form>
+      ) : (
+        <InviteActions>
+          <Button variant={codeVariant} block onClick={() => setMode('code')}>
+            {waiting ? 'Ввести другой код' : 'Ввести код команды'}
+          </Button>
+          {!pendingTeamRequest && (
+            <Button variant="ghost" block onClick={() => setMode('create')}>
+              Создать команду
+            </Button>
+          )}
+        </InviteActions>
+      )}
+
+      <div className="pbth-noteam__out">
+        {userName ? <div className="pbth-small">Ты вошёл как {userName}</div> : null}
+        <Button variant="ghost" size="sm" icon="log-out" onClick={onLogout}>
           Выйти
-        </button>
+        </Button>
       </div>
-    </div>
+    </InviteFrame>
   );
 };

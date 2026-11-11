@@ -1,0 +1,28 @@
+/* Раскладка календаря. Вид (стекло, цвета, шрифт) даёт тема ui-kit; здесь размеры и вес текста по макету. */
+.pbth-cal {
+  padding: 8px 8px 12px;
+  --ui-month-day-h: 50px;
+}
+.pbth-cal .ui-month__title { font-size: 20px; font-weight: 700; }
+.pbth-cal .ui-month__wd { font-size: 12px; font-weight: 500; }
+.pbth-cal .ui-month__d { font-size: 16px; font-weight: 700; }
+.pbth-cal .ui-month__d.is-today .ui-month__num { font-weight: 800; }
+/* Выбранный день — рамка второго слоя стекла, а не акцентная заливка: зелёный в приложении только у главного действия. */
+.pbth-cal .ui-month__d.is-selected {
+  border-color: color-mix(in srgb, var(--ui-text) 16%, transparent);
+  background: var(--ui-glass2-bg);
+}
+.pbth-cal .ui-month__d.is-selected:focus-visible { border-color: var(--ui-accent); }
+
+/* Лента дня: название 16px, время 20px жирным, название переносится до двух строк. */
+.pbth-calday { --ui-feed-name-size: 16px; --ui-feed-time-size: 20px; }
+.pbth-calday .ui-feed__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  font-weight: 700;
+  text-overflow: clip;
+}
+.pbth-calday .ui-feed__time { color: var(--ui-text); font-weight: 700; }

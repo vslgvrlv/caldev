@@ -10,6 +10,7 @@ import { DataUnavailableScreen, TeamForbiddenScreen } from '../components/shell/
 import { TeamsPicker } from '../components/shell/TeamsPicker';
 import { TeamsPickerContext } from './teams-picker-context';
 import { SectionHeader } from './SectionHeader';
+import { useSectionSubtitleOverride } from './section-subtitle';
 import { hasSectionHead, markTarget, sectionHeadText, sectionPaints } from './section-head';
 import { spotColor, TeamMark, teamPaint } from '../ui';
 import { shellExtensions, type ShellExtContext } from './extensions';
@@ -143,6 +144,7 @@ const SectionHead: React.FC<{
   const { badges, menuItems } = useShellExt(code);
   const onMe = location.pathname === '/me';
   const text = sectionHeadText(location.pathname, { now, team, membersCount: ready ? shell.members.length : 0 });
+  const subtitleOverride = useSectionSubtitleOverride();
   const pickTeam = (target: TeamContext) => {
     setTeamsOpen(false);
     const targetCode = teamCodeOf({ teamId: target.teamId, shortCode: target.shortCode });
@@ -152,7 +154,7 @@ const SectionHead: React.FC<{
     <>
       <SectionHeader
         title={text.title}
-        subtitle={text.subtitle}
+        subtitle={subtitleOverride ?? text.subtitle}
         mark={
           team && parseTeamPath(location.pathname)?.section === 'roster' ? (
             <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={48} />

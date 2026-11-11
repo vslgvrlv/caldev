@@ -20,7 +20,8 @@ const HINTS: Record<Choice, string> = {
   CAPTAIN: 'Управляет командой целиком.',
 };
 
-export const MemberRoleControl: React.FC<{ member: TeamMember }> = ({ member }) => {
+/** `bare` — только строка, без своей панели: её кладут внутрь чужой. */
+export const MemberRoleControl: React.FC<{ member: TeamMember; bare?: boolean }> = ({ member, bare }) => {
   const shell = useShell();
   const [busy, setBusy] = React.useState<Choice | null>(null);
   const [open, setOpen] = React.useState(false);
@@ -59,19 +60,21 @@ export const MemberRoleControl: React.FC<{ member: TeamMember }> = ({ member }) 
     }
   };
 
+  const row = (
+    <Row
+      lead={<span className="pbth-iconlead ui-glass2"><Icon name="shield-check" /></span>}
+      title="Роль в команде"
+      sub={HINTS[current] ?? ''}
+      trailing={<span>{roleLabel(current)}</span>}
+      chevron
+      onClick={() => setOpen(true)}
+      disabled={busy !== null}
+    />
+  );
+
   return (
     <>
-      <Glass className="pbth-team__panel">
-        <Row
-          lead={<span className="pbth-iconlead ui-glass2"><Icon name="shield-check" /></span>}
-          title="Роль в команде"
-          sub={HINTS[current] ?? ''}
-          trailing={<span>{roleLabel(current)}</span>}
-          chevron
-          onClick={() => setOpen(true)}
-          disabled={busy !== null}
-        />
-      </Glass>
+      {bare ? row : <Glass className="pbth-team__panel">{row}</Glass>}
       <Sheet open={open} onClose={() => setOpen(false)} title="Роль в команде" subtitle={member.name}>
         <div className="pbth-btnlist">
           {choices.map((choice) => (

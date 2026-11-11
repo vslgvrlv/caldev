@@ -4,7 +4,8 @@ import { roleLabel, playerStatusLabel } from '../lib/labels';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { formatBalance } from '../lib/team-roster';
 import { MemberRoleControl } from '../components/track1/MemberRoleControl';
-import { Avatar, Button, Glass, Icon, Row, Screen, ScreenBar, teamPaint } from '../ui';
+import { pluralRu } from '../lib/plural';
+import { Avatar, Button, Glass, Icon, Row, Screen, ScreenBar, Sheet, TeamMark, teamPaint } from '../ui';
 import './team/team.css';
 
 interface PlayerProfileViewProps {
@@ -51,79 +52,120 @@ export const PlayerProfileView: React.FC<PlayerProfileViewProps> = ({
     }
   };
 
+  const [statusOpen, setStatusOpen] = React.useState(false);
+  const attendance = Math.round(Number(stats.attendanceRate) || 0);
+  const pickStatus = (status: PlayerStatus) => {
+    setStatusOpen(false);
+    if (status !== member.status) void setStatus(status);
+  };
+
   return (
     <Screen paints={teamId ? [teamPaint(teamId)] : undefined}>
-      <ScreenBar onBack={onBack} title="Профиль игрока" subtitle={teamName} />
+      <ScreenBar
+        onBack={onBack}
+        mark={teamId ? <TeamMark teamId={teamId} name={teamName} size={32} /> : undefined}
+        title={teamName}
+        subtitle="Карточка игрока"
+      />
 
       <div className="pbth-phero">
         <Avatar name={member.name} src={member.avatar} size={96} />
         <h2 className="pbth-phero__name">{member.name}</h2>
-        <div className="pbth-phero__nick">@{member.nickname}</div>
         <div className="pbth-small">
           {roleLabel(member.role)} · {playerStatusLabel(member.status)}
         </div>
       </div>
 
       <div className="pbth-stack">
+        <div className="pbth-statgrid">
+          <Glass className="pbth-stat">
+            <div className="pbth-stat__label">Посещаемость</div>
+            <div className="pbth-stat__big">{attendance}%</div>
+            <div className="pbth-stat__sub">
+              {stats.eventsAttended} из {stats.totalEvents} {pluralRu(stats.totalEvents, 'событие', 'события', 'событий')}
+            </div>
+          </Glass>
+          <Glass className="pbth-stat">
+            <div className="pbth-stat__label">Деньги</div>
+            <div className={`pbth-stat__big${balance < 0 ? ' pbth-stat__value--neg' : ''}`}>{formatBalance(balance)}</div>
+            <div className="pbth-stat__sub">{balance < 0 ? 'долг по казне' : 'баланс по казне'}</div>
+          </Glass>
+        </div>
+
         <Glass className="pbth-team__panel">
-          {member.phone && (
-            <Row
-              as="a"
-              href={`tel:${member.phone}`}
-              lead={<span className="pbth-iconlead ui-glass2"><Icon name="phone" /></span>}
-              title={member.phone}
-              sub="Позвонить"
-              chevron
-            />
-          )}
-          <Row
-            title="Посещаемость"
-            sub={`${stats.eventsAttended} из ${stats.totalEvents} событий`}
-            trailing={<span>{Math.round(stats.attendanceRate)}%</span>}
-          />
-          {/* «Игр» и MVP убраны: «Игр» равнялось числу событий команды и было
-              одинаковым у всех, MVP приложение не считает (всегда 0). */}
-          <Row
-            title="Баланс"
-            sub="по казне команды"
-            trailing={<span className={balance < 0 ? 'pbth-stat__value--neg' : undefined}>{formatBalance(balance)}</span>}
-          />
+          <div className="pbth-team__group">В команде</div>
+          <Row title="Роль" trailing={<span>{roleLabel(member.role)}</span>} />
+          <Row title="Статус" trailing={<span>{playerStatusLabel(member.status)}</span>} />
         </Glass>
 
-        {canManage && <MemberRoleControl member={member} />}
+        {(member.nickname || member.phone) && (
+          <Glass className="pbth-team__panel">
+            {member.nickname && (
+              <Row
+                lead={<span className="pbth-iconlead ui-glass2"><Icon name="send" /></span>}
+                title={`@${member.nickname}`}
+                sub="Ник в Telegram"
+              />
+            )}
+            {member.phone && (
+              <Row
+                as="a"
+                href={`tel:${member.phone}`}
+                lead={<span className="pbth-iconlead ui-glass2"><Icon name="phone" /></span>}
+                title={member.phone}
+                sub="Позвонить"
+                chevron
+              />
+            )}
+          </Glass>
+        )}
 
         {canManage && (
-          <Glass className="pbth-pad pbth-stack">
-            <div style={{ fontSize: 16, fontWeight: 700 }}>Управление игроком</div>
-            <div className="pbth-grid2">
-              {STATUS_CHOICES.map(({ status, label }) => (
-                <Button
-                  key={status}
-                  variant="glass2"
-                  icon={member.status === status ? 'check' : undefined}
-                  aria-current={member.status === status ? 'true' : undefined}
-                  onClick={() => void setStatus(status)}
-                >
-                  {label}
-                </Button>
-              ))}
+          <Glass className="pbth-team__panel">
+            <div className="pbth-team__group">Управление игроком</div>
+            <MemberRoleControl member={member} bare />
+            <Row
+              lead={<span className="pbth-iconlead ui-glass2"><Icon name="sliders-horizontal" /></span>}
+              title="Статус игрока"
+              sub={playerStatusLabel(member.status)}
+              chevron
+              onClick={() => setStatusOpen(true)}
+            />
+            <div className="pbth-pad">
+              <Button
+                variant="danger"
+                block
+                onClick={() => {
+                  void confirmAction(`Исключить ${member.name} из команды?`, { confirmLabel: 'Исключить', danger: true }).then(
+                    (confirmed) => {
+                      if (confirmed) void onRemoveMember?.(member);
+                    },
+                  );
+                }}
+              >
+                Исключить из команды
+              </Button>
             </div>
-            <Button
-              variant="danger"
-              block
-              onClick={() => {
-                void confirmAction(`Исключить ${member.name} из команды?`, { confirmLabel: 'Исключить', danger: true }).then(
-                  (confirmed) => {
-                    if (confirmed) void onRemoveMember?.(member);
-                  },
-                );
-              }}
-            >
-              Исключить из команды
-            </Button>
           </Glass>
         )}
       </div>
+
+      <Sheet open={statusOpen} onClose={() => setStatusOpen(false)} title="Статус игрока" subtitle={member.name}>
+        <div className="pbth-btnlist">
+          {STATUS_CHOICES.map(({ status, label }) => (
+            <Button
+              key={status}
+              variant={member.status === status ? 'light' : 'glass2'}
+              block
+              icon={member.status === status ? 'check' : undefined}
+              aria-current={member.status === status ? 'true' : undefined}
+              onClick={() => pickStatus(status)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </Sheet>
     </Screen>
   );
 };
