@@ -48,3 +48,8 @@
 .pbth-invite__actions { display: flex; flex-direction: column; gap: 4px; }
 .pbth-invite__note { margin: 0; font-size: 14px; text-align: center; color: var(--ui-muted); }
 .pbth-invite__until { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--ui-muted); }
+/* Экран «нет команды»: форма кода и названия внутри панели, выход тихо внизу. */
+.pbth-noteam__form { display: flex; flex-direction: column; gap: 8px; }
+.pbth-noteam__label { font-size: 14px; font-weight: 700; }
+.pbth-noteam__hint { margin: 0; font-size: 12px; color: var(--ui-muted); }
+.pbth-noteam__out { display: flex; flex-direction: column; align-items: center; gap: 4px; }

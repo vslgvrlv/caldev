@@ -7,8 +7,12 @@ import './invite-frame.css';
 // знак продукта сверху, стеклянная панель, знак команды, заголовок. Человек
 // ещё не в приложении, поэтому нижней панели нет.
 
-export const InviteFrame: React.FC<{ teamId?: string | null; children: React.ReactNode }> = ({ teamId, children }) => (
-  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : undefined}>
+export const InviteFrame: React.FC<{ teamId?: string | null; /** Краски вместо краски команды (hex), если команды нет. */ paints?: string[]; children: React.ReactNode }> = ({
+  teamId,
+  paints,
+  children,
+}) => (
+  <Screen className="pbth-invite-screen" paints={teamId ? [teamPaint(teamId)] : paints}>
     <div className="pbth-invite__brand">
       <Icon name="hexagon" size={24} />
       <span className="pbth-invite__brand-name">Paintball TeamHub</span>
