@@ -91,6 +91,13 @@ describe("видимость рефлексий и денег", () => {
     expect(debtsOnlyBalance({ totalDue: 500, totalPaid: 0, outstanding: 500, overpaid: 0 }, false)).toBe(-500);
     expect(debtsOnlyBalance(undefined, false)).toBe(0);
   });
+  it("чужой с переплатой по одному событию и долгом по другому — чистый долг, как у капитана", () => {
+    const mixed = { totalDue: 800, totalPaid: 500, outstanding: 500, overpaid: 200 };
+    expect(debtsOnlyBalance(mixed, false)).toBe(-300);
+    expect(debtsOnlyBalance(mixed, true)).toBe(-300);
+    const covered = { totalDue: 800, totalPaid: 800, outstanding: 300, overpaid: 300 };
+    expect(Object.is(debtsOnlyBalance(covered, false), 0)).toBe(true);
+  });
 });
 
 describe("привязка Яндекса: тот же браузер", () => {

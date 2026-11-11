@@ -60,12 +60,23 @@ export async function loadMemberChargeTotals(teamId: string): Promise<Map<string
 }
 
 /**
+ * Чистый долг чужого участника: долг по начислениям минус переплата по другим
+ * событиям, не ниже нуля. Капитан на экране видит тот же чистый баланс, поэтому
+ * список должников у игрока с ним совпадает, а переплата сверх долга не видна.
+ */
+export function netDebt(totals: MemberChargeTotals | undefined): number {
+  if (!totals) return 0;
+  return Math.max(totals.outstanding - totals.overpaid, 0);
+}
+
+/**
  * Баланс участника для того, кто не видит книгу команды.
- * Свой — как у капитана на экране (переплата минус долг), чужой — только долг
- * (отрицательное число или 0). Переплаты и взносы других не раскрываются.
+ * Свой — как у капитана на экране (переплата минус долг), чужой — только чистый
+ * долг (отрицательное число или 0). Переплаты и взносы других не раскрываются.
  */
 export function debtsOnlyBalance(totals: MemberChargeTotals | undefined, isSelf: boolean): number {
   if (!totals) return 0;
   if (isSelf) return totals.overpaid - totals.outstanding;
-  return totals.outstanding > 0 ? -totals.outstanding : 0;
+  const debt = netDebt(totals);
+  return debt > 0 ? -debt : 0;
 }

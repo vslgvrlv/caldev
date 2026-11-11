@@ -112,6 +112,29 @@ beforeAll(async () => {
     [f.tournamentId, f.users.player, f.teamId, f.users.captain]
   );
 
+  // «Богатый» переплатил 200 за турнир и должен 500 за второй сбор: чистый долг 300.
+  const deposit = await pool.query<{ id: string }>(
+    `SELECT id FROM transactions WHERE team_id = $1 AND user_id = $2 LIMIT 1`,
+    [f.teamId, f.users.rich]
+  );
+  const richCharge = await pool.query<{ id: string }>(
+    `INSERT INTO event_member_charges (event_id, user_id, team_id, amount_due, created_by) VALUES ($1, $2, $3, 300, $4) RETURNING id`,
+    [f.tournamentId, f.users.rich, f.teamId, f.users.captain]
+  );
+  await pool.query(
+    `INSERT INTO event_payment_allocations (transaction_id, event_member_charge_id, amount, created_by) VALUES ($1, $2, 500, $3)`,
+    [deposit.rows[0].id, richCharge.rows[0].id, f.users.captain]
+  );
+  const secondCollection = await pool.query<{ id: string }>(
+    `INSERT INTO events (team_id, type, title, start_at, finance_state)
+     VALUES ($1, 'TRAINING', 'Второй сбор', NOW() + INTERVAL '4 days', 'COLLECTING') RETURNING id`,
+    [f.teamId]
+  );
+  await pool.query(
+    `INSERT INTO event_member_charges (event_id, user_id, team_id, amount_due, created_by) VALUES ($1, $2, $3, 500, $4)`,
+    [secondCollection.rows[0].id, f.users.rich, f.teamId, f.users.captain]
+  );
+
   // Игра с пойнтом и двумя рефлексиями (игрока и «богатого» игрока).
   const game = await pool.query<{ id: string }>(
     `INSERT INTO event_games (event_id, time_label, opponent) VALUES ($1, '10:00', 'Соперник') RETURNING id`,
@@ -191,8 +214,9 @@ describe("деньги: игрок видит свой долг и должни�
     expect(res.body.transactions).toEqual([]);
     const byId = new Map<string, any>(res.body.members.map((m: any) => [m.id, m]));
     expect(byId.get(f.users.player).balance).toBe(-500);
-    // Взнос «богатого» игрока (+1000 в книге) игроку не виден.
-    expect(byId.get(f.users.rich).balance).toBe(0);
+    // Взнос «богатого» (+1000 в книге) игроку не виден; его переплата 200 за
+    // турнир гасит часть долга 500 за второй сбор — чистый долг, как у капитана.
+    expect(byId.get(f.users.rich).balance).toBe(-300);
     expect(byId.get(f.users.captain).balance).toBe(0);
   });
 
@@ -227,7 +251,7 @@ describe("деньги: игрок видит свой долг и должни�
     const me = res.body.items.find((i: any) => i.userId === f.users.player);
     expect(me).toMatchObject({ totalDue: 500, outstanding: 500 });
     const rich = res.body.items.find((i: any) => i.userId === f.users.rich);
-    expect(rich).toMatchObject({ totalDue: 0, totalPaid: 0, overpaid: 0, outstanding: 0 });
+    expect(rich).toMatchObject({ totalDue: 0, totalPaid: 0, overpaid: 0, outstanding: 300 });
   });
 });
 
