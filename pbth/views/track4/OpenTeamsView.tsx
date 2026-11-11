@@ -9,6 +9,7 @@ import { SlotEventPage } from '../../components/track4/SlotEventPage';
 import { SlotTeamPage } from '../../components/track4/SlotTeamPage';
 import { SlotsFrame, secondaryBtn, sectionTitle, surface } from '../../components/track4/SlotsFrame';
 import { pluralRu } from '../../components/track4/slot-format';
+import { TeamMark } from '../../ui';
 
 // Трек 4 «Открытые слоты», адрес `/teams` (решения Василия 10.11.2026, п. 23–28).
 //
@@ -30,12 +31,11 @@ const TeamRow: React.FC<{ team: SlotTeamCard; busy: boolean; onOpen: () => void;
 }) => (
   <div className="flex items-center gap-3 py-2">
     <button type="button" onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3 text-left">
-      <img
-        src={team.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(team.name)}&background=0F0F0F&color=fff`}
-        alt=""
-        loading="lazy"
-        className="w-9 h-9 rounded-full object-cover shrink-0"
-      />
+      {team.logo ? (
+        <img src={team.logo} alt="" loading="lazy" className="w-9 h-9 rounded-full object-cover shrink-0" />
+      ) : (
+        <TeamMark teamId={team.id} name={team.name} size={36} />
+      )}
       <div className="min-w-0">
         <div className="text-sm text-white font-semibold truncate">{team.name}</div>
         <div className="text-xs text-pb-subtext">

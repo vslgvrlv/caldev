@@ -42,6 +42,8 @@
 .pbth-event__dots { display: flex; gap: 8px; flex: none; }
 .pbth-event__dotgroup { display: flex; gap: 3px; }
 .pbth-event__dot { box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ui-muted); }
+.pbth-event__bar { flex: 1 1 64px; min-width: 64px; height: 8px; overflow: hidden; border-radius: 4px; background: var(--ui-surface-2); }
+.pbth-event__barfill { display: block; height: 100%; border-radius: 4px; background: var(--pbth-event-paint); }
 .pbth-event__dot--on { border-color: var(--pbth-event-paint); background: var(--pbth-event-paint); }
 
 .pbth-event__group { padding: 8px 4px 0; font-size: 14px; font-weight: 700; color: var(--ui-muted); }

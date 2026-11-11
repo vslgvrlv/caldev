@@ -164,6 +164,16 @@ export interface RosterFive {
   free: number;
 }
 
+/** Точками показываются до 15 мест, дальше они не помещаются в строку карточки. */
+export const ROSTER_DOTS_MAX = 15;
+
+export interface RosterBar {
+  going: number;
+  capacity: number;
+  /** Доля занятых мест, 0–100. */
+  percent: number;
+}
+
 export interface Roster {
   goingCount: number;
   /** Сколько мест всего: лимит события или весь состав. */
@@ -171,8 +181,10 @@ export interface Roster {
   /** Идущие тренеры и штаб (в пятёрки не входят). */
   staff: RosterPerson[];
   fives: RosterFive[];
-  /** Точки: пятёрки по пять; `true` — место занято идущим. */
+  /** Точки: пятёрки по пять; `true` — место занято идущим. Пусто, когда мест больше `ROSTER_DOTS_MAX`. */
   dots: boolean[][];
+  /** Полоса заполнения вместо точек, когда мест больше `ROSTER_DOTS_MAX`; иначе `null`. */
+  bar: RosterBar | null;
   /** «Не ответили»: без ответа и «думаю». */
   silent: RosterPerson[];
   declined: RosterPerson[];
@@ -216,7 +228,8 @@ export function buildRoster(params: {
   }
 
   const dots: boolean[][] = [];
-  for (let i = 0; i < capacity; i += 5) {
+  const useBar = capacity > ROSTER_DOTS_MAX;
+  for (let i = 0; !useBar && i < capacity; i += 5) {
     const row: boolean[] = [];
     for (let j = i; j < Math.min(i + 5, capacity); j += 1) row.push(j < goingCount);
     dots.push(row);
@@ -228,6 +241,7 @@ export function buildRoster(params: {
     staff,
     fives,
     dots,
+    bar: useBar ? { going: goingCount, capacity, percent: Math.min(100, Math.round((goingCount / capacity) * 100)) } : null,
     silent: people.filter((p) => p.rsvpStatus === 'UNANSWERED' || p.rsvpStatus === 'PENDING'),
     declined: people.filter((p) => p.rsvpStatus === 'DECLINED'),
     empty: rosterSize === 0,
@@ -237,6 +251,11 @@ export function buildRoster(params: {
 /** «Идут 7 из 10»; мест неизвестно — «Идут 7». */
 export function rosterHeadline(roster: Pick<Roster, 'goingCount' | 'capacity'>): string {
   return roster.capacity > 0 ? `Идут ${roster.goingCount} из ${roster.capacity}` : `Идут ${roster.goingCount}`;
+}
+
+/** Подпись полосы заполнения: «идут 15 из 30». */
+export function rosterBarLabel(bar: Pick<RosterBar, 'going' | 'capacity'>): string {
+  return `идут ${bar.going} из ${bar.capacity}`;
 }
 
 export function silentLabel(count: number): string {

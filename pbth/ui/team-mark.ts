@@ -14,52 +14,56 @@ const p = (s: number, v: number) => +(v * s).toFixed(2);
 const pts = (s: number, list: [number, number][]) =>
   list.map(([x, y], i) => `${i ? 'L' : 'M'}${p(s, x)} ${p(s, y)}`).join(' ') + ' Z';
 
-/** Девять силуэтов; `ty` — высота центра букв в долях знака. */
+/**
+ * Девять силуэтов семейства щитов; `ty` — высота центра букв в долях знака.
+ * В каждом две самые широкие буквы («WW», «ЩЩ») при размерах текста из `markLetterSize` помещаются целиком:
+ * у острых фигур (треугольник, ромб) для этого не хватало места, они заменены на шестиугольник и щит со скошенными плечами.
+ */
 export const TEAM_SHAPES: Shape[] = [
   {
     name: 'щит',
-    ty: 0.46,
+    ty: 0.36,
     d: (s) => `M${p(s, 0.1)} ${p(s, 0.05)} H${p(s, 0.9)} V${p(s, 0.55)} Q${p(s, 0.9)} ${p(s, 0.8)} ${p(s, 0.5)} ${p(s, 0.97)} Q${p(s, 0.1)} ${p(s, 0.8)} ${p(s, 0.1)} ${p(s, 0.55)} Z`,
   },
   {
     name: 'круг',
-    ty: 0.5,
+    ty: 0.48,
     d: (s) => `M${p(s, 0.04)} ${p(s, 0.5)} A${p(s, 0.46)} ${p(s, 0.46)} 0 1 1 ${p(s, 0.96)} ${p(s, 0.5)} A${p(s, 0.46)} ${p(s, 0.46)} 0 1 1 ${p(s, 0.04)} ${p(s, 0.5)} Z`,
   },
   {
     name: 'вымпел с ласточкиным хвостом',
-    ty: 0.42,
-    d: (s) => pts(s, [[0.1, 0.06], [0.9, 0.06], [0.9, 0.95], [0.5, 0.72], [0.1, 0.95]]),
+    ty: 0.38,
+    d: (s) => pts(s, [[0.06, 0.06], [0.94, 0.06], [0.94, 0.95], [0.5, 0.72], [0.06, 0.95]]),
   },
   {
-    name: 'ромб',
+    name: 'шестиугольник',
     ty: 0.5,
-    d: (s) => pts(s, [[0.5, 0.02], [0.98, 0.5], [0.5, 0.98], [0.02, 0.5]]),
+    d: (s) => pts(s, [[0.5, 0.02], [0.96, 0.26], [0.96, 0.74], [0.5, 0.98], [0.04, 0.74], [0.04, 0.26]]),
   },
   {
     name: 'щит с шевроном',
-    ty: 0.4,
-    d: (s) => pts(s, [[0.08, 0.05], [0.92, 0.05], [0.92, 0.6], [0.5, 0.97], [0.08, 0.6]]),
+    ty: 0.38,
+    d: (s) => pts(s, [[0.06, 0.05], [0.94, 0.05], [0.94, 0.6], [0.5, 0.97], [0.06, 0.6]]),
   },
   {
     name: 'квадрат со срезанными углами',
     ty: 0.5,
-    d: (s) => pts(s, [[0.26, 0.06], [0.94, 0.06], [0.94, 0.74], [0.74, 0.94], [0.06, 0.94], [0.06, 0.26]]),
+    d: (s) => pts(s, [[0.24, 0.06], [0.94, 0.06], [0.94, 0.76], [0.76, 0.94], [0.06, 0.94], [0.06, 0.24]]),
   },
   {
     name: 'щит с вырезом сверху',
-    ty: 0.5,
-    d: (s) => `M${p(s, 0.06)} ${p(s, 0.06)} H${p(s, 0.36)} L${p(s, 0.5)} ${p(s, 0.18)} L${p(s, 0.64)} ${p(s, 0.06)} H${p(s, 0.94)} V${p(s, 0.56)} Q${p(s, 0.94)} ${p(s, 0.82)} ${p(s, 0.5)} ${p(s, 0.96)} Q${p(s, 0.06)} ${p(s, 0.82)} ${p(s, 0.06)} ${p(s, 0.56)} Z`,
+    ty: 0.42,
+    d: (s) => `M${p(s, 0.06)} ${p(s, 0.06)} H${p(s, 0.36)} L${p(s, 0.5)} ${p(s, 0.16)} L${p(s, 0.64)} ${p(s, 0.06)} H${p(s, 0.94)} V${p(s, 0.58)} Q${p(s, 0.94)} ${p(s, 0.82)} ${p(s, 0.5)} ${p(s, 0.96)} Q${p(s, 0.06)} ${p(s, 0.82)} ${p(s, 0.06)} ${p(s, 0.58)} Z`,
   },
   {
     name: 'щит с полукруглым низом',
-    ty: 0.42,
-    d: (s) => `M${p(s, 0.08)} ${p(s, 0.06)} H${p(s, 0.92)} V${p(s, 0.5)} A${p(s, 0.42)} ${p(s, 0.42)} 0 0 1 ${p(s, 0.08)} ${p(s, 0.5)} Z`,
+    ty: 0.38,
+    d: (s) => `M${p(s, 0.06)} ${p(s, 0.06)} H${p(s, 0.94)} V${p(s, 0.5)} A${p(s, 0.44)} ${p(s, 0.44)} 0 0 1 ${p(s, 0.06)} ${p(s, 0.5)} Z`,
   },
   {
-    name: 'вымпел-треугольник',
-    ty: 0.34,
-    d: (s) => pts(s, [[0.06, 0.06], [0.94, 0.06], [0.5, 0.96]]),
+    name: 'щит со скошенными плечами',
+    ty: 0.4,
+    d: (s) => pts(s, [[0.04, 0.22], [0.2, 0.05], [0.8, 0.05], [0.96, 0.22], [0.96, 0.62], [0.5, 0.97], [0.04, 0.62]]),
   },
 ];
 
@@ -82,23 +86,24 @@ export function teamPaint(teamId: string | number): string {
   return TEAM_PAINTS[Math.floor(hash(teamId) / TEAM_SHAPE_COUNT) % TEAM_PAINTS.length];
 }
 
-const CYRILLIC = /[\u0400-\u04FF]/;
+/** Первые буквы названия: два первых слова без слов в скобках, одно слово — его две первые буквы. */
+function lettersOf(text?: string | null): string {
+  const clean = (raw: string) => raw.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const source = String(text ?? '');
+  const words = clean(source.replace(/\([^)]*(\)|$)/g, ' '));
+  const use = words.length > 0 ? words : clean(source);
+  if (use.length === 0) return '';
+  const letters = use.length === 1 ? Array.from(use[0]).slice(0, 2).join('') : Array.from(use[0])[0] + Array.from(use[1])[0];
+  return letters.toUpperCase();
+}
 
 /**
- * Две буквы знака: из короткого кода, иначе из названия. Кириллическое название
- * при латинском коде даёт буквы из названия: «Дневной Дозор» — «ДД», а не «DD».
+ * Две буквы знака, одни и те же для команды на любом экране: из названия, без слова в скобках
+ * («Гроза (тест)» — «ГР», «Северный ветер (тест)» — «СВ», «Holy Guns» — «HG», «Тест · Гроза» — «ТГ»).
+ * Короткий код нужен, только если в названии нет ни букв, ни цифр.
  */
 export function teamLetters(name?: string | null, code?: string | null): string {
-  const c = (code ?? '').trim();
-  const cyrillicName = CYRILLIC.test(name ?? '') && !CYRILLIC.test(c);
-  if (c && !cyrillicName) return Array.from(c).slice(0, 2).join('').toUpperCase();
-  const words = (name ?? '')
-    .replace(/[«»"'()]/g, ' ')
-    .split(/[\s\-–—_]+/)
-    .filter(Boolean);
-  if (words.length === 0) return '·';
-  if (words.length === 1) return Array.from(words[0]).slice(0, 2).join('').toUpperCase();
-  return (Array.from(words[0])[0] + Array.from(words[1])[0]).toUpperCase();
+  return lettersOf(name) || lettersOf(code) || '·';
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -120,6 +125,24 @@ export function markLetterSize(size: number): number {
   return 12;
 }
 
+/** Заглавные Manrope 800: высота 0.72 em, у «Щ» и «Ц» хвостик ниже линии на 0.12 em, самая широкая буква («W») — 0.99 em. */
+export const MARK_CAP_HEIGHT = 0.72;
+export const MARK_TAIL = 0.12;
+export const MARK_MAX_ADVANCE = 0.99;
+
+/** Линия письма: заглавные стоят по центру `ty` (явная линия вместо `dominant-baseline`, он в Safari считается иначе). */
+export function markBaseline(size: number, ty: number, fontSize: number): number {
+  return +(size * ty + (MARK_CAP_HEIGHT / 2) * fontSize).toFixed(2);
+}
+
+/** Рамка текста знака (в пикселях блока): ширина по самым широким буквам, снизу с запасом на хвостики. */
+export function markTextBox(shapeIndex: number, size: number, count = 2): { left: number; right: number; top: number; bottom: number } {
+  const fs = markLetterSize(size);
+  const base = markBaseline(size, TEAM_SHAPES[shapeIndex].ty, fs);
+  const half = (count * MARK_MAX_ADVANCE * fs) / 2;
+  return { left: size / 2 - half, right: size / 2 + half, top: base - MARK_CAP_HEIGHT * fs, bottom: base + MARK_TAIL * fs };
+}
+
 /** Разметка знака в пикселях блока: width, height и viewBox равны `size`. */
 export function teamMarkSvg({ teamId, name, code, size = 40, paint }: TeamMarkSpec): string {
   const shape = TEAM_SHAPES[teamShapeIndex(teamId)];
@@ -131,7 +154,7 @@ export function teamMarkSvg({ teamId, name, code, size = 40, paint }: TeamMarkSp
   return (
     `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
     `<path d="${shape.d(size)}" fill="${fill}"/>` +
-    `<text x="${size / 2}" y="${+(size * shape.ty).toFixed(2)}" text-anchor="middle" dominant-baseline="central" fill="${TEAM_INK}" font-family="inherit" font-weight="800" font-size="${fs}">${letters}</text>` +
+    `<text x="${size / 2}" y="${markBaseline(size, shape.ty, fs)}" text-anchor="middle" fill="${TEAM_INK}" font-family="inherit" font-weight="800" font-size="${fs}">${letters}</text>` +
     `</svg>`
   );
 }
@@ -151,10 +174,7 @@ export function avatarPhotoSrc(src?: string | null): string | null {
 
 /** Инициалы человека: первые буквы имени и фамилии. */
 export function initialsOf(name?: string | null): string {
-  const words = (name ?? '').split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '·';
-  if (words.length === 1) return Array.from(words[0]).slice(0, 2).join('').toUpperCase();
-  return (Array.from(words[0])[0] + Array.from(words[1])[0]).toUpperCase();
+  return lettersOf(name) || '·';
 }
 
 /** Разметка аватара: круг на втором слое стекла с инициалами. */

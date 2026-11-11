@@ -1,16 +1,17 @@
 import React from 'react';
 import { slotsApi, type SlotManageView } from '../../api/track4';
+import { publishSlotsView, useSlotsView } from './slots-store';
 import { confirmAction, errorText, notify } from '../../lib/notify';
 import type { EventBlockProps } from '../../shell/extensions';
 import { Role } from '../../types';
-import { Avatar, Button, Glass, Row, Switch } from '../../ui';
+import { Button, Glass } from '../../ui';
 import '../event/event.css';
 import { SLOTS_STATE_EVENT } from '../../lib/event-view';
-import { followersLabel, openedLabel, parsePriceInput, slotPriceLabel } from './slot-format';
+import { followersLabel, openedLabel, parsePriceInput } from './slot-format';
 
 // Блок «Свободные слоты» на экране события у капитана и тренера (трек 4).
 // Открыть N мест с ценой — подписчикам команды сразу уходит уведомление;
-// список гостей с галочкой «оплатил» и кнопкой «Снять».
+// гости записанных мест показываются в блоке состава (components/event/RosterBlock).
 
 function isPast(event: EventBlockProps['event']): boolean {
   const start = event.startDate instanceof Date ? event.startDate : new Date(event.startAt || '');
@@ -18,7 +19,8 @@ function isPast(event: EventBlockProps['event']): boolean {
 }
 
 export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }) => {
-  const [view, setView] = React.useState<SlotManageView | null>(null);
+  const view = useSlotsView(event.id);
+  const setView = React.useCallback((next: SlotManageView) => publishSlotsView(event.id, next), [event.id]);
   const [loadError, setLoadError] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -37,11 +39,12 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
     } catch {
       setLoadError(true);
     }
-  }, [event.id]);
+  }, [event.id, setView]);
 
   React.useEffect(() => {
     void load();
-  }, [load]);
+    return () => publishSlotsView(event.id, null);
+  }, [load, event.id]);
 
   const run = async (action: () => Promise<SlotManageView | void>, success?: string) => {
     setBusy(true);
@@ -65,7 +68,6 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
 
   const past = isPast(event);
   const slot = view?.slot ?? null;
-  const guests = view?.guests ?? [];
 
   // Прошедшее событие без слотов — блоку нечего показать.
   if (past && !slot) return null;
@@ -105,14 +107,6 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
       confirmLabel: 'Закрыть',
     });
     if (ok) await run(() => slotsApi.close(event.id), 'Запись закрыта');
-  };
-
-  const removeGuest = async (userId: string, name: string) => {
-    const ok = await confirmAction(`Снять ${name} со слота? Место снова станет свободным.`, {
-      confirmLabel: 'Снять',
-      danger: true,
-    });
-    if (ok) await run(() => slotsApi.removeGuest(event.id, userId), `${name} снят`);
   };
 
   const showForm = !past && view.openSchedule && (!slot || !slot.open || editing);
@@ -211,37 +205,6 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
         </div>
       )}
 
-      {guests.length > 0 && (
-        <div>
-          <div className="pbth-event__group">Гости</div>
-          {guests.map((guest) => (
-            <Row
-              key={guest.userId}
-              lead={<Avatar name={guest.name} src={guest.avatar} size={40} />}
-              title={guest.name}
-              sub={`${slotPriceLabel(guest.price)} · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
-              trailing={
-                <span className="pbth-event__inline">
-                  <Switch
-                    checked={guest.paid}
-                    disabled={busy}
-                    label={`${guest.name}: оплатил`}
-                    onChange={(paid) => void run(() => slotsApi.setPaid(event.id, guest.userId, paid))}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="x"
-                    aria-label={`Снять ${guest.name}`}
-                    disabled={busy}
-                    onClick={() => void removeGuest(guest.userId, guest.name)}
-                  />
-                </span>
-              }
-            />
-          ))}
-        </div>
-      )}
     </Glass>
   );
 };
