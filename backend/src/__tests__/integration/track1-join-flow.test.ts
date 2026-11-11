@@ -173,11 +173,17 @@ describe("ссылка команды", () => {
     expect(lower.body.team.name).toBe(`Заявки ${stamp}`);
   });
 
-  it("ссылку видит и меняет только капитан", async () => {
+  it("ссылку видят капитан и тренер, меняет только капитан", async () => {
     const player = await login("player");
     await player.get(`/api/v1/teams/${f.team}/join-link`).expect(403);
+    await player.post(`/api/v1/teams/${f.team}/join-link/rotate`).send({}).expect(403);
+    const captainCode = await teamLinkCode();
     const trainer = await login("trainer");
+    const seen = await trainer.get(`/api/v1/teams/${f.team}/join-link`).expect(200);
+    expect(seen.body.code).toBe(captainCode);
+    expect(seen.body.url).toBe(`https://staging.pbthub.ru/join/${captainCode}`);
     await trainer.post(`/api/v1/teams/${f.team}/join-link/rotate`).send({}).expect(403);
+    expect(await teamLinkCode()).toBe(captainCode);
   });
 });
 
@@ -299,7 +305,11 @@ describe("новичок: ссылка → вход → заявка → «Пр�
     expect(declined.body.status).toBe("DECLINED");
     // Решение в приложении тоже закрывает карточки в боте.
     expect(botCalls.filter((c) => c.method === "editMessageText")).toHaveLength(2);
-    expect(sentTo("sendMessage", TG.second)).toHaveLength(0);
+    // Человеку — короткое сообщение об отказе, без имени того, кто отклонил.
+    const notice = sentTo("sendMessage", TG.second);
+    expect(notice).toHaveLength(1);
+    expect(notice[0].payload.text).toBe(`Заявку в команду «Заявки ${stamp}» отклонили.`);
+    expect(notice[0].payload.text).not.toContain("Трек1");
 
     const seen = await second.get(`/api/v1/join-requests/${requestId}`).expect(200);
     expect(seen.body.request.status).toBe("DECLINED");
@@ -490,7 +500,13 @@ describe("заявка на создание команды", () => {
     expect(captain.rows[0].role).toBe("CAPTAIN");
     const link = await pool.query(`SELECT 1 FROM team_join_links WHERE team_id = $1 AND revoked_at IS NULL`, [decided.team.id]);
     expect(link.rowCount).toBe(1);
-    expect(sentTo("sendMessage", TG.founder)).toHaveLength(1);
+    const founderNote = sentTo("sendMessage", TG.founder);
+    expect(founderNote).toHaveLength(1);
+    expect(founderNote[0].payload.text).toContain("создана");
+    expect(founderNote[0].payload.reply_markup.inline_keyboard[0][0]).toEqual({
+      text: "Открыть команду",
+      url: `https://staging.pbthub.ru/t/${String(decided.team.shortCode).toLowerCase()}`,
+    });
     expect(botCalls.filter((c) => c.method === "editMessageText")).toHaveLength(1);
 
     const home = await founder.get("/api/v1/init").expect(200);
@@ -505,6 +521,10 @@ describe("заявка на создание команды", () => {
     stubTelegram();
     const res = await owner.post(`/api/v1/team-requests/${created.body.request.id}/decline`).send({}).expect(200);
     expect(res.body.request.status).toBe("DECLINED");
+    const notice = sentTo("sendMessage", TG.intruder);
+    expect(notice).toHaveLength(1);
+    expect(notice[0].payload.text).toBe("Заявку на команду «Лишняя» отклонили.");
+    expect(notice[0].payload.text).not.toContain("Трек1");
     await owner.post(`/api/v1/team-requests/${created.body.request.id}/approve`).send({}).expect(409);
   });
 });

@@ -1,11 +1,21 @@
 // Подписи открытых слотов на экранах. Чистые функции — проверяются без браузера.
 
-export function pluralRu(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
+import type { SlotOffer } from '../../api/track4';
+import { pluralRu } from '../../lib/plural';
+
+export { pluralRu };
+
+/**
+ * Записи гостем, которые ещё впереди (или идут сейчас): для карточки «Ты
+ * записан гостем» на главной и в профиле. Ленту отдаёт `/slots/feed`.
+ */
+export function upcomingGuestBookings(bookings: SlotOffer[] | null | undefined, nowTs: number = Date.now()): SlotOffer[] {
+  return (bookings || [])
+    .filter((offer) => {
+      const end = Date.parse(offer.endAt || offer.startAt);
+      return Number.isFinite(end) && end > nowTs;
+    })
+    .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
 }
 
 /** 3000 → «3000 ₽», 0 → «бесплатно». */
@@ -78,4 +88,9 @@ export function slotWhenLabel(startAt: string, timeZone?: string | null): string
   const weekday = WEEKDAYS[['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday)] ?? '';
   const month = MONTHS[Number(parts.month) - 1] ?? '';
   return `${weekday}, ${parts.day} ${month}, ${parts.hour}:${parts.minute}`;
+}
+
+/** «Ты записан гостем: Holy Guns · Тренировка · вторник, 18 ноября, 20:30». */
+export function guestBookingLabel(offer: Pick<SlotOffer, 'teamName' | 'title' | 'startAt' | 'timezone'>): string {
+  return `Ты записан гостем: ${offer.teamName} · ${offer.title} · ${slotWhenLabel(offer.startAt, offer.timezone)}`;
 }

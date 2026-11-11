@@ -1,9 +1,36 @@
 import type { Request, Response } from "express";
+import type { PoolClient } from "pg";
 import { query } from "../db/pool.js";
 import { writeAudit } from "./audit.js";
 import { canChooseAdminRole } from "./entry-role.js";
 import { getUserMemberships } from "./permissions.js";
 import { findIdentity, linkIdentity } from "./identity-repo.js";
+import { withTransaction } from "./team-captains.js";
+
+type LoginUserRow = {
+  id: string;
+  telegram_id: string;
+  username: string | null;
+  account_role: "ADMIN" | "USER" | null;
+  onboarding_completed_at: string | null;
+};
+
+/**
+ * Ник Telegram в каждый момент принадлежит одному человеку. Если он записан
+ * у другого аккаунта, там он устарел (ник сменили или отдали) — снимаем его
+ * оттуда, иначе запись нового владельца падает на UNIQUE(users.username).
+ * Регистр не важен: в Telegram @Nick и @nick — один ник.
+ */
+async function releaseTelegramUsername(client: PoolClient, username: string | null | undefined, telegramId: string) {
+  if (!username) return;
+  await client.query(
+    `UPDATE users
+        SET username = NULL, updated_at = NOW()
+      WHERE lower(username) = lower($1)
+        AND telegram_id IS DISTINCT FROM $2::bigint`,
+    [username, telegramId]
+  );
+}
 
 export type AuthMethod = "WEBAPP" | "OIDC" | "LEGACY_WIDGET" | "DEV" | "BOT_HANDOFF" | "YANDEX_OAUTH" | "PAIRING";
 
@@ -83,23 +110,20 @@ export async function completeOAuthLogin(
     if (provider === "telegram") {
       const name = [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim() || profile.username || `tg-${profile.id}`;
       const nickname = profile.username || `tg_${profile.id}`;
-      const upd = await query<{
-        id: string;
-        telegram_id: string;
-        username: string | null;
-        account_role: "ADMIN" | "USER" | null;
-        onboarding_completed_at: string | null;
-      }>(
-        `UPDATE users
-            SET username = COALESCE($2, username),
-                name = $3,
-                nickname = $4,
-                avatar = COALESCE($5, avatar),
-                updated_at = NOW()
-          WHERE id = $1
-          RETURNING id, telegram_id::text AS telegram_id, username, account_role, onboarding_completed_at`,
-        [existing.userId, profile.username ?? null, name, nickname, profile.avatarUrl ?? null]
-      );
+      const upd = await withTransaction(async (client) => {
+        await releaseTelegramUsername(client, profile.username, profile.id);
+        return client.query<LoginUserRow>(
+          `UPDATE users
+              SET username = COALESCE($2, username),
+                  name = $3,
+                  nickname = $4,
+                  avatar = COALESCE($5, avatar),
+                  updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, telegram_id::text AS telegram_id, username, account_role, onboarding_completed_at`,
+          [existing.userId, profile.username ?? null, name, nickname, profile.avatarUrl ?? null]
+        );
+      });
       userRow = upd.rows[0];
     } else {
       // Non-telegram: just hydrate the row, don't touch profile fields here.
@@ -127,26 +151,23 @@ export async function completeOAuthLogin(
     const nickname = profile.username || `tg_${profile.id}`;
     const onboardingCompletedAt = authMethod === "BOT_HANDOFF" ? null : new Date().toISOString();
 
-    const upsert = await query<{
-      id: string;
-      telegram_id: string;
-      username: string | null;
-      account_role: "ADMIN" | "USER" | null;
-      onboarding_completed_at: string | null;
-    }>(
-      `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at, onboarding_completed_at)
-       VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6::timestamptz)
-       ON CONFLICT (telegram_id)
-       DO UPDATE SET
-         username = COALESCE(EXCLUDED.username, users.username),
-         name = EXCLUDED.name,
-         nickname = EXCLUDED.nickname,
-         avatar = EXCLUDED.avatar,
-         onboarding_completed_at = COALESCE(users.onboarding_completed_at, EXCLUDED.onboarding_completed_at),
-         updated_at = NOW()
-       RETURNING id, telegram_id::text AS telegram_id, username, account_role, onboarding_completed_at`,
-      [profile.id, profile.username ?? null, name, nickname, profile.avatarUrl ?? null, onboardingCompletedAt]
-    );
+    const upsert = await withTransaction(async (client) => {
+      await releaseTelegramUsername(client, profile.username, profile.id);
+      return client.query<LoginUserRow>(
+        `INSERT INTO users (telegram_id, username, name, nickname, avatar, account_role, role_selected_at, onboarding_completed_at)
+         VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6::timestamptz)
+         ON CONFLICT (telegram_id)
+         DO UPDATE SET
+           username = COALESCE(EXCLUDED.username, users.username),
+           name = EXCLUDED.name,
+           nickname = EXCLUDED.nickname,
+           avatar = EXCLUDED.avatar,
+           onboarding_completed_at = COALESCE(users.onboarding_completed_at, EXCLUDED.onboarding_completed_at),
+           updated_at = NOW()
+         RETURNING id, telegram_id::text AS telegram_id, username, account_role, onboarding_completed_at`,
+        [profile.id, profile.username ?? null, name, nickname, profile.avatarUrl ?? null, onboardingCompletedAt]
+      );
+    });
     userRow = upsert.rows[0];
     userId = userRow.id;
 

@@ -127,6 +127,20 @@ describe("режима учётной записи нет", () => {
     expect(teams[0]).toMatchObject({ teamId: f.ownTeam, via: "membership" });
     expect(teams.find((t) => t.teamId === f.otherTeam)).toMatchObject({ via: "owner" });
   });
+
+  it("события чужой команды помечены: владелец не в составе, свой ответ на явку ему не предлагают", async () => {
+    const owner = await login("owner");
+    const init = await owner.get(`/api/v1/init?team=${CODE_OTHER.toLowerCase()}`);
+    const foreign = (init.body.events as Array<{ title: string; viewerInRoster: boolean }>).find(
+      (e) => e.title === `Ближайшая ${stamp}`
+    );
+    expect(foreign).toMatchObject({ viewerInRoster: false });
+
+    const player = await login("player");
+    const own = await player.get(`/api/v1/init?team=${CODE_OTHER.toLowerCase()}`);
+    const all = [...own.body.events, ...own.body.actionRequiredEvents] as Array<{ title: string; viewerInRoster: boolean }>;
+    expect(all.find((e) => e.title === `Ближайшая ${stamp}`)).toMatchObject({ viewerInRoster: true });
+  });
 });
 
 describe("консоль /platform — только владельцу", () => {

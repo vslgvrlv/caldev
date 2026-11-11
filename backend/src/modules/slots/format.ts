@@ -108,6 +108,20 @@ export function buildSlotBookedText(input: SlotBookedTextInput): string {
   return `${input.guestName.trim()} занял слот\n«${input.eventTitle.trim()}», ${when}, ${formatSlotPrice(input.price)}. ${left}`;
 }
 
+export type SlotRemovedTextInput = {
+  teamName: string;
+  eventTitle: string;
+  startAt: string | Date;
+  timeZone?: string | null;
+  now?: Date;
+};
+
+/** Снятому гостю: «Holy Guns: тебя сняли со слота — Тренировка, во вторник в 20:30». */
+export function buildSlotRemovedText(input: SlotRemovedTextInput): string {
+  const when = formatSlotWhen(input.startAt, input.timeZone, input.now);
+  return `${input.teamName.trim()}: тебя сняли со слота — ${input.eventTitle.trim()}, ${when}`;
+}
+
 /** Строка, которую бот дописывает к сообщению после нажатия кнопки. */
 export const SLOT_VERDICT = {
   booked: "Ты записан.",

@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Send } from 'lucide-react';
 import { getEventDelivery, REMINDERS_SENT_EVENT, type EventDeliveryReport } from '../../api/track2';
+import { countLabel } from '../../lib/plural';
 
 // «Кому дошло» на экране события (трек 2): капитан и тренер видят по последней
 // рассылке «Напомнить», кому дошло, кому нет и почему, и сколько раз уже
@@ -17,10 +18,7 @@ function when(iso: string): string {
 }
 
 function times(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} раза`;
-  return `${n} раз`;
+  return countLabel(n, 'раз', 'раза', 'раз');
 }
 
 const Chip: React.FC<{ tone: 'ok' | 'bad' | 'muted'; children: React.ReactNode }> = ({ tone, children }) => (

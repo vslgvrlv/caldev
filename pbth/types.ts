@@ -277,6 +277,11 @@ export interface Event {
   teamName?: string;
   teamShortCode?: string;
   viewerRole?: Role;
+  /**
+   * Человек в составе команды события. `false` — владелец платформы в чужой
+   * команде: свой ответ на явку ему не предлагается. Нет поля — в составе.
+   */
+  viewerInRoster?: boolean;
   teamTimezone?: string;
   financeState?: 'NOT_CALCULATED' | 'COLLECTING' | 'CLOSED';
   type: EventType;

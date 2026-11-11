@@ -4,6 +4,8 @@ import { TeamMemberCard } from '../components/TeamMemberCard';
 import { UserPlus, Search, Shield, Users, BarChart2, Star } from 'lucide-react';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
+import { countLabel } from '../lib/plural';
+import { teamLinkAccess } from '../lib/team-link-access';
 
 interface TeamViewProps {
   team: Team;
@@ -31,6 +33,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const [quickBusy, setQuickBusy] = useState(false);
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
+  // Ссылку команды показывают капитан и тренер (заявки одобряют оба), отзывает — капитан.
+  const linkAccess = teamLinkAccess(currentUserRole);
 
   // Filter members
   const filteredMembers = members.filter(m => 
@@ -191,9 +195,9 @@ export const TeamView: React.FC<TeamViewProps> = ({
         <div className="flex justify-between items-end mb-4">
           <div>
             <h2 className="text-pb-primary font-bold text-lg leading-tight">{team.name}</h2>
-            <p className="text-pb-subtext text-xs">{members.length} участников</p>
+            <p className="text-pb-subtext text-xs">{countLabel(members.length, 'участник', 'участника', 'участников')}</p>
           </div>
-          {isAdminOrCaptain && activeTab === 'ROSTER' && (
+          {linkAccess.canShare && activeTab === 'ROSTER' && (
             <button
               onClick={() => setLinkOpen(true)}
               className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-colors active:scale-95 flex items-center gap-2 text-sm font-semibold"
@@ -238,7 +242,14 @@ export const TeamView: React.FC<TeamViewProps> = ({
          {activeTab === 'ROSTER' ? renderRoster() : renderStats()}
       </div>
 
-      {linkOpen && <TeamJoinLinkSheet teamId={team.id} teamName={team.name} onClose={() => setLinkOpen(false)} />}
+      {linkOpen && (
+        <TeamJoinLinkSheet
+          teamId={team.id}
+          teamName={team.name}
+          canRotate={linkAccess.canRotate}
+          onClose={() => setLinkOpen(false)}
+        />
+      )}
 
       {quickMember && (
         <div className="fixed inset-0 z-[60] bg-black/60 flex items-end" onClick={() => setQuickMember(null)}>
