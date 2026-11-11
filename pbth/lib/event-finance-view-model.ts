@@ -1,4 +1,5 @@
 import { Role, TransactionType } from "../types";
+import { formatRub } from "./format-rub";
 
 type EventFinanceDetail = {
   event: {
@@ -98,10 +99,6 @@ export function buildEventFinanceViewModel(params: {
       .sort((a, b) => Date.parse(b.date) - Date.parse(a.date)),
     recentOperations: [...params.detail.payments].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)),
   };
-}
-
-function formatRub(value: number): string {
-  return `${Number(value || 0).toLocaleString("ru-RU").replace(/\u00A0/g, " ")} ₽`;
 }
 
 function getCollectionStatusLabel(

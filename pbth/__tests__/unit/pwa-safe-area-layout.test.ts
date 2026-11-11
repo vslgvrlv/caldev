@@ -46,11 +46,16 @@ describe("pwa safe-area layouts", () => {
   });
 
   it("pads primary app tabs below the standalone status bar", () => {
-    [calendarViewPath, financeViewPath, teamViewPath, profileViewPath].forEach((path) => {
+    [calendarViewPath, teamViewPath, profileViewPath].forEach((path) => {
       const source = readFileSync(path, "utf8");
       expect(source).toContain("calc(var(--pb-safe-top)");
     });
     expect(readFileSync(dashboardViewPath, "utf8")).toContain("calc(var(--pb-safe-top, 0px)");
+  });
+
+  it("keeps the treasury screen inside Screen, which owns the safe-area padding", () => {
+    expect(readFileSync(financeViewPath, "utf8")).toContain("<Screen");
+    expect(readFileSync(screenCssPath, "utf8")).toContain("var(--pb-safe-top");
   });
 
   it("keeps auth entry screens safe-area aware in standalone mode", () => {
