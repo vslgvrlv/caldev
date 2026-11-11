@@ -155,7 +155,7 @@ export const LandingView: React.FC = () => {
             <FeatureCard 
               icon={<Wallet size={32} className="text-yellow-500" />}
               title="Прозрачные финансы"
-              description="Удобная форма для сбора взносов, контроль бюджета команды и история всех транзакций для каждого игрока."
+              description="Расходы и баланс команды — у капитана, а у каждого игрока — его долг и список должников."
             />
           </div>
         </div>
@@ -183,7 +183,7 @@ export const LandingView: React.FC = () => {
             <StepCard 
               number="03"
               title="Полный контроль"
-              description="Добавляйте события, собирайте взносы и отслеживайте статистику посещений."
+              description="Добавляйте события, собирайте ответы «иду / не иду» и отслеживайте статистику посещений."
             />
           </div>
         </div>
@@ -227,7 +227,7 @@ export const LandingView: React.FC = () => {
               <p className="text-pb-subtext mb-8">Для турнирных команд с серьезным подходом к тренировкам.</p>
               <ul className="space-y-4 mb-8">
                 <PricingFeature text="Неограниченное число игроков" />
-                <PricingFeature text="Финансовый модуль и взносы" />
+                <PricingFeature text="Казна команды: расходы и долги" />
                 <PricingFeature text="Детальная статистика посещений" />
                 <PricingFeature text="Экспорт календаря (ICS)" />
               </ul>

@@ -33,6 +33,6 @@ test("captain guide TOC follows keyboard order and reaches its target", async ({
   await expect(page.locator("nav.toc a").first()).toBeFocused();
 
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#s1$/);
-  await expect(page.locator("#s1 h2")).toBeInViewport();
+  await expect(page).toHaveURL(/#s0$/);
+  await expect(page.locator("#s0 h2")).toBeInViewport();
 });
