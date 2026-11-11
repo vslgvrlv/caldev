@@ -6,7 +6,7 @@ import { useShell } from '../shell/context';
 import { canCommitToSeries } from '../lib/events';
 import { eventTeamCode, resolveEventTeamName } from '../lib/event-team';
 import { answerStatus, eventSubline, feedTitle, timeLabel } from '../lib/home-feed';
-import { calendarDayHeading, calendarMarks, eventsOfDay, isoOfDate, monthPaints, parseIso } from '../lib/calendar-days';
+import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, isoOfDate, monthPaints, parseIso } from '../lib/calendar-days';
 import { canAnswerRsvp } from '../lib/rsvp';
 import { eventPath } from '../lib/team-url';
 import { useRowPress } from './Dashboard';
@@ -26,6 +26,13 @@ interface CalendarViewProps {
 }
 
 const FEED_TYPES: Record<string, FeedType> = { event: { icon: 'calendar' } };
+
+/** Отметка ответа справа: «думаю» — просто приглушённое слово, без значка. */
+function calendarStatus(event: Event): FeedItem['status'] {
+  const status = answerStatus(event);
+  if (!status) return undefined;
+  return status.text === 'думаю' ? { text: status.text, tone: status.tone } : status;
+}
 
 /** События выбранного дня одной стеклянной лентой: знак команды, название, время, отметка ответа. */
 const DayEvents: React.FC<{
@@ -61,7 +68,7 @@ const DayEvents: React.FC<{
         href,
         lead: teamMarkSvg({ teamId: event.teamId, name: teamName, code: event.teamShortCode, size: 40 }),
         timeDisplay: timeLabel(event.startDate),
-        status: answerStatus(event) ?? undefined,
+        status: calendarStatus(event),
         actions: actions.length ? actions : undefined,
       };
     });
@@ -103,7 +110,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const dayEvents = React.useMemo(() => eventsOfDay(events, selected), [events, selected]);
   const heading = calendarDayHeading(parseIso(selected) ?? new Date(now), dayEvents.length);
 
-  const onNav = React.useCallback((to: { year: number; month: number }) => setShown(to), []);
+  // Сетка при тапе по дню соседнего месяца сначала сообщает о смене месяца, потом о выборе дня: выбор побеждает.
+  const onNav = React.useCallback(
+    (to: { year: number; month: number }) => {
+      setShown(to);
+      setSelected(dayForMonth(events, to.year, to.month, todayIso));
+    },
+    [events, todayIso],
+  );
 
   return (
     <Screen paints={paints}>
@@ -122,7 +136,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           />
         </Glass>
 
-        <section className="pbth-day">
+        <section className="pbth-day pbth-calday">
           <div className="pbth-day__head">
             <h2 className="pbth-day__title">{heading.title}</h2>
             <span className="pbth-day__sub">{heading.sub}</span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarDayHeading, calendarMarks, eventsOfDay, monthPaints, parseIso } from '../../lib/calendar-days';
+import { calendarDayHeading, calendarMarks, dayForMonth, eventsOfDay, monthPaints, parseIso } from '../../lib/calendar-days';
 import { EventType, RSVPStatus, type Event } from '../../types';
 
 const at = (day: number, h = 10, month = 11) => new Date(2026, month - 1, day, h, 0);
@@ -69,5 +69,18 @@ describe('краски фона месяца', () => {
     expect(monthPaints([ev('x', at(5, 10, 12))], 2026, 11, now, paint)).toEqual([]);
     const many = ['a', 'b', 'c', 'd'].map((t, i) => ev(t, at(12 + i), t));
     expect(monthPaints(many, 2026, 11, now, paint)).toHaveLength(3);
+  });
+});
+
+describe('день после перехода на другой месяц', () => {
+  const events = [ev('late', at(20, 10, 12)), ev('early', at(5, 10, 12)), ev('nov', at(14))];
+  it('в месяце с событиями — первый день с событием', () => {
+    expect(dayForMonth(events, 2026, 12, '2026-11-11')).toBe('2026-12-05');
+  });
+  it('в месяце без событий — 1-е число', () => {
+    expect(dayForMonth(events, 2027, 1, '2026-11-11')).toBe('2027-01-01');
+  });
+  it('в текущем месяце — сегодня', () => {
+    expect(dayForMonth(events, 2026, 11, '2026-11-11')).toBe('2026-11-11');
   });
 });

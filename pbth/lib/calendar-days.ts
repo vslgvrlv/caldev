@@ -74,3 +74,18 @@ export function monthPaints(
   }
   return result;
 }
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Какой день выбрать, когда человек перешёл на другой месяц: сегодня, если месяц текущий,
+ * иначе первый день с событиями, а без событий — 1-е число.
+ */
+export function dayForMonth(events: Event[], year: number, month: number, todayIso: string): string {
+  const prefix = `${year}-${pad(month)}-`;
+  if (todayIso.startsWith(prefix)) return todayIso;
+  const first = sortEventsByStart(events)
+    .map((event) => dayKey(event.startDate))
+    .find((key) => key.startsWith(prefix));
+  return first ?? `${prefix}01`;
+}
