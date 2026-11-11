@@ -5,7 +5,7 @@
 .guide { font-size: 16px; line-height: 1.6; scroll-behavior: smooth; }
 .guide h1, .guide h2, .guide h3, .guide p, .guide ul, .guide ol, .guide figure { margin: 0; }
 .guide a { color: var(--ui-accent); }
-.guide a.ui-btn { color: var(--ui-text); }
+.guide a.ui-btn, .guide a.guide-brand { color: var(--ui-text); }
 .guide a:focus-visible { outline: 3px solid var(--ui-accent); outline-offset: 3px; }
 
 .guide-bar { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; }
