@@ -1,0 +1,8 @@
+/* Плашки ui-kit в теме pbth: фон плашки (--ui-surface-2) там полупрозрачный, поэтому на ней берётся
+   плотная поверхность; над плавающей нижней панелью плашка не лежит. Только токены и отступ. */
+.ui-toast-host {
+  --ui-surface-2: var(--ui-surface);
+}
+body:has(.ui-sidenav-bottom--floating) .ui-toast-host {
+  bottom: calc(var(--ui-sidenav-bottom-h) + var(--ui-sidenav-bottom-gap) * 2 + env(safe-area-inset-bottom, 0px) + 8px);
+}
