@@ -17,7 +17,7 @@ export const SlotsHeaderBadge: React.FC<ShellExtContext> = () => {
       onClick={() => navigate(slotsPath.list())}
       aria-label="Свободные слоты"
       title="Свободные слоты"
-      className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-pb-subtext hover:text-white transition-colors"
+      className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-pb-subtext hover:text-white transition-colors"
     >
       <Ticket size={18} />
     </button>

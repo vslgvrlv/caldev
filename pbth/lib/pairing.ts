@@ -81,15 +81,15 @@ export function pairingStatusMessage(state: PairingScreenState): string {
     case 'waiting':
       return 'Ждём подтверждения в Telegram';
     case 'claimed':
-      return 'Код получен — подтвердите вход в чате с ботом';
+      return 'Код получен — подтверди вход в чате с ботом';
     case 'approved':
       return 'Готово, входим';
     case 'denied':
-      return 'Вход отклонён. Если это были не вы — всё в порядке, код больше не работает.';
+      return 'Вход отклонён. Если это был не ты — всё в порядке, код больше не работает.';
     case 'expired':
-      return 'Код истёк. Получите новый.';
+      return 'Код истёк. Получи новый.';
     case 'error':
-      return 'Не удалось получить код. Проверьте связь и попробуйте ещё раз.';
+      return 'Не удалось получить код. Проверь связь и попробуй ещё раз.';
     default:
       return '';
   }

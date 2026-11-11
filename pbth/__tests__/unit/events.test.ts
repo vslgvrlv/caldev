@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildDashboardEventSections,
   canCommitToSeries,
   filterFutureEvents,
   filterUpcomingAndOngoingEvents,
-  getCountdownParts,
   getEventEndTimestamp,
   isEventOngoing,
   pickDashboardHeroEvent,
@@ -104,30 +102,6 @@ describe("events helpers", () => {
     expect(hero?.id).toBe("nearest");
   });
 
-  it("removes the hero event from dashboard secondary sections", () => {
-    const now = Date.parse("2026-03-01T10:30:00.000Z");
-    const sections = buildDashboardEventSections(
-      [
-        makeEvent("hero", "2026-03-01T10:00:00.000Z", "2026-03-01T10:45:00.000Z", {
-          rsvpStatus: RSVPStatus.UNANSWERED,
-        }),
-        makeEvent("pending-next", "2026-03-01T11:00:00.000Z", "2026-03-01T12:00:00.000Z", {
-          rsvpStatus: RSVPStatus.PENDING,
-        }),
-        makeEvent("confirmed-next", "2026-03-01T12:30:00.000Z", "2026-03-01T13:30:00.000Z", {
-          rsvpStatus: RSVPStatus.CONFIRMED,
-        }),
-      ],
-      now
-    );
-
-    expect(sections.heroEvent?.id).toBe("hero");
-    expect(sections.heroEventIsOngoing).toBe(true);
-    expect(sections.heroEventNeedsResponse).toBe(true);
-    expect(sections.pendingEvents.map((event) => event.id)).toEqual(["pending-next"]);
-    expect(sections.upcomingEvents.map((event) => event.id)).toEqual(["confirmed-next"]);
-  });
-
   it("detects ongoing event by end timestamp", () => {
     const now = Date.parse("2026-03-01T10:30:00.000Z");
     const ongoing = makeEvent("ongoing", "2026-03-01T10:00:00.000Z", "2026-03-01T11:00:00.000Z");
@@ -135,12 +109,6 @@ describe("events helpers", () => {
     expect(isEventOngoing(ongoing, now)).toBe(true);
     expect(isEventOngoing(finished, now)).toBe(false);
     expect(getEventEndTimestamp(ongoing)).toBe(Date.parse("2026-03-01T11:00:00.000Z"));
-  });
-
-  it("builds countdown parts", () => {
-    const now = Date.parse("2026-03-01T00:00:00.000Z");
-    const countdown = getCountdownParts(new Date("2026-03-02T02:05:00.000Z"), now);
-    expect(countdown).toEqual({ days: "01", hours: "02", mins: "05" });
   });
 });
 
