@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import { loadInviteFacts } from "./invite-facts.js";
 import { z } from "zod";
 import { isPlatformOwner, resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
@@ -219,8 +220,9 @@ teamsRouter.get(
       used_at: string | null;
       single_use: boolean;
       note: string | null;
+      created_by: string;
     }>(
-      `SELECT i.team_id, t.name AS team_name, i.role::text, i.expires_at, i.is_revoked, i.used_at, i.single_use, i.note
+      `SELECT i.team_id, t.name AS team_name, i.role::text, i.expires_at, i.is_revoked, i.used_at, i.single_use, i.note, i.created_by
        FROM team_invites i
        JOIN teams t ON t.id = i.team_id
        WHERE i.token = $1`,
@@ -241,6 +243,7 @@ teamsRouter.get(
     if (invite.single_use && isUsed) {
       return sendTrackError(req, res, 409, "INVITE_USED", "Invite has already been used");
     }
+    const facts = await loadInviteFacts(invite.team_id, { creatorId: invite.created_by });
     return res.json({
       teamId: invite.team_id,
       teamName: invite.team_name,
@@ -252,6 +255,7 @@ teamsRouter.get(
       isRevoked: invite.is_revoked,
       singleUse: invite.single_use,
       note: invite.note,
+      ...(facts ?? {}),
     });
   })
 );
