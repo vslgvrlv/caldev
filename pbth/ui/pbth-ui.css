@@ -57,3 +57,7 @@ button.pbth-row, a.pbth-row { cursor: pointer; }
 @media (min-width: 768px) {
   .pbth-bottomnav .ui-sidenav-bottom { display: grid; }
 }
+
+/* Область касания не меньше 44px: компактные кнопки и крестик окон. Окна рисуются вне .pbth-ui, поэтому крестик без префикса. */
+.pbth-ui .ui-btn--sm { min-width: 44px; min-height: 44px; }
+.ui-dialog__x { min-width: 44px; min-height: 44px; }

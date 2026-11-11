@@ -58,7 +58,7 @@ export const AttendanceSheet: React.FC<{ eventId: string; attendees: EventAttend
             {attendees.map((a) => (
               <Row
                 key={a.userId}
-                lead={<Avatar name={a.name} size={40} />}
+                lead={<Avatar name={a.name} src={a.avatar} size={40} />}
                 title={a.name}
                 trailing={
                   <Switch

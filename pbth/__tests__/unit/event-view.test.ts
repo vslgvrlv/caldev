@@ -196,3 +196,32 @@ describe('игры и формы', () => {
     expect(seriesUpcomingText(5)).toBe('Впереди ещё 5 занятий. Запишись сразу на все.');
   });
 });
+
+import { slotsTileSub } from '../../lib/event-view';
+import { avatarPhotoSrc } from '../../ui/team-mark';
+
+describe('плитка слотов', () => {
+  it('открытые слоты — места и цена, иначе подсказка', () => {
+    expect(slotsTileSub({ open: true, capacity: 3, price: 3000 })).toBe('3 места · 3 000 ₽');
+    expect(slotsTileSub({ open: true, capacity: 1, price: 0 })).toBe('1 место · бесплатно');
+    expect(slotsTileSub({ open: true, capacity: 5, price: 500 })).toBe('5 мест · 500 ₽');
+    expect(slotsTileSub({ open: false, capacity: 3, price: 3000 })).toBe('места и цена');
+    expect(slotsTileSub(null)).toBe('места и цена');
+  });
+});
+
+describe('фото или инициалы', () => {
+  it('берёт фото только с нормальным адресом', () => {
+    expect(avatarPhotoSrc('https://cdn.example.com/a.jpg')).toBe('https://cdn.example.com/a.jpg');
+    expect(avatarPhotoSrc('/uploads/a.jpg')).toBe('/uploads/a.jpg');
+    expect(avatarPhotoSrc('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA');
+    expect(avatarPhotoSrc('  ')).toBeNull();
+    expect(avatarPhotoSrc(null)).toBeNull();
+    expect(avatarPhotoSrc(undefined)).toBeNull();
+  });
+  it('внешний генератор и чужие схемы не используются', () => {
+    expect(avatarPhotoSrc('https://ui-avatars.com/api/?name=A')).toBeNull();
+    expect(avatarPhotoSrc('javascript:alert(1)')).toBeNull();
+    expect(avatarPhotoSrc('//evil.example.com/a.jpg')).toBeNull();
+  });
+});

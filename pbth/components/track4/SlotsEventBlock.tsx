@@ -5,6 +5,7 @@ import type { EventBlockProps } from '../../shell/extensions';
 import { Role } from '../../types';
 import { Avatar, Button, Glass, Row, Switch } from '../../ui';
 import '../event/event.css';
+import { SLOTS_STATE_EVENT } from '../../lib/event-view';
 import { followersLabel, openedLabel, parsePriceInput, slotPriceLabel } from './slot-format';
 
 // Блок «Свободные слоты» на экране события у капитана и тренера (трек 4).
@@ -56,6 +57,11 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
       setBusy(false);
     }
   };
+
+  React.useEffect(() => {
+    if (!view) return;
+    window.dispatchEvent(new CustomEvent(SLOTS_STATE_EVENT, { detail: { eventId: event.id, slot: view.slot } }));
+  }, [event.id, view]);
 
   const past = isPast(event);
   const slot = view?.slot ?? null;
@@ -211,7 +217,7 @@ export const SlotsEventBlock: React.FC<EventBlockProps> = ({ event, viewerRole }
           {guests.map((guest) => (
             <Row
               key={guest.userId}
-              lead={<Avatar name={guest.name} size={40} />}
+              lead={<Avatar name={guest.name} src={guest.avatar} size={40} />}
               title={guest.name}
               sub={`${slotPriceLabel(guest.price)} · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
               trailing={

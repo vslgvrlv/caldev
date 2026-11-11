@@ -443,3 +443,17 @@ export function eventTypeIcon(type: EventType): string {
       return 'calendar-days';
   }
 }
+
+// ───────── плитка «Слоты» ─────────
+
+/** Блок слотов сообщает экрану своё состояние, чтобы плитка панели показала места и цену. */
+export const SLOTS_STATE_EVENT = 'pbth:slots-state';
+
+export type SlotsTileState = { open: boolean; capacity: number; price: number } | null | undefined;
+
+/** «3 места · 3 000 ₽» у открытых слотов, «места и цена» — пока не открыты. */
+export function slotsTileSub(slot: SlotsTileState): string {
+  if (!slot || !slot.open) return 'места и цена';
+  const places = `${slot.capacity} ${pluralRu(slot.capacity, 'место', 'места', 'мест')}`;
+  return `${places} · ${slot.price > 0 ? formatRub(slot.price) : 'бесплатно'}`;
+}

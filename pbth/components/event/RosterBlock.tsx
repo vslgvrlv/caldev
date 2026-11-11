@@ -20,7 +20,7 @@ const PersonRow: React.FC<{ person: RosterPerson; onPerson: Props['onPerson']; t
   trailing,
 }) => (
   <Row
-    lead={<Avatar name={person.name} size={40} />}
+    lead={<Avatar name={person.name} src={person.avatar} size={40} />}
     title={person.isSelf ? 'Ты' : person.name}
     sub={rosterSub(person)}
     trailing={trailing}
@@ -52,7 +52,7 @@ const GoingTag: React.FC<{ self: boolean }> = ({ self }) => (
 export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin, onRemindSilent, reminding, hideFree }) => (
   <Glass layer={1} className="pbth-event__panel" data-testid="event-roster">
     <div className="pbth-event__head">
-      <h2 className="pbth-event__h">{rosterHeadline(roster)}</h2>
+      <h2 className="pbth-event__h pbth-event__h--nowrap">{rosterHeadline(roster)}</h2>
       <div className="pbth-event__dots" aria-hidden="true">
         {roster.dots.map((group, gi) => (
           <span key={gi} className="pbth-event__dotgroup">

@@ -32,6 +32,9 @@ import {
   reminderErrorText,
   resolveEnd,
   silentLabel,
+  slotsTileSub,
+  SLOTS_STATE_EVENT,
+  type SlotsTileState,
   sortSchedule,
   timeLabel,
   type EditPatch,
@@ -139,6 +142,15 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const extRef = useRef<HTMLDivElement>(null);
+  const [slotsState, setSlotsState] = useState<SlotsTileState>(null);
+  useEffect(() => {
+    const onState = (e: globalThis.Event) => {
+      const detail = (e as CustomEvent<{ eventId?: string; slot?: SlotsTileState }>).detail;
+      if (detail?.eventId === event.id) setSlotsState(detail.slot ?? null);
+    };
+    window.addEventListener(SLOTS_STATE_EVENT, onState);
+    return () => window.removeEventListener(SLOTS_STATE_EVENT, onState);
+  }, [event.id]);
 
   const perms = eventPermissions({
     role: currentUserRole,
@@ -504,12 +516,12 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
       icon: 'bell',
       title: 'Напомнить',
       sub: 'не ответившим',
-      disabled: isReminding || roster.silent.length === 0 || phase === 'past',
+      disabled: isReminding || roster.silent.length === 0,
       onClick: handleRemindSilent,
     });
   }
   if (slotsAvailable) {
-    tiles.push({ key: 'slots', icon: 'users', title: 'Слоты', sub: 'места и цена', onClick: scrollToSlots });
+    tiles.push({ key: 'slots', icon: 'users', title: 'Слоты', sub: slotsTileSub(slotsState), onClick: scrollToSlots });
   }
   if (perms.canManageAttendance) {
     tiles.push({
@@ -596,7 +608,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
             onAttendeeClick(p.userId, { name: p.name, nickname: p.nickname, avatar: p.avatar, role: p.role })
           }
           onJoin={canAnswer && answer === 'none' ? () => handleStatusChange(RSVPStatus.CONFIRMED) : undefined}
-          onRemindSilent={perms.canRemind && phase !== 'past' ? handleRemindSilent : undefined}
+          onRemindSilent={perms.canRemind ? handleRemindSilent : undefined}
           reminding={isReminding}
           hideFree={phase === 'past'}
         />
@@ -605,7 +617,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
 
         <EventPlace location={event.location} locationUrl={event.locationUrl} description={event.description} />
 
-        {showSchedule && (sortedSchedule.length > 0 || perms.canAddGame) ? (
+        {showSchedule && (sortedSchedule.length > 0 || perms.canSeeTable) ? (
           <GameSchedule
             games={sortedSchedule}
             teamName={teamName}
