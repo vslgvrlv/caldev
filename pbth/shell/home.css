@@ -3,10 +3,10 @@
 .pbth-home { display: flex; flex-direction: column; gap: 16px; }
 
 .pbth-homebar { padding: 16px; }
-.pbth-homebar__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pbth-homebar__top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
 .pbth-homebar__title { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.15; }
 .pbth-homebar__sub { margin-top: 2px; font-size: 14px; color: var(--ui-muted); }
-.pbth-homebar__tools { display: flex; flex: none; align-items: center; gap: 8px; }
+.pbth-homebar__tools { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .pbth-homebar__marks {
   display: flex;
   gap: 4px;
@@ -53,12 +53,12 @@
 .pbth-hero__time { font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 .pbth-hero__until { font-size: 20px; font-weight: 700; color: var(--ui-muted); }
 .pbth-hero__place { display: flex; align-items: center; gap: 8px; margin-top: -8px; font-size: 14px; color: var(--ui-muted); }
-.pbth-hero__count { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.pbth-hero__count { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 16px; }
 .pbth-hero__dots { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .pbth-hero__dotgroup { display: inline-flex; gap: 4px; }
 .pbth-hero__dot { box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ui-muted); }
 .pbth-hero__dot.is-on { border-color: var(--pbth-paint); background: var(--pbth-paint); }
-.pbth-hero__counttext { font-size: 16px; font-weight: 700; }
+.pbth-hero__counttext { font-size: 16px; font-weight: 700; white-space: nowrap; }
 .pbth-hero__actions { display: flex; gap: 8px; }
 .pbth-hero__actions > .ui-btn { flex: 1 1 0; min-height: 56px; }
 .pbth-hero__answered { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -89,3 +89,23 @@
 /* ui-kit резервирует место под плавающую панель отступом у body: страница получает лишний прокрут и полосу цвета body.
    Место под панель оставляют сами экраны (нижний отступ в <Screen>, в рамках старых экранов, в SlotsFrame). */
 html body:has(.ui-sidenav-bottom--floating) { padding-bottom: 0; }
+
+/* Нижняя панель оболочки: шесть слотов (четыре пункта, «Ещё» и «плюс») на 360–390px. */
+.pbth-bottomnav .ui-sidenav-bottom { --ui-sidenav-bottom-label-size: 12px; }
+.pbth-bottomnav .ui-sidenav-bottom:has(.ui-sidenav-bottom__action) { --ui-sidenav-bottom-label-size: 11px; }
+.pbth-bottomnav .ui-sidenav-bottom__item { padding-left: 0; padding-right: 0; }
+.pbth-bottomnav .ui-sidenav-bottom__item .ui-sidenav__text { letter-spacing: 0; }
+/* Стекло плотнее: подписи читаются над яркими знаками команд. Размытие остаётся. */
+.pbth-bottomnav .ui-sidenav-bottom {
+  --ui-lglass-tint: linear-gradient(180deg, rgba(12, 16, 24, .55), rgba(8, 11, 18, .66));
+}
+/* На 320px подписи неактивных пунктов скрыты: остаются значки (у пунктов есть aria-label). */
+@media (max-width: 340px) {
+  .pbth-bottomnav .ui-sidenav-bottom__item:not(.is-active):not(.ui-sidenav-bottom__action) .ui-sidenav__text {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+}
+
+.pbth-awaiting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.pbth-awaiting__text { font-size: 14px; color: var(--ui-muted); }
+.pbth-day__list .ui-feed__actions .ui-btn { min-height: 44px; }

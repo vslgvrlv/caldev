@@ -133,12 +133,35 @@ export function needsAnswer(event: Event): boolean {
   return canAnswerRsvp(event) && (event.rsvpStatus === RSVPStatus.PENDING || event.rsvpStatus === RSVPStatus.UNANSWERED);
 }
 
-/** Отметка своего ответа справа от времени в ленте. */
+/** Отметка своего ответа справа от времени в ленте; «думаю» приглушённая, кнопки ответа остаются. */
 export function answerStatus(event: Event): { text: string; tone: 'success' | 'muted'; icon: string } | null {
   if (!canAnswerRsvp(event)) return null;
   if (event.rsvpStatus === RSVPStatus.CONFIRMED) return { text: 'иду', tone: 'success', icon: 'check' };
   if (event.rsvpStatus === RSVPStatus.DECLINED) return { text: 'не иду', tone: 'muted', icon: 'x' };
+  if (event.rsvpStatus === RSVPStatus.PENDING) return { text: 'думаю', tone: 'muted', icon: 'circle-help' };
   return null;
+}
+
+/** События, на которые игрок ещё не дал ответа (без ответа и «думаю»), в том же порядке. */
+export function awaitingEvents(events: Event[]): Event[] {
+  return events.filter(needsAnswer);
+}
+
+/** «Ждут ответа: N» — события без ответа в ленте под ближайшим событием; ближайшее не считается. */
+export function awaitingCount(rest: Event[]): number {
+  return awaitingEvents(rest).length;
+}
+
+/** Что показывает лента: все события или только ждущие ответа. Когда ждущих не осталось, фильтр сам выключается. */
+export function visibleFeedEvents(rest: Event[], onlyAwaiting: boolean): Event[] {
+  if (!onlyAwaiting) return rest;
+  const awaiting = awaitingEvents(rest);
+  return awaiting.length > 0 ? awaiting : rest;
+}
+
+/** Подпись уведомления о неотвеченных событиях. */
+export function awaitingText(count: number): string {
+  return `Ждут ответа: ${count}`;
 }
 
 const MAX_DOTS = 30;

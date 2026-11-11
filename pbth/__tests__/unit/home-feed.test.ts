@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   answerStatus,
   attendanceDots,
+  awaitingCount,
+  awaitingEvents,
+  awaitingText,
+  visibleFeedEvents,
   attendanceText,
   dayHeading,
   endLabel,
@@ -105,6 +109,7 @@ describe('время, место, ответ', () => {
     expect(answerStatus(ev('a', at(12, 9), { rsvpStatus: RSVPStatus.CONFIRMED }))).toMatchObject({ text: 'иду', tone: 'success' });
     expect(answerStatus(ev('a', at(12, 9), { rsvpStatus: RSVPStatus.DECLINED }))).toMatchObject({ text: 'не иду', tone: 'muted' });
     expect(answerStatus(ev('a', at(12, 9)))).toBeNull();
+    expect(answerStatus(ev('a', at(12, 9), { rsvpStatus: RSVPStatus.PENDING }))).toMatchObject({ text: 'думаю', tone: 'muted' });
     expect(answerStatus(ev('a', at(12, 9), { rsvpStatus: RSVPStatus.CONFIRMED, viewerInRoster: false }))).toBeNull();
   });
 
@@ -144,5 +149,38 @@ describe('краски фона', () => {
     const events = ['a', 'c', 'b', 'd', 'e'].map((team, i) => ev(`e${i}`, at(12, 9 + i), { teamId: team }));
     expect(homePaints(events, paintOf)).toEqual(['#1', '#2', '#3']);
     expect(homePaints([], paintOf)).toEqual([]);
+  });
+});
+
+describe('«Ждут ответа»', () => {
+  const rest = [
+    ev('a', at(12, 9)),
+    ev('b', at(12, 10), { rsvpStatus: RSVPStatus.CONFIRMED }),
+    ev('c', at(13, 10), { rsvpStatus: RSVPStatus.PENDING }),
+    ev('d', at(13, 11), { rsvpStatus: RSVPStatus.DECLINED }),
+    ev('e', at(14, 11), { viewerInRoster: false }),
+  ];
+
+  it('считаются события без ответа и «думаю»; чужой команды и с ответом — нет', () => {
+    expect(awaitingEvents(rest).map((e) => e.id)).toEqual(['a', 'c']);
+    expect(awaitingCount(rest)).toBe(2);
+    expect(awaitingCount([])).toBe(0);
+  });
+
+  it('ближайшее событие не входит в счётчик', () => {
+    const { hero, rest: others } = pickHomeEvents([ev('hero', at(11, 20)), ev('x', at(12, 9))], NOW);
+    expect(hero?.id).toBe('hero');
+    expect(awaitingCount(others)).toBe(1);
+  });
+
+  it('фильтр показывает только ждущие; когда их не осталось, показывает все', () => {
+    expect(visibleFeedEvents(rest, false)).toBe(rest);
+    expect(visibleFeedEvents(rest, true).map((e) => e.id)).toEqual(['a', 'c']);
+    const answered = rest.filter((e) => e.id === 'b' || e.id === 'd');
+    expect(visibleFeedEvents(answered, true)).toBe(answered);
+  });
+
+  it('подпись', () => {
+    expect(awaitingText(3)).toBe('Ждут ответа: 3');
   });
 });

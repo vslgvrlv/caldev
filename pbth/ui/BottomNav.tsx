@@ -9,6 +9,8 @@ export type BottomNavItem = {
   badge?: number | string;
   /** Только в листе «Ещё». */
   more?: boolean;
+  /** Короткая подпись: ставится, только если полная не помещается в пункт панели. */
+  short?: string;
 };
 
 export type BottomNavProps = {
@@ -22,6 +24,25 @@ export type BottomNavProps = {
 };
 
 type Cfg = BottomNavProps;
+
+/**
+ * ui-kit берёт короткую подпись всегда, если она задана. Здесь полная подпись стоит по умолчанию,
+ * короткая — только когда полная усекается; у каждого пункта есть `aria-label` с полной подписью.
+ */
+export function fitLabels(host: HTMLElement, items: BottomNavItem[], moreLabel = 'Ещё') {
+  const bottom = host.querySelector('.ui-sidenav-bottom');
+  if (!bottom?.querySelectorAll) return;
+  const byHref = new Map(items.map((it) => [it.href, it]));
+  bottom.querySelectorAll<HTMLElement>('a.ui-sidenav-bottom__item').forEach((a) => {
+    const it = byHref.get(a.getAttribute('data-href') || '');
+    const text = a.querySelector<HTMLElement>('.ui-sidenav__text');
+    if (!it || !text) return;
+    a.setAttribute('aria-label', it.label);
+    text.textContent = it.label;
+    if (it.short && text.scrollWidth > text.clientWidth) text.textContent = it.short;
+  });
+  bottom.querySelector('.ui-sidenav-bottom__more')?.setAttribute('aria-label', moreLabel);
+}
 
 export function mountNav(host: HTMLElement, cfg: Cfg): Handle {
   let current = cfg;
@@ -43,11 +64,17 @@ export function mountNav(host: HTMLElement, cfg: Cfg): Handle {
     current.onNavigate(href);
   };
   host.addEventListener('click', onClick);
+  const fit = () => fitLabels(host, current.items);
+  fit();
+  const hasWindow = typeof window !== 'undefined';
+  if (hasWindow) window.addEventListener('resize', fit);
+  if (typeof document !== 'undefined') void document.fonts?.ready.then(fit);
   return {
     update(next: Cfg) {
       const prev = current;
       current = next;
       nav.setActive(next.path);
+      fit();
       for (const it of next.items) {
         const was = prev.items.find((p) => p.href === it.href);
         if (was?.badge !== it.badge) nav.setBadge(it.href, it.badge ?? null);
@@ -55,6 +82,7 @@ export function mountNav(host: HTMLElement, cfg: Cfg): Handle {
     },
     destroy() {
       host.removeEventListener('click', onClick);
+      if (hasWindow) window.removeEventListener('resize', fit);
       nav.el.remove();
       nav.bottom?.remove();
       host.querySelector('.ui-sidenav-more')?.remove();

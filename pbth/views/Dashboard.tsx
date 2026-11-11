@@ -8,6 +8,9 @@ import {
   answerStatus,
   attendanceDots,
   attendanceText,
+  awaitingCount,
+  awaitingText,
+  visibleFeedEvents,
   dayHeading,
   endLabel,
   eventSubline,
@@ -318,7 +321,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const now = nowOverride ?? tick;
 
   const { hero, rest } = React.useMemo(() => pickHomeEvents(events, now), [events, now]);
-  const days = React.useMemo(() => groupEventsByDay(rest), [rest]);
+  const [onlyAwaiting, setOnlyAwaiting] = React.useState(false);
+  const awaiting = awaitingCount(rest);
+  // Когда ждущих ответа не осталось, лента сама возвращается ко всем событиям.
+  const filtering = onlyAwaiting && awaiting > 0;
+  const days = React.useMemo(() => groupEventsByDay(visibleFeedEvents(rest, filtering)), [rest, filtering]);
   const paints = React.useMemo(() => homePaints(hero ? [hero, ...rest] : rest, teamPaint), [hero, rest]);
   const multi = teams.length > 1;
   const showInvite = Boolean(captainHints?.inviteTeam && onInviteTeam);
@@ -345,6 +352,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             press={heroPress}
             onOpen={onEventClick}
           />
+        )}
+
+        {awaiting > 0 && (
+          <Glass as="section" className="pbth-awaiting">
+            <span className="pbth-awaiting__text">{awaitingText(awaiting)}</span>
+            <Button size="sm" onClick={() => setOnlyAwaiting(!filtering)}>
+              {filtering ? 'Показать все' : 'Показать'}
+            </Button>
+          </Glass>
         )}
 
         {guestBookings}

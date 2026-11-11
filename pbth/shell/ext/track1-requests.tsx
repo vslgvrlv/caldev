@@ -42,7 +42,7 @@ const RequestsBadge: React.FC<ShellExtContext> = (ctx) => {
     <button
       type="button"
       onClick={() => navigate(teamPath(ctx.teamCode, 'requests'))}
-      className="relative p-2 rounded-xl bg-white/10 text-white"
+      className="relative w-11 h-11 flex items-center justify-center rounded-xl bg-white/10 text-white"
       aria-label={`Заявки в команду: ${count}`}
     >
       <Inbox size={20} />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav, type BottomNavItem } from '../../ui';
-import { teamPath } from '../../lib/team-url';
+import { parseTeamPath, teamPath } from '../../lib/team-url';
 import '../../shell/home.css';
 
 export type ShellNavProps = {
@@ -16,12 +16,22 @@ export function shellNavItems(teamCode: string | null): BottomNavItem[] {
   if (!teamCode) return [me];
   return [
     { href: teamPath(teamCode), label: 'Главная', icon: 'house' },
-    { href: teamPath(teamCode, 'calendar'), label: 'Календарь', icon: 'calendar' },
+    { href: teamPath(teamCode, 'calendar'), label: 'Календарь', icon: 'calendar', short: 'Календ.' },
     { href: teamPath(teamCode, 'roster'), label: 'Команда', icon: 'users' },
     me,
     // Пятый пункт уходит в «Ещё».
     { href: teamPath(teamCode, 'money'), label: 'Казна', icon: 'wallet', more: true },
   ];
+}
+
+/**
+ * Адрес для подсветки пункта. ui-kit сопоставляет по префиксу, и «Заявки» или «Журнал» подсвечивали бы «Главную»:
+ * у разделов вне панели не подсвечивается ничего.
+ */
+export function navActivePath(pathname: string): string {
+  const parsed = parseTeamPath(pathname);
+  if (!parsed) return pathname;
+  return ['', 'calendar', 'money', 'roster'].includes(parsed.section) ? pathname : '/-';
 }
 
 /** Плавающая стеклянная нижняя панель оболочки: пункты команды, профиль и «плюс». */
@@ -43,5 +53,5 @@ export const ShellNav: React.FC<ShellNavProps> = ({ teamCode, canCreate }) => {
   }, [pathname]);
 
   // Набор пунктов и «плюс» ui-kit задаёт при появлении, поэтому при смене команды или права панель строится заново.
-  return <BottomNav key={`${teamCode ?? ''}|${action ? 1 : 0}`} items={items} path={pathname} action={action} onNavigate={navigate} />;
+  return <BottomNav key={`${teamCode ?? ''}|${action ? 1 : 0}`} items={items} path={navActivePath(pathname)} action={action} onNavigate={navigate} />;
 };

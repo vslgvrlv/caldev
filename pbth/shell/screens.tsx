@@ -100,6 +100,7 @@ export const DashboardScreen: React.FC = () => {
         header={
           <HomeHeader
             title="Главная"
+            modeNote={team?.via === 'owner' ? 'Владелец платформы' : undefined}
             now={now}
             teams={shell.teams}
             currentCode={code}

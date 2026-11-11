@@ -12,6 +12,8 @@ export type HomeHeaderProps = {
   now: number;
   teams: TeamContext[];
   currentCode: string;
+  /** Тихая строка под датой: режим, в котором игрок смотрит команду («Владелец платформы»). */
+  modeNote?: string;
   /** Значки справа (расширения шапки команды). */
   badges?: React.ReactNode;
   onPickTeam: (team: TeamContext) => void;
@@ -19,7 +21,21 @@ export type HomeHeaderProps = {
 };
 
 /** Стеклянная шапка главной: название, дата, ряд знаков команд игрока и кнопка выбора команд. */
-export const HomeHeader: React.FC<HomeHeaderProps> = ({ title, now, teams, currentCode, badges, onPickTeam, onOpenTeams }) => (
+/** Прокручивает ряд знаков так, чтобы текущая команда была видна целиком. */
+export function scrollMarkIntoView(row: HTMLElement, mark: HTMLElement) {
+  const left = mark.offsetLeft - row.offsetLeft;
+  if (left < row.scrollLeft) row.scrollLeft = left;
+  else if (left + mark.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + mark.offsetWidth - row.clientWidth;
+}
+
+export const HomeHeader: React.FC<HomeHeaderProps> = ({ title, now, teams, currentCode, modeNote, badges, onPickTeam, onOpenTeams }) => {
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const row = rowRef.current;
+    const mark = row?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (row && mark) scrollMarkIntoView(row, mark);
+  }, [currentCode, teams.length]);
+  return (
   <Glass as="header" className="pbth-homebar">
     <div className="pbth-homebar__top">
       <div>
@@ -33,8 +49,9 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({ title, now, teams, curre
         </Button>
       </div>
     </div>
+    {modeNote && <div className="pbth-homebar__sub">{modeNote}</div>}
     {teams.length > 0 && (
-      <div className="pbth-homebar__marks" role="list" aria-label="Команды">
+      <div ref={rowRef} className="pbth-homebar__marks" role="list" aria-label="Команды">
         {teams.map((t) => {
           const current = teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }) === currentCode;
           return (
@@ -55,3 +72,4 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({ title, now, teams, curre
     )}
   </Glass>
 );
+};
