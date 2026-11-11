@@ -47,6 +47,14 @@ export const TeamFilterContext = createContext<TeamFilterState>(ALL_SHOWN);
 /** Фильтр команд оболочки. Вне оболочки — «показаны все». */
 export const useTeamFilter = () => useContext(TeamFilterContext);
 
+/**
+ * Число ждущих заявок по своим командам, где я капитан или тренер. Считает
+ * оболочка (`useTeamRequestCounts`), а не экран «Моё»: переходы между «Моё» и
+ * «Календарём» не повторяют запросы.
+ */
+export const RequestCountsContext = createContext<Record<string, number>>({});
+export const useRequestCounts = () => useContext(RequestCountsContext);
+
 function readStored(userId: string | null | undefined): HiddenTeams {
   if (!userId || typeof window === 'undefined') return EMPTY;
   try {

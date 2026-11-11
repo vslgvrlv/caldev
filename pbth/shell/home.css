@@ -105,10 +105,11 @@
   border-radius: 1px;
   background: var(--ui-text);
 }
-/* Ряд знаков как фильтр («Моё», «Календарь»): выключенная команда — контур в цвете краски без заливки, приглушённый. */
-.pbth-sectionhead__mark.is-off .pbth-teammark { overflow: visible; opacity: .8; }
+/* Ряд знаков как фильтр («Моё», «Календарь»): выключенная команда — контур в цвете краски без заливки,
+   буквы приглушённым текстом темы (#C0C6CE: контраст к стеклу шапки выше 4,5; синяя краска буквами давала бы ~3,5). */
+.pbth-sectionhead__mark.is-off .pbth-teammark { overflow: visible; }
 .pbth-sectionhead__mark.is-off .pbth-teammark path { fill: transparent; stroke: var(--pbth-paint); stroke-width: 1.5; }
-.pbth-sectionhead__mark.is-off .pbth-teammark text { fill: var(--pbth-paint); }
+.pbth-sectionhead__mark.is-off .pbth-teammark text { fill: var(--ui-muted); }
 .pbth-sectionhead__mark:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; border-radius: var(--ui-radius-md); }
 
 /* Стекло под часами на экранах без шапки раздела (событие, заявки, карточка игрока): полоса высотой в вырез. */
@@ -197,6 +198,8 @@
 
 /* Шторка «Команды» на «Моё» и в «Календаре»: быстрый выбор, группы по роли, выключатели в цвете краски. */
 .pbth-tfilter { display: flex; flex-direction: column; gap: 4px; }
+/* Сегменты «Все · Играю» под палец: 44px, как в макете. */
+.pbth-tfilter .ui-seg > button { min-height: 44px; }
 .pbth-tfilter__group { display: flex; flex-direction: column; margin-top: 12px; }
 .pbth-tfilter__head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 4px; }
 .pbth-tfilter__title { font-size: 16px; font-weight: 700; }

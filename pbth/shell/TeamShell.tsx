@@ -10,7 +10,8 @@ import { DataUnavailableScreen, TeamForbiddenScreen } from '../components/shell/
 import { TeamsPicker } from '../components/shell/TeamsPicker';
 import { TeamsFilter } from '../components/shell/TeamsFilter';
 import { CreateTeamPicker } from '../components/shell/CreateTeamPicker';
-import { TeamFilterContext, useTeamFilter, useTeamFilterState } from './team-filter-context';
+import { RequestCountsContext, TeamFilterContext, useTeamFilter, useTeamFilterState } from './team-filter-context';
+import { useTeamRequestCounts } from '../lib/use-team-requests';
 import { plusAction } from '../lib/team-filter';
 import { TeamsPickerContext } from './teams-picker-context';
 import { SectionHeader } from './SectionHeader';
@@ -264,6 +265,8 @@ const TeamShellInner: React.FC = () => {
   const [createOpen, setCreateOpen] = React.useState(false);
   const filter = useTeamFilterState(shell.user?.id, shell.teams);
   const paints = useSectionPaints(location.pathname, filter.isShown);
+  // Заявки по всем своим командам для строк в ленте «Моё»: один запрос на команду, где я капитан или тренер.
+  const requestCounts = useTeamRequestCounts(shell.teams, Boolean(shell.user));
 
   if (!ready && shell.teamLoad === 'forbidden') {
     return (
@@ -356,34 +359,36 @@ const TeamShellInner: React.FC = () => {
 
   return (
     <TeamFilterContext.Provider value={filter}>
-      <SectionFrame
-        paints={paints}
-        head={(onHeight) => (
-          <SectionHead
-            code={code}
-            team={headerTeam}
-            ready={ready}
-            teamsOpen={teamsOpen}
-            setTeamsOpen={setTeamsOpen}
-            onHeight={onHeight}
+      <RequestCountsContext.Provider value={requestCounts}>
+        <SectionFrame
+          paints={paints}
+          head={(onHeight) => (
+            <SectionHead
+              code={code}
+              team={headerTeam}
+              ready={ready}
+              teamsOpen={teamsOpen}
+              setTeamsOpen={setTeamsOpen}
+              onHeight={onHeight}
+            />
+          )}
+        >
+          <OnboardingNote />
+          {content}
+          {nav}
+        </SectionFrame>
+        {plus?.kind === 'pick' && (
+          <CreateTeamPicker
+            open={createOpen}
+            onClose={() => setCreateOpen(false)}
+            teams={plus.teams}
+            onPick={(t) => {
+              setCreateOpen(false);
+              navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }), 'new'));
+            }}
           />
         )}
-      >
-        <OnboardingNote />
-        {content}
-        {nav}
-      </SectionFrame>
-      {plus?.kind === 'pick' && (
-        <CreateTeamPicker
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          teams={plus.teams}
-          onPick={(t) => {
-            setCreateOpen(false);
-            navigate(teamPath(teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }), 'new'));
-          }}
-        />
-      )}
+      </RequestCountsContext.Provider>
     </TeamFilterContext.Provider>
   );
 };

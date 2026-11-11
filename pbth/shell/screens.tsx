@@ -14,9 +14,8 @@ import { teamScreenRows } from './section-head';
 import { treasuryRowSub } from '../lib/treasury-view';
 import { formatRub } from '../lib/format-rub';
 import { GuestBookingsBlock } from '../components/track4/GuestBookingCards';
-import { useTeamFilter } from './team-filter-context';
+import { useRequestCounts, useTeamFilter } from './team-filter-context';
 import { requestsNotices } from '../lib/team-filter';
-import { useTeamRequestCounts } from '../lib/use-team-requests';
 import { PlayerStatus, Role, type Event, type TeamContext, type TeamMember } from '../types';
 
 // Экраны по адресам. Здесь только проводка: данные и действия из оболочки,
@@ -72,7 +71,7 @@ export const DashboardScreen: React.FC = () => {
     teamEventsCount: team ? shell.events.filter((event) => event.teamId === team.id).length : 0,
   });
   // Заявки в команду: по строке на каждую включённую команду, где я решаю заявки и они есть.
-  const counts = useTeamRequestCounts(shell.teams);
+  const counts = useRequestCounts();
   const notices = requestsNotices(shell.teams, counts, filter.hidden).map(({ team: t, text }) => {
     const teamCode = teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode });
     return {
