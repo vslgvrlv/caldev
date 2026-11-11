@@ -1,4 +1,6 @@
 import { Router, type Request } from "express";
+import { loadInviteFacts } from "./invite-facts.js";
+import { publicLinkReadLimiter } from "../../lib/public-link-rate-limit.js";
 import { z } from "zod";
 import { isPlatformOwner, resolveTeamAccess, TeamAccessError } from "../../lib/team-access.js";
 import {
@@ -208,6 +210,7 @@ teamsRouter.post(
 
 teamsRouter.get(
   "/invites/:token",
+  publicLinkReadLimiter(),
   asyncHandler(async (req, res) => {
     const token = z.string().uuid().parse(req.params.token);
     const inviteResult = await query<{
@@ -241,6 +244,7 @@ teamsRouter.get(
     if (invite.single_use && isUsed) {
       return sendTrackError(req, res, 409, "INVITE_USED", "Invite has already been used");
     }
+    const facts = await loadInviteFacts(invite.team_id);
     return res.json({
       teamId: invite.team_id,
       teamName: invite.team_name,
@@ -252,6 +256,7 @@ teamsRouter.get(
       isRevoked: invite.is_revoked,
       singleUse: invite.single_use,
       note: invite.note,
+      ...(facts ?? {}),
     });
   })
 );

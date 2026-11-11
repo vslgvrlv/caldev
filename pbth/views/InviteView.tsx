@@ -5,8 +5,8 @@ import { normalizeAuthErrorCode, resolveAuthErrorMessage, sendAuthTelemetry } fr
 import { describeInviteProblem } from '../lib/invite-problem';
 import { inviteValidUntil } from '../lib/invite-copy';
 import { roleLabel } from '../lib/labels';
-import { Button, Glass, Icon, Row } from '../ui';
-import { InviteActions, InviteFrame, InviteHero, InviteNotNow } from '../components/track1/InviteFrame';
+import { Button, Icon, Row } from '../ui';
+import { InviteActions, InviteFacts, InviteFrame, InviteHero, InviteNotNow } from '../components/track1/InviteFrame';
 
 // Одноразовое приглашение (капитана) уже сработало — трек 1. Общий разбор
 // ошибок приглашения этот код не знает.
@@ -190,7 +190,8 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
   // Поля одноразового приглашения (трек 1) — тип общего клиента их ещё не знает.
   const inviteExtra = inviteInfo as TeamInviteInfoResponse & { singleUse?: boolean; note?: string | null };
   const team = { id: inviteInfo.teamId, name: inviteInfo.teamName };
-  const until = inviteValidUntil(inviteInfo.expiresAt);
+  // Пояс команды приходит только вместе с ближайшим событием; без него срок — по поясу браузера.
+  const until = inviteValidUntil(inviteInfo.expiresAt, inviteInfo.nextEvent?.timezone);
   const acceptLabel = accepted ? 'Готово' : isSubmitting ? 'Вступаем…' : 'Вступить';
 
   return (
@@ -199,14 +200,14 @@ export const InviteView: React.FC<InviteViewProps> = ({ onJoined }) => {
         Тренировки, турниры и спарринги команды будут у тебя в ленте.
       </InviteHero>
 
-      <Glass layer={2} className="pbth-invite__facts">
+      <InviteFacts facts={inviteInfo}>
         <Row
           lead={<Icon name="shield" size={24} />}
           title={`Роль: ${roleLabel(inviteInfo.role).toLowerCase()}`}
           sub={inviteExtra.singleUse ? 'Приглашение одноразовое: сработает у одного человека' : undefined}
         />
         {inviteExtra.note ? <Row lead={<Icon name="message-circle" size={24} />} title={inviteExtra.note} /> : null}
-      </Glass>
+      </InviteFacts>
 
       <InviteActions>
         {isAuthenticated ? (

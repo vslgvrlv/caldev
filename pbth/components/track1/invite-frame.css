@@ -43,6 +43,8 @@
 .pbth-invite__text { margin: 0; font-size: 16px; line-height: 1.4; color: var(--ui-muted); }
 .pbth-invite__text strong { color: var(--ui-text); }
 .pbth-invite__facts { padding: 4px 16px; }
+/* Подпись строки (заметка, срок, тип) не вылезает за карточку на длинном слове. */
+.pbth-invite__facts .pbth-row__sub { overflow-wrap: anywhere; }
 .pbth-invite__actions { display: flex; flex-direction: column; gap: 4px; }
 .pbth-invite__note { margin: 0; font-size: 14px; text-align: center; color: var(--ui-muted); }
 .pbth-invite__until { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: var(--ui-muted); }

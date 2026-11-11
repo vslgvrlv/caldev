@@ -16,5 +16,5 @@ export { ScreenBar } from './ScreenBar';
 export { Row } from './Row';
 export { Avatar } from './Avatar';
 export { TeamMark, TeamMarkPair, teamPaint } from './TeamMark';
-export { teamMarkSvg, teamLetters, avatarHtml, initialsOf, TEAM_PAINTS, TEAM_SHAPES } from './team-mark';
+export { teamMarkSvg, teamLetters, avatarHtml, avatarPhotoSrc, initialsOf, TEAM_PAINTS, TEAM_SHAPES } from './team-mark';
 export { Screen } from './Screen';

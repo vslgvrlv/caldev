@@ -2,6 +2,7 @@ import { query } from "../../db/pool.js";
 import { writeAudit } from "../../lib/audit.js";
 import { withTransaction } from "../../lib/team-captains.js";
 import { findActiveJoinLink, type JoinLinkTeam } from "../teams/join-link.js";
+import { loadPublicNextEvent, type PublicNextEvent } from "../teams/public-next-event.js";
 import {
   closeRequestCards,
   linkKeyboard,
@@ -31,7 +32,8 @@ export function canDecideJoinRequests(role: TeamRole | null | undefined): boolea
   return role === "CAPTAIN" || role === "TRAINER";
 }
 
-export type NextEvent = { title: string; startAt: string; location: string | null; timezone: string };
+/** Ближайшее событие для того, кто ещё не в команде: время, тип, пояс (public-next-event.ts). */
+export type NextEvent = PublicNextEvent;
 
 export type JoinRequestView = {
   id: string;
@@ -39,28 +41,16 @@ export type JoinRequestView = {
   createdAt: string;
   decidedAt: string | null;
   team: { id: string; name: string; shortCode: string };
-  /** Ближайшее событие — только пока заявка ждёт решения. Без состава и денег. */
+  /**
+   * Ближайшее игровое событие — только пока заявка ждёт решения: время, тип,
+   * пояс. Без названия, места, состава и денег — человек ещё не в команде.
+   */
   nextEvent: NextEvent | null;
 };
 
 function iso(value: string | Date | null): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : String(value);
-}
-
-export async function loadNextEvent(teamId: string): Promise<NextEvent | null> {
-  const result = await query<{ title: string; start_at: Date; location: string | null; timezone: string }>(
-    `SELECT e.title, e.start_at, e.location, t.timezone
-     FROM events e
-     JOIN teams t ON t.id = e.team_id
-     WHERE e.team_id = $1 AND e.is_cancelled = FALSE AND e.start_at >= NOW()
-     ORDER BY e.start_at ASC
-     LIMIT 1`,
-    [teamId]
-  );
-  const row = result.rows[0];
-  if (!row) return null;
-  return { title: row.title, startAt: iso(row.start_at)!, location: row.location, timezone: row.timezone };
 }
 
 type RequestRow = {
@@ -87,7 +77,7 @@ async function toView(row: RequestRow): Promise<JoinRequestView> {
     createdAt: iso(row.created_at)!,
     decidedAt: iso(row.decided_at),
     team: { id: row.team_id, name: row.team_name, shortCode: row.team_short_code },
-    nextEvent: row.status === "PENDING" ? await loadNextEvent(row.team_id) : null,
+    nextEvent: row.status === "PENDING" ? await loadPublicNextEvent(row.team_id) : null,
   };
 }
 

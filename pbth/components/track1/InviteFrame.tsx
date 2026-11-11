@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Glass, Icon, Screen, TeamMark, teamPaint } from '../../ui';
+import { Button, Glass, Icon, Row, Screen, TeamMark, teamPaint } from '../../ui';
+import { membersParts, nextEventLines, type InviteFactsInput } from '../../lib/invite-copy';
 import './invite-frame.css';
 
 // Общий каркас экранов приглашения и заявки (`/invite/:token`, `/join/:code`):
@@ -50,3 +51,34 @@ export const InviteNotNow: React.FC<{ onClick: () => void }> = ({ onClick }) => 
     Не сейчас
   </Button>
 );
+
+/**
+ * Строки фактов: сколько людей в команде и ближайшее событие (когда и тип).
+ * Что сервер не прислал, того на экране нет; нет ни одной строки — нет и
+ * блока. Лишние строки (роль, заметка) приходят снаружи и идут после фактов.
+ */
+export const InviteFacts: React.FC<{
+  facts: InviteFactsInput | null | undefined;
+  children?: React.ReactNode;
+}> = ({ facts, children }) => {
+  const members = membersParts(facts?.membersCount);
+  const event = nextEventLines(facts?.nextEvent);
+  if (!members && !event && !children) return null;
+  return (
+    <Glass layer={2} className="pbth-invite__facts">
+      {members ? (
+        <Row
+          lead={<Icon name="users" size={24} />}
+          title={
+            <>
+              <strong>{members.strong}</strong>
+              {members.rest}
+            </>
+          }
+        />
+      ) : null}
+      {event ? <Row lead={<Icon name="calendar" size={24} />} title={event.when} sub={event.details || undefined} /> : null}
+      {children}
+    </Glass>
+  );
+};

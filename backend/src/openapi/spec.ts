@@ -264,7 +264,11 @@ export function buildOpenApiSpec() {
         get: {
           summary: "Get invite details",
           parameters: [{ name: "token", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
-          responses: { "200": { description: "Invite details" }, "404": { description: "Not found" } },
+          responses: {
+            "200": { description: "Invite details" },
+            "404": { description: "Not found" },
+            "429": { description: "Too many requests from this IP (30 per minute)" },
+          },
         },
       },
       "/teams/invites/{token}/accept": {

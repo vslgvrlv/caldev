@@ -6,7 +6,8 @@ import { EventCard } from '../../components/EventCard';
 import { joinLinkHint } from '../../lib/team-roster';
 import { GuestBookingCards } from '../../components/track4/GuestBookingCards';
 import { upcomingGuestBookings } from '../../components/track4/slot-format';
-import { buildDashboardEventSections, captainHomeHints, countdownLabels, showUpcomingSection } from '../../lib/events';
+import { captainHomeHints } from '../../lib/events';
+import { needsAnswer, pickHomeEvents } from '../../lib/home-feed';
 import { isExpectedInitState } from '../../lib/init-state';
 import { runOptimistic } from '../../lib/optimistic';
 import { countLabel, pluralRu } from '../../lib/plural';
@@ -115,14 +116,15 @@ describe('2. владелец платформы в чужой команде: �
     expect(canAnswerRsvp(ev('legacy'))).toBe(true);
   });
 
-  it('на главной события чужой команды не «требуют ответа»', () => {
-    const sections = buildDashboardEventSections(
-      [ev('hero', { viewerInRoster: false }), ev('next', { viewerInRoster: false, startDate: new Date(NOW + 2 * 86_400_000) })],
-      NOW,
-    );
-    expect(sections.heroEventNeedsResponse).toBe(false);
-    expect(sections.pendingEvents).toEqual([]);
-    expect(sections.upcomingEvents.map((e) => e.id)).toEqual(['next']);
+  it('на главной события чужой команды не ждут ответа и не получают кнопок', () => {
+    const own = ev('own', { rsvpStatus: RSVPStatus.UNANSWERED });
+    const other = ev('other', { viewerInRoster: false, rsvpStatus: RSVPStatus.UNANSWERED });
+    expect(needsAnswer(own)).toBe(true);
+    expect(needsAnswer(other)).toBe(false);
+    const html = renderHome({ events: [other] });
+    expect(html).toContain('Ближайшее событие');
+    expect(html).not.toContain('Не иду');
+    expect(renderHome({ events: [own] })).toContain('Не иду');
   });
 
   it('в карточке события нет кнопок «Иду / Не иду»', () => {
@@ -238,13 +240,6 @@ describe('11. склонения', () => {
     expect(renderTeam(Role.CAPTAIN, 2)).toContain('2 игрока · ты капитан<');
     expect(renderTeam(Role.CAPTAIN, 5)).toContain('5 игроков · ты капитан<');
   });
-
-  it('таймер ближайшего события: день, дня, дней; час, часа, часов', () => {
-    expect(countdownLabels({ days: '01', hours: '01', mins: '01' })).toEqual({ days: 'день', hours: 'час', mins: 'мин' });
-    expect(countdownLabels({ days: '02', hours: '03', mins: '05' })).toEqual({ days: 'дня', hours: 'часа', mins: 'мин' });
-    expect(countdownLabels({ days: '11', hours: '21', mins: '00' })).toEqual({ days: 'дней', hours: 'час', mins: 'мин' });
-    expect(countdownLabels({ days: '00', hours: '05', mins: '00' })).toEqual({ days: 'дней', hours: 'часов', mins: 'мин' });
-  });
 });
 
 const renderHome = (props: Partial<React.ComponentProps<typeof Dashboard>> = {}) =>
@@ -256,6 +251,7 @@ const renderHome = (props: Partial<React.ComponentProps<typeof Dashboard>> = {})
       onEventClick: () => {},
       onEventLongPress: () => {},
       onCommitSeries: () => {},
+      nowOverride: NOW,
       ...props,
     }),
   );
@@ -288,7 +284,7 @@ describe('12. главная капитана новой команды', () => 
     const html = renderHome({ captainHints: { inviteTeam: true, createFirstEvent: true }, onInviteTeam: () => {}, onCreateEvent: () => {} });
     expect(html).toContain('Позови команду');
     expect(html).toContain('Создай первое событие');
-    // Подсказка «Создай первое событие» заменяет пустое «Ближайшие — Событий нет».
+    // Подсказка «Создай первое событие» заменяет пустое «Событий нет».
     expect(html).not.toContain('Событий нет');
     const none = renderHome({ captainHints: { inviteTeam: false, createFirstEvent: false } });
     expect(none).not.toContain('Позови команду');
@@ -296,23 +292,22 @@ describe('12. главная капитана новой команды', () => 
   });
 });
 
-describe('13. «Ближайшие» без противоречия', () => {
-  it('единственное событие уже наверху — блока «Ближайшие» нет', () => {
-    const sections = buildDashboardEventSections([ev('only', { rsvpStatus: RSVPStatus.CONFIRMED })], NOW);
-    expect(showUpcomingSection(sections)).toBe(false);
-    const html = renderHome({ events: [ev('only', { rsvpStatus: RSVPStatus.CONFIRMED })] });
-    expect(html).not.toContain('Ближайшие');
+describe('13. лента под ближайшим событием без противоречия', () => {
+  it('единственное событие уже наверху — ленты по дням нет', () => {
+    const only = [ev('only', { rsvpStatus: RSVPStatus.CONFIRMED })];
+    expect(pickHomeEvents(only, NOW).rest).toEqual([]);
+    const html = renderHome({ events: only, nowOverride: NOW });
+    expect(html).not.toContain('pbth-day');
     expect(html).not.toContain('Событий нет');
   });
 
-  it('событий нет совсем — «Событий нет»; есть другие — «Ближайшие» со списком', () => {
-    expect(renderHome()).toContain('Событий нет');
+  it('событий нет совсем — «Событий нет»; есть другие — лента по дням', () => {
+    expect(renderHome({ nowOverride: NOW })).toContain('Событий нет');
     const two = [
       ev('a', { rsvpStatus: RSVPStatus.CONFIRMED }),
       ev('b', { rsvpStatus: RSVPStatus.CONFIRMED, startDate: new Date(NOW + 3 * 86_400_000) }),
     ];
-    expect(showUpcomingSection(buildDashboardEventSections(two, NOW))).toBe(true);
-    expect(renderHome({ events: two })).toContain('Ближайшие');
+    expect(renderHome({ events: two, nowOverride: NOW })).toContain('pbth-day');
   });
 });
 
@@ -344,10 +339,10 @@ describe('14. записи гостем видны на главной и в п�
     expect(renderToStaticMarkup(React.createElement(GuestBookingCards, { bookings: [], onOpen: () => {} }))).toBe('');
   });
 
-  it('на главной карточка стоит сверху', () => {
+  it('на главной карточка стоит под ближайшим событием', () => {
     const card = React.createElement('div', null, 'GUEST-CARD');
     const html = renderHome({ guestBookings: card, events: [ev('only')] });
     expect(html.indexOf('GUEST-CARD')).toBeGreaterThan(-1);
-    expect(html.indexOf('GUEST-CARD')).toBeLessThan(html.indexOf('Событие only'));
+    expect(html.indexOf('GUEST-CARD')).toBeGreaterThan(html.indexOf('Ближайшее событие'));
   });
 });
