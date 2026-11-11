@@ -11,7 +11,7 @@ import {
   sendAuthTelemetry,
 } from '../lib/auth-ux';
 import { sanitizeNext } from '../lib/login-next-param';
-import { resolveLoginSession } from '../lib/login-session';
+import { canContinueToAdmin, resolveLoginSession } from '../lib/login-session';
 import { isInvitePath } from '../lib/post-login';
 import { formatPairingCountdown, pairingStatusMessage } from '../lib/pairing';
 import { usePairing } from '../lib/use-pairing';
@@ -29,8 +29,6 @@ interface LoginViewProps {
   bootstrapDone: boolean;
   /** Человек, которого оболочка нашла по сессии при запуске. */
   sessionUser: User | null;
-  /** Владелец платформы: после «Продолжить» из `?next=/admin` ведём в консоль. */
-  canEnterAdmin: boolean;
 }
 
 const PAINTS = ['#00E676', '#4F7CFF'];
@@ -105,7 +103,7 @@ const PairingSteps: React.FC<{ scope: 'USER' | 'ADMIN'; redirectTo: string; onAu
   );
 };
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, sessionUser, canEnterAdmin }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, sessionUser }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authQuery = searchParams.toString();
@@ -176,7 +174,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, se
     return initData;
   };
 
-  const handleContinueExisting = () => {
+  const handleContinueExisting = async () => {
     if (session.kind !== 'session') return;
     sessionStorage.setItem('pbth:post-auth-app', wantsAdmin ? '0' : '1');
 
@@ -185,9 +183,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, bootstrapDone, se
     // for the admin path. handleLogin → tryEnterUserApp → selectRole('USER')
     // would demote the just-elevated ADMIN session back to USER and bounce to
     // /app. AdminConsoleView's own bootstrap owns the admin entry flow.
-    if (wantsAdmin && canEnterAdmin) {
-      navigate('/admin', { replace: true });
-      return;
+    if (wantsAdmin) {
+      let me = null;
+      try {
+        me = await api.getAuthMe();
+      } catch {
+        // нет ответа — идём как обычный пользователь
+      }
+      if (canContinueToAdmin(me)) {
+        navigate('/admin', { replace: true });
+        return;
+      }
     }
 
     onLogin(targetRedirect.startsWith('/admin') ? '/app' : targetRedirect);

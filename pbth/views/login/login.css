@@ -55,8 +55,12 @@
 
 .pbth-login__loading { display: flex; justify-content: center; padding: 20px 0; color: var(--ui-muted); }
 
-.pbth-login__foot { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; }
+.pbth-login__foot { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 12px; }
 .pbth-login__links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; }
 .pbth-login__links a { font-size: 12px; color: var(--ui-muted); text-decoration: underline; text-underline-offset: 3px; }
 .pbth-login__dev { display: flex; justify-content: center; gap: 8px; margin-top: 4px; }
 .pbth-login__quiet { color: var(--ui-muted); }
+
+/* Области касания не меньше 44px; текст остаётся мелким, растёт только зона нажатия. */
+.pbth-login .ui-btn--sm { min-height: 44px; }
+.pbth-login__links a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }

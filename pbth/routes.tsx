@@ -66,7 +66,6 @@ const LoginRoute: React.FC = () => {
       onLogin={(target) => void shell.actions.login(target)}
       bootstrapDone={shell.authBootstrapDone}
       sessionUser={shell.user}
-      canEnterAdmin={shell.canEnterAdmin}
     />
   );
 };

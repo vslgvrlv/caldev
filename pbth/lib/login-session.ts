@@ -15,3 +15,13 @@ export function resolveLoginSession(input: { bootstrapDone: boolean; user: User 
   if (input.user) return { kind: 'session', user: input.user };
   return { kind: 'anonymous' };
 }
+
+/**
+ * «Продолжить» из `?next=/admin` ведёт в консоль, если у сессии есть админский
+ * охват (как и раньше, по ответу `/auth/me`): `adminScope` не пуст и не `NONE`.
+ * Оболочка этого поля не хранит, поэтому экран читает его по нажатию, а не при загрузке.
+ */
+export function canContinueToAdmin(me: { authenticated?: boolean; adminScope?: string | null } | null | undefined): boolean {
+  if (!me || !me.authenticated) return false;
+  return Boolean(me.adminScope) && me.adminScope !== 'NONE';
+}

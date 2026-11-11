@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveLoginSession } from '../../lib/login-session';
+import { canContinueToAdmin, resolveLoginSession } from '../../lib/login-session';
 
 const user = { id: 'u1', name: 'Аня', nickname: 'anya' };
 
@@ -15,5 +15,18 @@ describe('resolveLoginSession', () => {
 
   it('после запуска с человеком — «Продолжить как»', () => {
     expect(resolveLoginSession({ bootstrapDone: true, user })).toEqual({ kind: 'session', user });
+  });
+});
+
+describe('canContinueToAdmin', () => {
+  it.each([
+    ['владелец платформы', { authenticated: true, adminScope: 'PLATFORM' }, true],
+    ['не-владелец с охватом TEAM', { authenticated: true, adminScope: 'TEAM' }, true],
+    ['охват NONE', { authenticated: true, adminScope: 'NONE' }, false],
+    ['охват не задан', { authenticated: true }, false],
+    ['без сессии', { authenticated: false, adminScope: 'PLATFORM' }, false],
+    ['нет ответа', null, false],
+  ])('%s', (_name, me, expected) => {
+    expect(canContinueToAdmin(me as any)).toBe(expected);
   });
 });
