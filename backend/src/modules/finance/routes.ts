@@ -1058,7 +1058,10 @@ financeRouter.get(
             memberStatus: row.member_status,
             totalDue: visible ? Number(row.total_due) : 0,
             totalPaid: visible ? Number(row.total_paid) : 0,
-            outstanding: Number(row.outstanding),
+            // Чужим — чистый долг, как на экране капитана (см. netDebt).
+            outstanding: visible
+              ? Number(row.outstanding)
+              : Math.max(Number(row.outstanding) - Number(row.overpaid), 0),
             overpaid: visible ? Number(row.overpaid) : 0,
           };
         }),
