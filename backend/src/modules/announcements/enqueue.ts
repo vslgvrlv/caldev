@@ -8,9 +8,12 @@
 //
 // Правила (раздел спеки «Когда строка появляется»):
 //   - новое событие → CREATED / EVENT; новая серия → одна CREATED / SERIES;
-//   - перенос (время или место): есть ожидающая CREATED — ничего, она уйдёт
-//     с актуальными данными; есть ожидающая RESCHEDULED — «было» остаётся
-//     прежним, сдвигается срок; иначе RESCHEDULED с «было»;
+//   - перенос (время или место): есть ожидающая CREATED — новой строки нет,
+//     она уйдёт с актуальными данными, а её срок пересчитывается от нового
+//     начала (через 3 минуты после последней правки, ночное правило — от
+//     нового времени; для серии — от ближайшего не начавшегося занятия); есть
+//     ожидающая RESCHEDULED — «было» остаётся прежним, сдвигается срок; иначе
+//     RESCHEDULED с «было»;
 //   - удаление: есть ожидающая CREATED — она SKIPPED, отмены нет; есть
 //     ожидающая RESCHEDULED — она SKIPPED и пишется CANCELLED; иначе CANCELLED;
 //   - событие уже началось или в прошлом — строк нет.
@@ -109,6 +112,22 @@ async function guarded(name: string, context: Record<string, unknown>, fn: () =>
   }
 }
 
+/**
+ * Ожидающее сообщение о новой серии: пересчитать срок от ближайшего ещё не
+ * начавшегося занятия серии (после правки). Занятий не осталось — срок не
+ * трогаем: при отправке строка станет SKIPPED.
+ */
+async function shiftPendingSeriesCreated(id: string, teamId: string, seriesId: string, now: Date) {
+  const next = await query<{ start_at: Date }>(
+    `SELECT start_at FROM events WHERE series_id = $1 AND is_cancelled = FALSE AND start_at > $2 ORDER BY start_at LIMIT 1`,
+    [seriesId, now]
+  );
+  const start = next.rows[0]?.start_at;
+  if (!start) return;
+  const { dueAt, silent } = await due(teamId, new Date(start), now);
+  await shiftPending(id, dueAt, silent);
+}
+
 function sameLocation(a: string | null | undefined, b: string | null | undefined) {
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
@@ -172,11 +191,24 @@ export function announceEventChanged(params: {
     if (!timeChanged && sameLocation(params.before.location, params.after.location)) return;
     if (params.before.startAt.getTime() <= now.getTime() || params.after.startAt.getTime() <= now.getTime()) return;
 
-    // Сообщение о новом событии ещё не ушло — уйдёт с новыми данными.
-    if (await findPending("CREATED", { eventId: params.eventId })) return;
-    if (params.seriesId && (await findPending("CREATED", { seriesId: params.seriesId }))) return;
-
     const { dueAt, silent } = await due(params.teamId, params.after.startAt, now);
+
+    // Сообщение о новом событии ещё не ушло — уйдёт с новыми данными. Срок
+    // считается заново от нового начала: событие, перенесённое ночью на утро,
+    // не должно ждать 09:00 и пропасть как «уже началось».
+    const created = await findPending("CREATED", { eventId: params.eventId });
+    if (created) {
+      await shiftPending(created, dueAt, silent);
+      return;
+    }
+    if (params.seriesId) {
+      const seriesCreated = await findPending("CREATED", { seriesId: params.seriesId });
+      if (seriesCreated) {
+        await shiftPendingSeriesCreated(seriesCreated, params.teamId, params.seriesId, now);
+        return;
+      }
+    }
+
     const pending = await findPending("RESCHEDULED", { eventId: params.eventId });
     if (pending) {
       await shiftPending(pending, dueAt, silent);
@@ -216,7 +248,11 @@ export function announceSeriesChanged(params: {
     if (!timeChanged && sameLocation(params.before.location, params.after.location)) return;
     if (params.before.startAt.getTime() <= now.getTime() || params.after.startAt.getTime() <= now.getTime()) return;
 
-    if (await findPending("CREATED", { seriesId: params.seriesId })) return;
+    const seriesCreated = await findPending("CREATED", { seriesId: params.seriesId });
+    if (seriesCreated) {
+      await shiftPendingSeriesCreated(seriesCreated, params.teamId, params.seriesId, now);
+      return;
+    }
 
     const tz = await teamTimezone(params.teamId);
     const { dueAt, silent } = announcementDueAt(now, params.after.startAt, tz, announcementsDelaySeconds());

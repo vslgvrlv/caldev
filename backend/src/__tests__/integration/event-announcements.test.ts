@@ -48,6 +48,7 @@ let app: typeof import("../../app.js").app;
 let pool: typeof import("../../db/pool.js").pool;
 let runEventAnnouncementTick: typeof import("../../modules/announcements/send.js").runEventAnnouncementTick;
 let runAutoReminderTick: typeof import("../../modules/reminders/auto.js").runAutoReminderTick;
+let enqueue: typeof import("../../modules/announcements/enqueue.js");
 let zonedTimeToUtc: typeof import("../../lib/notification-schedule.js").zonedTimeToUtc;
 let localParts: typeof import("../../lib/notification-schedule.js").localParts;
 let formatEventWhen: typeof import("../../lib/notification-messages.js").formatEventWhen;
@@ -156,6 +157,7 @@ beforeAll(async () => {
   ({ pool } = await import("../../db/pool.js"));
   ({ runEventAnnouncementTick } = await import("../../modules/announcements/send.js"));
   ({ runAutoReminderTick } = await import("../../modules/reminders/auto.js"));
+  enqueue = await import("../../modules/announcements/enqueue.js");
   ({ zonedTimeToUtc, localParts } = await import("../../lib/notification-schedule.js"));
   ({ formatEventWhen } = await import("../../lib/notification-messages.js"));
 
@@ -478,6 +480,142 @@ describe("запасным не слать и авто-напоминания (�
       .send({ audience: "ALL", template: "EVENT_REMINDER" });
     expect(res.status).toBe(200);
     expect(chatsOf(sent())).toContain(TG.reserveSilent);
+  });
+});
+
+describe("правка до отправки пересчитывает срок", () => {
+  // Время подставляется прямо в постановку в очередь: ночь нужна независимо от часов теста.
+  function mskOn(day: { year: number; month: number; day: number }, shiftDays: number, hour: number, minute = 0) {
+    const d = new Date(Date.UTC(day.year, day.month - 1, day.day + shiftDays));
+    return zonedTimeToUtc(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), hour, minute, "Europe/Moscow");
+  }
+  const base = () => localParts(new Date(Date.now() + 20 * 86_400_000), "Europe/Moscow");
+
+  async function insertEvent(title: string, startAt: Date) {
+    const ev = await pool.query<{ id: string }>(
+      `INSERT INTO events (team_id, type, title, start_at, location) VALUES ($1, 'TRAINING', $2, $3, 'Точка') RETURNING id`,
+      [f.teamId, title, startAt]
+    );
+    return ev.rows[0].id;
+  }
+
+  it("создано в 23:40 на 16:00 (ждёт 09:00) → в 23:50 перенесли на 08:00 → уходит через 3 минуты без звука и не пропускается", async () => {
+    const day = base();
+    const createdAt = mskOn(day, 0, 23, 40);
+    const editedAt = mskOn(day, 0, 23, 50);
+    const at16 = mskOn(day, 1, 16);
+    const at08 = mskOn(day, 1, 8);
+    const eventId = await insertEvent("Ночная правка", at16);
+
+    await enqueue.announceEventCreated({ teamId: f.teamId, eventId, startAt: at16, actorUserId: f.users.captain, now: createdAt });
+    let [row] = await rowsOf(eventId);
+    expect(new Date(row.due_at)).toEqual(mskOn(day, 1, 9));
+    expect(row.payload.silent).toBe(false);
+
+    await pool.query(`UPDATE events SET start_at = $2 WHERE id = $1`, [eventId, at08]);
+    await enqueue.announceEventChanged({
+      teamId: f.teamId,
+      eventId,
+      seriesId: null,
+      before: { startAt: at16, location: "Точка" },
+      after: { startAt: at08, location: "Точка" },
+      actorUserId: f.users.captain,
+      now: editedAt,
+    });
+    const rows = await rowsOf(eventId);
+    expect(rows.map((r) => [r.kind, r.status])).toEqual([["CREATED", "PENDING"]]);
+    row = rows[0];
+    expect(new Date(row.due_at)).toEqual(new Date(editedAt.getTime() + 180_000));
+    expect(row.payload.silent).toBe(true);
+
+    const tick = await runEventAnnouncementTick(new Date(editedAt.getTime() + 181_000));
+    expect(tick).toMatchObject({ claimed: 1, sent: 1, skipped: 0 });
+    expect(whoGot(sent())).toEqual(sorted(CREATED_AUDIENCE));
+    expect(sent().every((c) => c.payload.disable_notification === true)).toBe(true);
+    expect(sent()[0].payload.text).toContain(formatEventWhen(at08, "Europe/Moscow"));
+  });
+
+  it("обратный: ночью перенесли с 08:00 на 16:00 — срок сдвигается на 09:00, со звуком", async () => {
+    const day = base();
+    const createdAt = mskOn(day, 1, 23, 40);
+    const at08 = mskOn(day, 2, 8);
+    const at16 = mskOn(day, 2, 16);
+    const eventId = await insertEvent("Ночная правка 2", at08);
+
+    await enqueue.announceEventCreated({ teamId: f.teamId, eventId, startAt: at08, actorUserId: f.users.captain, now: createdAt });
+    let [row] = await rowsOf(eventId);
+    expect(new Date(row.due_at)).toEqual(new Date(createdAt.getTime() + 180_000));
+    expect(row.payload.silent).toBe(true);
+
+    await pool.query(`UPDATE events SET start_at = $2 WHERE id = $1`, [eventId, at16]);
+    await enqueue.announceEventChanged({
+      teamId: f.teamId,
+      eventId,
+      seriesId: null,
+      before: { startAt: at08, location: "Точка" },
+      after: { startAt: at16, location: "Точка" },
+      actorUserId: f.users.captain,
+      now: new Date(createdAt.getTime() + 60_000),
+    });
+    [row] = await rowsOf(eventId);
+    expect(new Date(row.due_at)).toEqual(mskOn(day, 2, 9));
+    expect(row.payload.silent).toBe(false);
+    // Строка остаётся ожидающей, с ней разбираемся здесь же.
+    await pool.query(`DELETE FROM event_announcements WHERE event_id = $1`, [eventId]);
+  });
+
+  it("серия: правка занятия и «это и все следующие» пересчитывают срок ожидающего сообщения о серии от ближайшего занятия", async () => {
+    let days = 4;
+    while (new Date(mskAt(days, 16)).getUTCDay() !== 2) days += 1;
+    const first = mskAt(days, 16);
+    const until = new Date(first.getTime() + 9 * 86_400_000).toISOString().slice(0, 10);
+    const created = await createEvent("Серия ночью", first, { recurrence: { enabled: true, weekdays: ["TUE", "THU"], untilDate: until } });
+    const seriesId = created.seriesId!;
+    const occ = await pool.query<{ id: string; start_at: Date }>(
+      `SELECT id, start_at FROM events WHERE series_id = $1 ORDER BY start_at`,
+      [seriesId]
+    );
+    const firstId = occ.rows[0].id;
+    const firstDay = localParts(first, "Europe/Moscow");
+    const night = mskOn(firstDay, -1, 23, 50);
+    const at08 = mskOn(firstDay, 0, 8);
+    const pendingSeries = async () =>
+      (await pool.query<Row>(`SELECT * FROM event_announcements WHERE series_id = $1 AND status = 'PENDING'`, [seriesId])).rows;
+
+    // Одно занятие перенесли ночью на 08:00 — сообщение о серии уходит через 3 минуты без звука.
+    await pool.query(`UPDATE events SET start_at = $2 WHERE id = $1`, [firstId, at08]);
+    await enqueue.announceEventChanged({
+      teamId: f.teamId,
+      eventId: firstId,
+      seriesId,
+      before: { startAt: first, location: "Точка" },
+      after: { startAt: at08, location: "Точка" },
+      actorUserId: f.users.captain,
+      now: night,
+    });
+    let rows = await pendingSeries();
+    expect(rows.map((r) => [r.scope, r.kind])).toEqual([["SERIES", "CREATED"]]);
+    expect(new Date(rows[0].due_at)).toEqual(new Date(night.getTime() + 180_000));
+    expect(rows[0].payload.silent).toBe(true);
+    expect(await rowsOf(firstId)).toHaveLength(1);
+
+    // «Это и все следующие» вернули на 16:00 — срок снова 09:00, со звуком.
+    await pool.query(`UPDATE events SET start_at = $2 WHERE id = $1`, [firstId, first]);
+    await enqueue.announceSeriesChanged({
+      teamId: f.teamId,
+      seriesId,
+      anchorEventId: firstId,
+      beforeStarts: [at08],
+      before: { startAt: at08, location: "Точка" },
+      after: { startAt: first, location: "Точка" },
+      actorUserId: f.users.captain,
+      now: night,
+    });
+    rows = await pendingSeries();
+    expect(rows).toHaveLength(1);
+    expect(new Date(rows[0].due_at)).toEqual(mskOn(firstDay, 0, 9));
+    expect(rows[0].payload.silent).toBe(false);
+    await pool.query(`DELETE FROM event_announcements WHERE series_id = $1`, [seriesId]);
   });
 });
 
