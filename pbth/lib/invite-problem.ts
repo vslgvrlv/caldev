@@ -10,13 +10,13 @@ export function describeInviteProblem(err: unknown): string | null {
   const code = String((err as { code?: string } | null)?.code || '');
   const message = err instanceof Error ? err.message.toLowerCase() : '';
   if (code === 'INVITE_NOT_FOUND' || code === 'INVITE_REQUIRED' || message.includes('invite not found')) {
-    return 'Эта ссылка устарела. Попросите у капитана новую ссылку-приглашение.';
+    return 'Эта ссылка устарела. Попроси у капитана новую ссылку-приглашение.';
   }
   if (code === 'INVITE_EXPIRED' || message.includes('invite expired')) {
-    return 'Срок приглашения истёк. Попросите у капитана новую ссылку-приглашение.';
+    return 'Срок приглашения истёк. Попроси у капитана новую ссылку-приглашение.';
   }
   if (code === 'INVITE_REVOKED' || message.includes('invite is revoked')) {
-    return 'Капитан отозвал это приглашение. Попросите у него новую ссылку.';
+    return 'Капитан отозвал это приглашение. Попроси у него новую ссылку.';
   }
   return null;
 }
