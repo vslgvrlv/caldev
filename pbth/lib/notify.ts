@@ -39,7 +39,7 @@ function push(kind: NotifyKind, text: string) {
   const message = String(text || '').trim();
   if (!message) return;
   if (hostMounted === 0) {
-    if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(message);
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(message);  // ui-kit-allow: запасной путь, пока хоста нет (тесты, сбой загрузки): человек всё равно должен увидеть сообщение
     return;
   }
   const toast: Toast = { id: ++seq, kind, text: message };
@@ -48,7 +48,7 @@ function push(kind: NotifyKind, text: string) {
   setTimeout(() => dismissToast(toast.id), kind === 'error' ? ERROR_TOAST_MS : TOAST_MS);
 }
 
-export function dismissToast(id: number) {
+export function dismissToast(id: number) {  // ui-kit-allow: имя функции состояния; плашку рисует ui-kit (NotifyHost)
   if (!state.toasts.some((toast) => toast.id === id)) return;
   state = { ...state, toasts: state.toasts.filter((toast) => toast.id !== id) };
   emit();
@@ -69,13 +69,13 @@ export function errorText(error: unknown, fallback = 'Что-то пошло н�
   return message;
 }
 
-export function confirmAction(
+export function confirmAction(  // ui-kit-allow: вход API подтверждения; окно рисует ui-kit (NotifyHost)
   text: string,
   options?: { confirmLabel?: string; cancelLabel?: string; danger?: boolean },
 ): Promise<boolean> {
   if (hostMounted === 0) {
     if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-      return Promise.resolve(window.confirm(text));
+      return Promise.resolve(window.confirm(text)); // ui-kit-allow: запасной путь без хоста, как для alert выше
     }
     return Promise.resolve(false);
   }

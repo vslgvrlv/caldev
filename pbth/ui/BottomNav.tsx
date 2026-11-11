@@ -1,5 +1,5 @@
 import React from 'react';
-import { UI, useUiMount, type Handle } from './uikit';
+import { sidenav, useUiMount, type Handle } from './uikit';
 
 export type BottomNavItem = {
   href: string;
@@ -25,7 +25,7 @@ type Cfg = BottomNavProps;
 
 export function mountNav(host: HTMLElement, cfg: Cfg): Handle {
   let current = cfg;
-  const nav = UI.sidenav.mount(host, {
+  const nav = sidenav.mount(host, {
     groups: [{ items: cfg.items.map(({ href, label, icon, badge, more }) => ({ href, label, icon, badge, more })) }],
     path: cfg.path,
     mobile: 'bottom',

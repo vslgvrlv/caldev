@@ -1,5 +1,5 @@
 import React from 'react';
-import { UI, useUiMount } from './uikit';
+import { feed, useUiMount } from './uikit';
 
 export type FeedType = {
   icon?: string;
@@ -42,7 +42,7 @@ export type FeedProps = {
   empty?: { text: string };
 };
 
-export const mountFeed = (el: HTMLElement, c: Record<string, unknown>) => UI.feed.mount(el, { group: false, limit: 50, ...c });
+export const mountFeed = (el: HTMLElement, c: Record<string, unknown>) => feed.mount(el, { group: false, limit: 50, ...c });
 
 /** Лента событий ui-kit (`UI.feed`). Данные приходят целиком, лента перерисовывается при смене пропсов.
  *  Пачки не сворачиваются (`group: false`) и лимит 50, пока экран не скажет иначе. */

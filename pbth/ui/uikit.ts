@@ -66,11 +66,18 @@ export interface UiKit {
   };
 }
 
-export const UI = raw as unknown as UiKit;
+// Модули берутся по одному (не одним объектом UI), чтобы сборка выкидывала те, что экран не использует;
+// сообщения (NotifyHost) подгружают этот файл лениво, при первом тосте или окне.
+export const toast = raw.toast as UiKit['toast'];
+export const dialog = raw.dialog as UiKit['dialog'];
+export const feed = raw.feed as UiKit['feed'];
+export const month = raw.month as UiKit['month'];
+export const seg = raw.seg as UiKit['seg'];
+export const sidenav = raw.sidenav as UiKit['sidenav'];
 
 // Спрайт значков лежит рядом с копией ui-kit и отдаётся с того же адреса.
 export const ICONS_HREF: string = iconsUrl;
-UI.icons.configure({ href: ICONS_HREF });
+(raw.icons as UiKit['icons']).configure({ href: ICONS_HREF });
 
 /** Подключает модуль ui-kit к узлу React: mount → update → destroy. */
 export type MountController<C> = {
@@ -127,3 +134,5 @@ export function useUiMount<C>(mountFn: (el: HTMLElement, cfg: C) => Handle, cfg:
 
   return ref;
 }
+
+export type UiKitModule = typeof import('./uikit');

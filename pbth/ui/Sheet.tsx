@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { UI, type DialogAction } from './uikit';
+import { dialog, type DialogAction } from './uikit';
 
 export type SheetProps = {
   open: boolean;
@@ -17,7 +17,7 @@ export type SheetProps = {
  * Нижняя шторка: `UI.dialog` (на телефоне ui-kit сам прижимает окно к низу).
  * Содержимое — обычные React-дети, они вставляются в тело окна порталом.
  */
-export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, subtitle, children, actions }) => {
+export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, subtitle, children, actions }) => {  // ui-kit-allow: обёртка над UI.dialog, а не своя шторка
   const [body, setBody] = React.useState<HTMLElement | null>(null);
   const onCloseRef = React.useRef(onClose);
   onCloseRef.current = onClose;
@@ -28,7 +28,7 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, subtitle, ch
     if (!open) return;
     const host = document.createElement('div');
     let closedByUs = false;
-    const win = UI.dialog.open({
+    const win = dialog.open({
       title,
       subtitle,
       content: host,

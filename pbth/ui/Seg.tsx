@@ -1,5 +1,5 @@
 import React from 'react';
-import { UI, useUiMount, type Handle } from './uikit';
+import { seg, useUiMount, type Handle } from './uikit';
 
 export type SegItem = { value: string; label: string; icon?: string };
 
@@ -18,7 +18,7 @@ export type SegProps = {
 type Cfg = { items: SegItem[]; value: string; label?: string; onChange: (v: string) => void; split?: boolean; fill?: boolean };
 
 export const mountSeg = (el: HTMLElement, cfg: Cfg): Handle => {
-  const s = UI.seg.mount(el, { items: cfg.items, value: cfg.value, label: cfg.label, onChange: (v: string) => cfgRef.get(el)?.onChange(v) });
+  const s = seg.mount(el, { items: cfg.items, value: cfg.value, label: cfg.label, onChange: (v: string) => cfgRef.get(el)?.onChange(v) });
   cfgRef.set(el, cfg);
   if (cfg.split) s.el.classList.add('ui-seg--split');
   if (cfg.fill) s.el.classList.add('ui-seg--fill');

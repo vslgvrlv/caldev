@@ -1,5 +1,5 @@
 import React from 'react';
-import { UI, useUiMount } from './uikit';
+import { month, useUiMount } from './uikit';
 
 export type MonthProps = {
   year: number;
@@ -14,7 +14,7 @@ export type MonthProps = {
   onNav?: (to: { year: number; month: number }) => void;
 };
 
-export const mountMonth = (el: HTMLElement, c: MonthProps) => UI.month.mount(el, c as unknown as Record<string, unknown>);
+export const mountMonth = (el: HTMLElement, c: MonthProps) => month.mount(el, c as unknown as Record<string, unknown>);
 
 /** Сетка месяца ui-kit (`UI.month`). */
 export const Month: React.FC<MonthProps> = (props) => {

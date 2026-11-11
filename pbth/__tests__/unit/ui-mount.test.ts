@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { UI, createMountController, type Handle } from '../../ui/uikit';
+import { feed, month, sidenav, createMountController, type Handle } from '../../ui/uikit';
 import { mountFeed } from '../../ui/Feed';
 import { mountMonth } from '../../ui/Month';
 import { mountNav } from '../../ui/BottomNav';
@@ -41,7 +41,7 @@ describe('useUiMount: mount, update, destroy', () => {
 
 describe('обёртки передают настройки в ui-kit', () => {
   it('Feed: лента с order, lead, status и actions без свёртки пачек', () => {
-    const mount = vi.spyOn(UI.feed, 'mount').mockReturnValue({} as Handle);
+    const mount = vi.spyOn(feed, 'mount').mockReturnValue({} as Handle);
     const items = [{ id: 1, type: 'event', at: '2026-11-12T19:00:00+03:00', lead: '<i></i>', status: { text: 'иду' } }];
     mountFeed(el, { types: {}, items, order: 'asc', timeDisplay: undefined });
     const cfg = mount.mock.calls[0][1] as Record<string, unknown>;
@@ -51,7 +51,7 @@ describe('обёртки передают настройки в ui-kit', () => {
   });
 
   it('Month: год, месяц и обработчики доходят до UI.month', () => {
-    const mount = vi.spyOn(UI.month, 'mount').mockReturnValue({} as Handle);
+    const mount = vi.spyOn(month, 'mount').mockReturnValue({} as Handle);
     const onSelect = vi.fn();
     mountMonth(el, { year: 2026, month: 11, selected: '2026-11-14', onSelect });
     expect(mount).toHaveBeenCalledWith(el, { year: 2026, month: 11, selected: '2026-11-14', onSelect });
@@ -61,7 +61,7 @@ describe('обёртки передают настройки в ui-kit', () => {
     const navEl = { remove: vi.fn() };
     const bottom = { remove: vi.fn() };
     const api = { el: navEl, bottom, setActive: vi.fn(), setBadge: vi.fn(), setAction: vi.fn() };
-    const mount = vi.spyOn(UI.sidenav, 'mount').mockReturnValue(api as never);
+    const mount = vi.spyOn(sidenav, 'mount').mockReturnValue(api as never);
     const listeners: Record<string, (e: unknown) => void> = {};
     const host = {
       addEventListener: (t: string, f: (e: unknown) => void) => (listeners[t] = f),

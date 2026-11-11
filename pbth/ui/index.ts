@@ -1,4 +1,4 @@
-export { UI, ICONS_HREF, useUiMount, createMountController } from './uikit';
+export { toast, dialog, feed, month, seg, sidenav, ICONS_HREF, useUiMount, createMountController } from './uikit';
 export type { DialogAction, DialogOptions, ToastOptions } from './uikit';
 export { Icon } from './Icon';
 export { Button, buttonClass } from './Button';
