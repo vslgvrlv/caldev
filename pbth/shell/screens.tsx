@@ -9,9 +9,10 @@ import { eventPath, memberPath, teamCodeOf, teamPath } from '../lib/team-url';
 import { captainHomeHints } from '../lib/events';
 import { teamLinkAccess } from '../lib/team-link-access';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
-import { HomeHeader } from '../components/shell/HomeHeader';
-import { TeamsPicker } from '../components/shell/TeamsPicker';
 import { shellExtensions, type ShellExtContext } from './extensions';
+import { teamScreenRows } from './section-head';
+import { treasuryRowSub } from '../lib/treasury-view';
+import { formatRub } from '../lib/format-rub';
 import { GuestBookingsBlock } from '../components/track4/GuestBookingCards';
 import { PlayerStatus, Role, type Event, type TeamContext, type TeamMember } from '../types';
 
@@ -57,12 +58,6 @@ export const DashboardScreen: React.FC = () => {
   const openEvent = useOpenEvent();
   const code = useTeamCode();
   const [linkOpen, setLinkOpen] = React.useState(false);
-  const [teamsOpen, setTeamsOpen] = React.useState(false);
-  const [now, setNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
   const team = shell.team;
   // Подсказки капитану новой команды: «Позови команду», «Создай первое событие».
   const hints = captainHomeHints({
@@ -71,44 +66,13 @@ export const DashboardScreen: React.FC = () => {
     teamEventsCount: team ? shell.events.filter((event) => event.teamId === team.id).length : 0,
   });
 
-  // Значки шапки и пункты меню команды — от треков (pbth/shell/ext).
-  const extCtx: ShellExtContext | null = shell.user && team ? { user: shell.user, team, teamCode: code, role: team.role, teams: shell.teams } : null;
-  const badges = extCtx
-    ? shellExtensions.headerBadges
-        .filter((badge) => !badge.visible || badge.visible(extCtx))
-        .map(({ id, Component }) => <Component key={id} {...extCtx} />)
-    : null;
-  const menuItems = extCtx
-    ? shellExtensions.teamMenu
-        .filter((item) => !item.visible || item.visible(extCtx))
-        .map((item) => ({ id: item.id, label: item.label, to: item.to(extCtx) }))
-    : [];
-
-  // Знак команды в шапке открывает главную этой команды: раздел сменой команды не сохраняется.
-  const pickTeam = (target: TeamContext) => {
-    setTeamsOpen(false);
-    const targetCode = teamCodeOf({ teamId: target.teamId, shortCode: target.shortCode });
-    if (targetCode !== code) navigate(teamPath(targetCode));
-  };
-
+  // Шапку «Моё» (название, дата, ряд знаков, «Команды», значки) и фон даёт оболочка.
   return (
     <>
       <Dashboard
         teams={shell.teams}
         events={shell.events}
         currentTeam={team ? { id: team.id, name: team.name, shortCode: team.shortCode } : null}
-        header={
-          <HomeHeader
-            title="Главная"
-            modeNote={team?.via === 'owner' ? 'Владелец платформы' : undefined}
-            now={now}
-            teams={shell.teams}
-            currentCode={code}
-            badges={badges}
-            onPickTeam={pickTeam}
-            onOpenTeams={() => setTeamsOpen(true)}
-          />
-        }
         onRsvp={(id, status) => void shell.actions.rsvp(id, status)}
         onEventClick={openEvent}
         onEventLongPress={shell.actions.openRsvpModal}
@@ -117,18 +81,6 @@ export const DashboardScreen: React.FC = () => {
         onInviteTeam={() => setLinkOpen(true)}
         onCreateEvent={() => navigate(teamPath(code || shell.teamCode || '', 'new'))}
         guestBookings={<GuestBookingsBlock />}
-      />
-      <TeamsPicker
-        open={teamsOpen}
-        onClose={() => setTeamsOpen(false)}
-        teams={shell.teams}
-        currentCode={code}
-        items={menuItems}
-        onPickTeam={pickTeam}
-        onPickItem={(to) => {
-          setTeamsOpen(false);
-          navigate(to);
-        }}
       />
       {linkOpen && team && (
         <TeamJoinLinkSheet
@@ -175,7 +127,14 @@ export const RosterScreen: React.FC = () => {
   const shell = useShell();
   const navigate = useNavigate();
   const code = useTeamCode();
-  if (!shell.team) return null;
+  if (!shell.team || !shell.user) return null;
+  // Пункты меню команды от треков — строками на экране команды (раньше — в шапке и в листе «Ещё»).
+  const extCtx: ShellExtContext = { user: shell.user, team: shell.team, teamCode: code, role: shell.team.role, teams: shell.teams };
+  const menuRows = teamScreenRows(
+    shellExtensions.teamMenu
+      .filter((item) => !item.visible || item.visible(extCtx))
+      .map((item) => ({ id: item.id, label: item.label, to: item.to(extCtx) })),
+  );
   return (
     <TeamView
       team={shell.team}
@@ -186,6 +145,17 @@ export const RosterScreen: React.FC = () => {
       onRemoveMember={shell.actions.removeMember}
       currentUserId={shell.user?.id}
       onOpenRequests={() => navigate(teamPath(code, 'requests'))}
+      treasury={{
+        sub: treasuryRowSub({
+          role: shell.team.role,
+          budget: shell.team.budget,
+          members: shell.members,
+          currentUserId: shell.user?.id,
+          formatRub,
+        }),
+        onOpen: () => navigate(teamPath(code, 'money')),
+      }}
+      menuRows={menuRows.map((row) => ({ id: row.id, label: row.label, icon: row.icon, onOpen: () => navigate(row.to) }))}
     />
   );
 };
@@ -274,6 +244,7 @@ export const EventScreen: React.FC = () => {
       onUpdateGame={shell.actions.updateGame}
       onAttendeeClick={(userId, seed) => navigate(memberPath(code, userId), { state: { seed } })}
       onSendEventReminder={shell.actions.sendEventReminder}
+      onOpenMoney={() => navigate(teamPath(code, 'money'))}
       onEditTime={shell.actions.editEventTime}
       onEditEvent={shell.actions.editEvent}
       onDeleteEvent={async (id, scope) => {

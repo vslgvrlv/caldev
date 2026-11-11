@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
-import { useOpenTeams } from '../shell/teams-picker-context';
 import { teamLinkAccess } from '../lib/team-link-access';
-import { attendanceLabel, filterMembers, groupRoster, isLeader, memberSub, rosterHeadline, sortRoster } from '../lib/team-roster';
+import { attendanceLabel, filterMembers, groupRoster, isLeader, memberSub, sortRoster } from '../lib/team-roster';
 import { usePendingRequests } from '../lib/use-pending-requests';
-import { Avatar, Button, Glass, Icon, Row, Screen, Seg, Sheet, TeamMark, teamPaint } from '../ui';
+import { Avatar, Button, Glass, Icon, Row, Screen, Seg, Sheet, teamPaint } from '../ui';
 import './team/team.css';
 
 interface TeamViewProps {
@@ -20,6 +19,10 @@ interface TeamViewProps {
   currentUserId?: string;
   /** Переход на экран заявок (строка «Заявки»). */
   onOpenRequests?: () => void;
+  /** Строка «Казна» над составом: подпись (остаток или свой долг) и переход. */
+  treasury?: { sub?: string; onOpen: () => void };
+  /** Пункты меню команды строками (журнал, открытое расписание): значок ui-kit, подпись, переход. */
+  menuRows?: Array<{ id: string; label: string; icon: string; onOpen: () => void }>;
 }
 
 type View = 'ROSTER' | 'STATS';
@@ -45,6 +48,8 @@ export const TeamView: React.FC<TeamViewProps> = ({
   onRemoveMember,
   currentUserId,
   onOpenRequests,
+  treasury,
+  menuRows = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   // Ссылка команды (трек 1): постоянная, с кодом и QR.
@@ -52,7 +57,6 @@ export const TeamView: React.FC<TeamViewProps> = ({
   const [view, setView] = useState<View>('ROSTER');
   const [quickMember, setQuickMember] = useState<TeamMember | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
-  const openTeams = useOpenTeams();
 
   const isAdminOrCaptain = currentUserRole === Role.ADMIN || currentUserRole === Role.CAPTAIN;
   // Ссылку команды показывают капитан и тренер (заявки одобряют оба), отзывает — капитан.
@@ -81,16 +85,7 @@ export const TeamView: React.FC<TeamViewProps> = ({
 
   return (
     <Screen paints={[paint]}>
-      <div className="pbth-team__hero">
-        <button type="button" className="pbth-team__markbtn" aria-label="Выбрать команду" onClick={openTeams}>
-          <TeamMark teamId={team.id} name={team.name} code={team.shortCode} size={72} />
-        </button>
-        <div className="pbth-team__heroText">
-          <h1 className="pbth-team__name">{team.name}</h1>
-          <div className="pbth-team__meta">{rosterHeadline(members.length, currentUserRole, team.via)}</div>
-        </div>
-      </div>
-
+      {/* Название команды, число участников и роль — в шапке раздела (оболочка); знак команды отмечен в её ряду. */}
       <div className="pbth-team__tools">
         <Seg items={VIEW_ITEMS} value={view} onChange={onViewChange} label="Что показать" fill />
         <input
@@ -104,6 +99,15 @@ export const TeamView: React.FC<TeamViewProps> = ({
       </div>
 
       <Glass className="pbth-team__panel">
+        {view === 'ROSTER' && treasury && (
+          <Row
+            lead={<span className="pbth-iconlead ui-glass2"><Icon name="wallet" /></span>}
+            title="Казна"
+            sub={treasury.sub}
+            chevron
+            onClick={treasury.onOpen}
+          />
+        )}
         {view === 'ROSTER' && linkAccess.canShare && onOpenRequests && (
           <Row
             lead={<span className="pbth-iconlead ui-glass2"><Icon name="users" /></span>}
@@ -121,6 +125,16 @@ export const TeamView: React.FC<TeamViewProps> = ({
             onClick={() => setLinkOpen(true)}
           />
         )}
+        {view === 'ROSTER' &&
+          menuRows.map((row) => (
+            <Row
+              key={row.id}
+              lead={<span className="pbth-iconlead ui-glass2"><Icon name={row.icon} /></span>}
+              title={row.label}
+              chevron
+              onClick={row.onOpen}
+            />
+          ))}
         {groups.map((group) => (
           <React.Fragment key={group.key}>
             {group.title && <div className="pbth-team__group">{group.title}</div>}

@@ -82,10 +82,16 @@ export function teamPaint(teamId: string | number): string {
   return TEAM_PAINTS[Math.floor(hash(teamId) / TEAM_SHAPE_COUNT) % TEAM_PAINTS.length];
 }
 
-/** Две буквы знака: из короткого кода, иначе из названия. */
+const CYRILLIC = /[\u0400-\u04FF]/;
+
+/**
+ * Две буквы знака: из короткого кода, иначе из названия. Кириллическое название
+ * при латинском коде даёт буквы из названия: «Дневной Дозор» — «ДД», а не «DD».
+ */
 export function teamLetters(name?: string | null, code?: string | null): string {
   const c = (code ?? '').trim();
-  if (c) return Array.from(c).slice(0, 2).join('').toUpperCase();
+  const cyrillicName = CYRILLIC.test(name ?? '') && !CYRILLIC.test(c);
+  if (c && !cyrillicName) return Array.from(c).slice(0, 2).join('').toUpperCase();
   const words = (name ?? '')
     .replace(/[«»"'()]/g, ' ')
     .split(/[\s\-–—_]+/)
@@ -106,12 +112,21 @@ export type TeamMarkSpec = {
   paint?: string;
 };
 
+/** Размер букв знака из шкалы текста приложения. */
+export function markLetterSize(size: number): number {
+  if (size >= 96) return 28;
+  if (size >= 52) return 20;
+  if (size >= 38) return 14;
+  return 12;
+}
+
 /** Разметка знака в пикселях блока: width, height и viewBox равны `size`. */
 export function teamMarkSvg({ teamId, name, code, size = 40, paint }: TeamMarkSpec): string {
   const shape = TEAM_SHAPES[teamShapeIndex(teamId)];
   const fill = /^#[0-9a-fA-F]{3,8}$/.test(paint ?? '') ? (paint as string) : teamPaint(teamId);
   const letters = esc(teamLetters(name, code));
-  const fs = +(size * 0.34).toFixed(1);
+  // Размер букв — из шкалы 12/14/20/28: мелкий знак в ряду — 12, в строке — 14, крупный — 20, огромный — 28.
+  const fs = markLetterSize(size);
   const label = esc(name ?? '');
   return (
     `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
@@ -145,7 +160,7 @@ export function initialsOf(name?: string | null): string {
 /** Разметка аватара: круг на втором слое стекла с инициалами. */
 export function avatarHtml(name?: string | null, size = 40): string {
   // Крупный аватар (профиль): буквы растут вместе с кругом; до 80px размеры прежние.
-  const fs = size >= 80 ? Math.round(size * 0.34) : size >= 56 ? 20 : size >= 40 ? 14 : 12;
+  const fs = size >= 80 ? 28 : size >= 56 ? 20 : size >= 40 ? 14 : 12;
   return (
     `<span class="ui-glass2" role="img" aria-label="${esc(name ?? '')}" style="display:inline-flex;align-items:center;justify-content:center;flex:none;` +
     `width:${size}px;height:${size}px;border-radius:50%;font-size:${fs}px;font-weight:700;color:var(--ui-text)">${esc(initialsOf(name))}</span>`

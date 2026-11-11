@@ -85,14 +85,31 @@ describe('Mini App — по данным запуска, а не по налич
   });
 });
 
-describe('нижняя панель: подсветка пункта', () => {
-  it('разделы вне панели (заявки, журнал) не подсвечивают ничего, разделы панели — свой пункт', async () => {
+describe('нижняя панель: пункты и подсветка', () => {
+  it('как в макете: Моё, Календарь, Команды, Профиль; без «Ещё» и без «Казны» в панели', async () => {
+    const { shellNavItems } = await import('../../components/shell/ShellNav');
+    const items = shellNavItems('hg');
+    expect(items.map((it) => [it.label, it.icon, it.href])).toEqual([
+      ['Моё', 'house', '/t/hg'],
+      ['Календарь', 'calendar', '/t/hg/calendar'],
+      ['Команды', 'users', '/t/hg/roster'],
+      ['Профиль', 'user', '/me'],
+    ]);
+    expect(items.some((it) => it.more)).toBe(false);
+    expect(shellNavItems(null).map((it) => it.label)).toEqual(['Профиль']);
+  });
+
+  it('разделы команды (состав, казна, заявки, журнал) подсвечивают «Команды», запись — ничего', async () => {
     const { navActivePath } = await import('../../components/shell/ShellNav');
     expect(navActivePath('/t/hg')).toBe('/t/hg');
     expect(navActivePath('/t/hg/calendar')).toBe('/t/hg/calendar');
     expect(navActivePath('/t/hg/roster')).toBe('/t/hg/roster');
+    expect(navActivePath('/t/hg/money')).toBe('/t/hg/roster');
+    expect(navActivePath('/t/hg/requests')).toBe('/t/hg/roster');
+    expect(navActivePath('/t/hg/journal')).toBe('/t/hg/roster');
     expect(navActivePath('/me')).toBe('/me');
-    expect(navActivePath('/t/hg/requests')).toBe('/-');
-    expect(navActivePath('/t/hg/journal')).toBe('/-');
+    expect(navActivePath('/t/hg/event/e1')).toBe('/-');
+    expect(navActivePath('/t/hg/new')).toBe('/-');
+    expect(navActivePath('/t/hg/roster/u1')).toBe('/-');
   });
 });
