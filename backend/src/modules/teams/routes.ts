@@ -1,4 +1,6 @@
-import { Router, type Request } from "express";
+import express, { Router, type Request, type RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
+import { env } from "../../config/env.js";
 import { loadInviteFacts } from "./invite-facts.js";
 import { publicLinkReadLimiter } from "../../lib/public-link-rate-limit.js";
 import { z } from "zod";
@@ -19,6 +21,7 @@ import { sendError } from "../../lib/http-error.js";
 import { appUrl, sendTrackError } from "../join-requests/delivery.js";
 import { ensureActiveJoinLink, joinLinkUrl, rotateJoinLink } from "./join-link.js";
 import { loadTeamLook, loadTeamLooks, teamLookPatchSchema, updateTeamLook } from "../../lib/team-look.js";
+import { deleteTeamLogo, encodeLogo, loadTeamLogo, LOGO_MAX_BYTES, LogoError, saveTeamLogo } from "../../lib/team-logo.js";
 
 const createTeamSchema = z.object({
   name: z.string().min(2).max(120),
@@ -378,25 +381,138 @@ teamsRouter.post(
 );
 
 // Ссылка команды `/join/<код>` (трек 1). Видят капитан и тренер — заявки
-// Оформление команды: краска, фигура знака и буквы. Меняет капитан (владелец
-// платформы — как капитан); тренер и игрок видят знак, но не правят его.
+// Оформление команды: краска, фигура знака, буквы и свой логотип. Меняет
+// капитан (владелец платформы — как капитан); тренер и игрок видят знак, но не
+// правят его. У смены оформления свой предел частоты на человека: это редкое
+// действие, а загрузка логотипа ещё и перекодирует картинку.
+const teamLookWriteLimiter = rateLimit({
+  windowMs: env.rateLimit.teamLookWindowMs,
+  limit: env.rateLimit.teamLookMax,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Счёт по вошедшему человеку, а не по IP: стоит после `requireAuth`, поэтому
+  // запросы без входа получают 401 и ничью квоту не тратят, а два капитана за
+  // одним Wi-Fi площадки не делят предел.
+  keyGenerator: (req) => `user:${req.authUser?.id ?? "anonymous"}`,
+  handler: (req, res) => {
+    res.status(429).json({ code: "RATE_LIMITED", detail: "Too many requests, try again later", correlationId: req.correlationId });
+  },
+});
+
+/** Доступ к оформлению: команда есть, человек — её капитан или владелец платформы. Иначе ответ уже отправлен. */
+const requireLookManager: RequestHandler = asyncHandler(async (req, res, next) => {
+  const teamId = z.string().uuid().parse(req.params.teamId);
+  const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
+  if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
+  const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
+  if (!isOwner && !isCaptain) {
+    return res.status(403).json({ detail: "Only the team captain can change the team look" });
+  }
+  return next();
+});
+
 // Присланное поле записывается, `null` возвращает расчёт по умолчанию.
 teamsRouter.patch(
   "/:teamId/look",
   requireAuth,
+  teamLookWriteLimiter,
+  requireLookManager,
   asyncHandler(async (req, res) => {
-    const teamId = z.string().uuid().parse(req.params.teamId);
-    const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
-    if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
-    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
-    if (!isOwner && !isCaptain) {
-      return res.status(403).json({ detail: "Only the team captain can change the team look" });
-    }
+    const teamId = req.params.teamId;
     const patch = teamLookPatchSchema.parse(req.body);
     const look = await updateTeamLook(teamId, patch);
     if (look === undefined) return res.status(404).json({ detail: "Team not found" });
     await writeAudit(req.authUser!.id, "teams.look.update", { teamId, ...patch });
     return res.json({ look });
+  })
+);
+
+// Тело загрузки — сам файл (не JSON и не форма). Читается только после
+// проверки прав, не больше 2 МБ; тип определяется по содержимому.
+const logoBody = express.raw({ type: () => true, limit: LOGO_MAX_BYTES });
+const readLogoBody: RequestHandler = (req, res, next) => {
+  logoBody(req, res, (error?: unknown) => {
+    if (!error) return next();
+    const tooLarge = (error as { type?: string } | null)?.type === "entity.too.large";
+    return res
+      .status(tooLarge ? 413 : 400)
+      .json({ code: tooLarge ? "LOGO_TOO_LARGE" : "LOGO_BAD_IMAGE", detail: tooLarge ? "Logo file is larger than 2 MB" : "Logo upload failed" });
+  });
+};
+
+teamsRouter.put(
+  "/:teamId/logo",
+  requireAuth,
+  teamLookWriteLimiter,
+  requireLookManager,
+  readLogoBody,
+  asyncHandler(async (req, res) => {
+    const teamId = req.params.teamId;
+    let encoded: Buffer;
+    try {
+      // JSON и форму общий разбор тела уже прочитал — это не файл.
+      if (!Buffer.isBuffer(req.body)) throw new LogoError("LOGO_TYPE", 415, "Logo must be a PNG, JPEG or WebP image");
+      encoded = await encodeLogo(req.body);
+    } catch (error) {
+      if (error instanceof LogoError) return res.status(error.status).json({ code: error.code, detail: error.message });
+      throw error;
+    }
+    await saveTeamLogo(teamId, encoded, req.authUser!.id);
+    await writeAudit(req.authUser!.id, "teams.logo.upload", { teamId, bytes: encoded.length });
+    return res.json({ look: await loadTeamLook(teamId) });
+  })
+);
+
+// Убрать логотип: знак возвращается к фигуре с буквами.
+teamsRouter.delete(
+  "/:teamId/logo",
+  requireAuth,
+  teamLookWriteLimiter,
+  requireLookManager,
+  asyncHandler(async (req, res) => {
+    const teamId = req.params.teamId;
+    const removed = await deleteTeamLogo(teamId);
+    if (removed) await writeAudit(req.authUser!.id, "teams.logo.remove", { teamId });
+    return res.json({ look: await loadTeamLook(teamId) });
+  })
+);
+
+// Логотип по случайному имени — без входа: знак команды виден на экране
+// приглашения. Отдаётся только перекодированный WebP из базы; имя проверяется
+// по шаблону, списка логотипов нет. Имя меняется при каждой загрузке, поэтому
+// ответ кэшируется надолго (общий запрет кэша для API здесь снят).
+const logoReadLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ code: "RATE_LIMITED", detail: "Too many requests, try again later", correlationId: req.correlationId });
+  },
+});
+
+teamsRouter.get(
+  "/logo/:file",
+  logoReadLimiter,
+  asyncHandler(async (req, res) => {
+    const match = /^([0-9a-f]{32})\.webp$/.exec(String(req.params.file));
+    const data = match ? await loadTeamLogo(match[1]) : null;
+    if (!data) return sendError(req, res, 404, "NOT_FOUND", "Not found");
+    res.removeHeader("Pragma");
+    res.removeHeader("Expires");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    res.setHeader("Content-Disposition", "inline");
+    // Имя файла меняется при каждой загрузке, поэтому оно же — метка версии.
+    const etag = `"${match![1]}"`;
+    res.setHeader("ETag", etag);
+    if (String(req.get("if-none-match") || "").split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag)) {
+      return res.status(304).end();
+    }
+    res.setHeader("Content-Length", String(data.length));
+    return res.end(data);
   })
 );
 

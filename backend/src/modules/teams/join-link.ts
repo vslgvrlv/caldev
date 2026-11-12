@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import type { PoolClient } from "pg";
 import { env } from "../../config/env.js";
 import { pool, query } from "../../db/pool.js";
-import { teamLookOf, type TeamLook } from "../../lib/team-look.js";
+import { teamLookColumns, teamLookOf, type TeamLook, type TeamLookRow } from "../../lib/team-look.js";
 
 // Постоянная ссылка команды `/join/<код>` (трек 1 ревизии, решение Василия
 // 10.11.2026, п. 4). У команды одна живая ссылка; капитан может отозвать её и
@@ -124,11 +124,8 @@ export async function findActiveJoinLink(rawCode: unknown): Promise<JoinLinkTeam
     team_id: string;
     name: string;
     short_code: string;
-    mark_paint: string | null;
-    mark_shape: number | null;
-    mark_letters: string | null;
-  }>(
-    `SELECT l.id, l.code, l.team_id, t.name, t.short_code, t.mark_paint, t.mark_shape, t.mark_letters
+  } & TeamLookRow>(
+    `SELECT l.id, l.code, l.team_id, t.name, t.short_code, ${teamLookColumns("t")}
      FROM team_join_links l
      JOIN teams t ON t.id = l.team_id
      WHERE upper(l.code) = $1 AND l.revoked_at IS NULL`,

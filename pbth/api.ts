@@ -1,4 +1,4 @@
-import { Event, Team, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport, GamePoint, GamePointsResponse, PointResult, EventTable } from './types';
+import { Event, Team, TeamLookData, TeamMember, TeamContext, Transaction, TransferConfirmation, User, RSVPStatus, EventType, TransactionType, FieldPosition, GameReflection, CaptainReport, GamePoint, GamePointsResponse, PointResult, EventTable } from './types';
 import {
   createLocalDevEvent,
   getLocalDevAuthMe,
@@ -1329,8 +1329,39 @@ export const api = {
   async updateTeamLook(
     teamId: string,
     patch: { paint?: string | null; shape?: number | null; letters?: string | null },
-  ): Promise<{ look: { paint: string | null; shape: number | null; letters: string | null } | null }> {
+  ): Promise<{ look: TeamLookData | null }> {
     return request(`/teams/${encodeURIComponent(teamId)}/look`, { method: 'PATCH', body: patch });
+  },
+
+  /** Свой логотип команды: тело запроса — сам файл (PNG, JPEG или WebP до 2 МБ). */
+  async uploadTeamLogo(teamId: string, file: Blob): Promise<{ look: TeamLookData | null }> {
+    let res: Response;
+    try {
+      res = await fetchWithDeadline(`${API_URL}/teams/${encodeURIComponent(teamId)}/logo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        credentials: 'include',
+        body: file,
+      });
+    } catch (networkError) {
+      throw toOfflineError(networkError);
+    }
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`) as ApiError;
+      err.status = res.status;
+      try {
+        const payload = await res.json();
+        if (payload?.detail) err.detail = String(payload.detail);
+        if (payload?.code) err.code = String(payload.code);
+      } catch (_) {}
+      throw err;
+    }
+    return res.json();
+  },
+
+  /** Убрать логотип: знак возвращается к фигуре с буквами. */
+  async removeTeamLogo(teamId: string): Promise<{ look: TeamLookData | null }> {
+    return request(`/teams/${encodeURIComponent(teamId)}/logo`, { method: 'DELETE' });
   },
 
   async createTeamInvite(

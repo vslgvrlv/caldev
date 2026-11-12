@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { Feed, Glass, Month, Screen, teamMarkSvg, teamPaint, type FeedItem, type FeedType } from '../ui';
+import { Feed, Glass, Month, Screen, teamMarkSvg, teamPaint, useTeamLooksVersion, type FeedItem, type FeedType } from '../ui';
 import { Event } from '../types';
 import { useShell } from '../shell/context';
 import { canCommitToSeries } from '../lib/events';
@@ -52,6 +52,8 @@ const DayEvents: React.FC<{
   const commit = React.useRef(onCommitSeries);
   commit.current = onCommitSeries;
 
+  // Знак в ленте собирается строкой: пересобираем её, когда у команды сменилось оформление.
+  const looksVersion = useTeamLooksVersion();
   const { map, items } = React.useMemo(() => {
     const byHref = new Map<string, Event>();
     const list: FeedItem[] = events.map((event) => {
@@ -76,7 +78,7 @@ const DayEvents: React.FC<{
       };
     });
     return { map: byHref, items: list };
-  }, [events, teams, multi, currentCode]);
+  }, [events, teams, multi, currentCode, looksVersion]);
 
   const press = useRowPress(
     (el) => {

@@ -4,6 +4,7 @@ import {
   defaultTeamPaint,
   defaultTeamShapeIndex,
   harvestTeamLooks,
+  markLogoBroken,
   resetTeamLooks,
   savedTeamLook,
   setTeamLook,
@@ -13,6 +14,7 @@ import {
   teamPaint,
   teamShapeIndex,
   TEAM_SHAPES,
+  validLogo,
 } from '../../ui/team-mark';
 import { spotColor } from '../../ui/paint-spot';
 import {
@@ -25,6 +27,10 @@ import {
   lookPatch,
   shownLook,
   typedLetters,
+  LOGO_MAX_BYTES,
+  fitLogoSize,
+  logoErrorText,
+  logoFileProblem,
 } from '../../lib/team-look';
 
 const ID = 'team-42';
@@ -161,5 +167,94 @@ describe('шторка оформления', () => {
 
   it('у каждой краски есть название для подписи', () => {
     expect(PAINT_NAMES).toHaveLength(TEAM_PAINTS.length);
+  });
+});
+
+describe('свой логотип', () => {
+  const LOGO = `/api/v1/teams/logo/${'ab12'.repeat(8)}.webp`;
+
+  it('логотип лежит в фигуре команды на фоне её краски, без букв', () => {
+    setTeamLook(ID, { paint: otherPaint, shape: otherShape, letters: 'HG', logo: LOGO });
+    const svg = teamMarkSvg({ teamId: ID, name: 'Holy "Guns"', size: 40 });
+    const d = TEAM_SHAPES[otherShape].d(40);
+    expect(svg).toContain(`<clipPath id="pbth-mk-${otherShape}-40"><path d="${d}"/></clipPath>`);
+    expect(svg).toContain(`<path d="${d}" fill="${otherPaint}"/>`);
+    expect(svg).toContain(`<image href="${LOGO}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice" clip-path="url(#pbth-mk-${otherShape}-40)"/>`);
+    expect(svg).toContain('aria-label="Holy &quot;Guns&quot;"');
+    expect(svg).not.toContain('<text');
+    expect(svg).not.toContain('preserveAspectRatio="none"');
+    expect(teamPaint(ID)).toBe(otherPaint);
+  });
+
+  it('убрали логотип — вернулась фигура с буквами', () => {
+    setTeamLook(ID, { shape: otherShape, logo: LOGO });
+    setTeamLook(ID, { shape: otherShape, logo: null });
+    const svg = teamMarkSvg({ teamId: ID, name: 'Holy Guns', size: 40 });
+    expect(svg).not.toContain('<image');
+    expect(svg).toContain('>HG</text>');
+  });
+
+  it('картинка не загрузилась — знак рисуется фигурой с буквами, подписчики узнают', () => {
+    setTeamLook(ID, { shape: otherShape, logo: LOGO });
+    let calls = 0;
+    const off = subscribeTeamLooks(() => (calls += 1));
+    markLogoBroken(LOGO);
+    markLogoBroken(LOGO);
+    off();
+    expect(calls).toBe(1);
+    const svg = teamMarkSvg({ teamId: ID, name: 'Holy Guns', size: 40 });
+    expect(svg).not.toContain('<image');
+    expect(svg).toContain('>HG</text>');
+    expect(svg).toContain(`d="${TEAM_SHAPES[otherShape].d(40)}"`);
+  });
+
+  it('команда только с логотипом хранится в оформлении и приходит из ответа сервера', () => {
+    harvestTeamLooks({ team: { id: ID, look: { paint: null, shape: null, letters: null, logo: LOGO } } });
+    expect(savedTeamLook(ID)?.logo).toBe(LOGO);
+    expect(teamPaint(ID)).toBe(defaultTeamPaint(ID));
+  });
+
+  it('в знак попадает только путь логотипа приложения', () => {
+    expect(validLogo(LOGO)).toBe(LOGO);
+    const bad = [
+      'https://example.com/logo.webp',
+      '//example.com/api/v1/teams/logo/' + 'ab12'.repeat(8) + '.webp',
+      'javascript:alert(1)',
+      'data:image/svg+xml,<svg onload=alert(1)>',
+      '/api/v1/teams/logo/../../auth/logout',
+      LOGO + '" onerror="alert(1)',
+      LOGO.replace('.webp', '.svg'),
+      LOGO.toUpperCase(),
+      '',
+      null,
+    ];
+    for (const value of bad) expect(validLogo(value), String(value)).toBeNull();
+    setTeamLook(ID, { logo: 'https://example.com/logo.webp' });
+    expect(savedTeamLook(ID)).toBeNull();
+    expect(teamMarkSvg({ teamId: ID, name: 'Holy Guns', look: { logo: LOGO + '" onerror="alert(1)' } })).not.toContain('<image');
+  });
+
+  it('файл проверяется до отправки: тип и размер', () => {
+    expect(logoFileProblem({ type: 'image/png', size: 1000 })).toBeNull();
+    expect(logoFileProblem({ type: 'image/webp', size: LOGO_MAX_BYTES })).toBeNull();
+    expect(logoFileProblem({ type: 'image/svg+xml', size: 1000 })).toMatch(/PNG, JPEG или WebP/);
+    expect(logoFileProblem({ type: 'image/gif', size: 1000 })).toMatch(/PNG, JPEG или WebP/);
+    expect(logoFileProblem({ type: 'image/jpeg', size: LOGO_MAX_BYTES + 1 })).toMatch(/2 МБ/);
+    expect(logoFileProblem({ type: 'image/png', size: 0 })).toMatch(/пуст/);
+  });
+
+  it('отказ сервера объясняется словами', () => {
+    expect(logoErrorText({ code: 'LOGO_TYPE', status: 415 })).toMatch(/PNG, JPEG или WebP/);
+    expect(logoErrorText({ status: 413 })).toMatch(/2 МБ/);
+    expect(logoErrorText({ code: 'LOGO_BAD_IMAGE', status: 400 })).toMatch(/не открылась/);
+    expect(logoErrorText({ status: 429 })).toMatch(/часто/);
+    expect(logoErrorText({ status: 403 })).toMatch(/капитан/);
+    expect(logoErrorText(new Error('boom'))).toMatch(/Не получилось/);
+  });
+
+  it('уменьшение перед отправкой: большая сторона до 512, пропорции те же, мелкое не растёт', () => {
+    expect(fitLogoSize(4000, 2000)).toEqual({ width: 512, height: 256 });
+    expect(fitLogoSize(300, 3000)).toEqual({ width: 51, height: 512 });
+    expect(fitLogoSize(200, 100)).toEqual({ width: 200, height: 100 });
   });
 });

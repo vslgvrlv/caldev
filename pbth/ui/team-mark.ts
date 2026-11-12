@@ -79,7 +79,13 @@ function hash(id: string | number): number {
 }
 
 /** Оформление, которое выбрал капитан. Пустое поле — расчёт по умолчанию. */
-export type TeamLook = { paint?: string | null; shape?: number | null; letters?: string | null };
+export type TeamLook = {
+  paint?: string | null;
+  shape?: number | null;
+  letters?: string | null;
+  /** Свой логотип: адрес в приложении. Встаёт на место фигуры с буквами. */
+  logo?: string | null;
+};
 
 /** Фигура по id команды — когда капитан свою не выбрал. */
 export function defaultTeamShapeIndex(teamId: string | number): number {
@@ -108,28 +114,66 @@ export function validLetters(letters: unknown): string | null {
   return chars.every((ch) => /^[\p{L}\p{N}]$/u.test(ch)) ? chars.join('') : null;
 }
 
+/**
+ * Адрес логотипа или `null`. Берём только путь, под которым сервер отдаёт
+ * перекодированный логотип (`/api/v1/teams/logo/<имя>.webp`): внешняя ссылка,
+ * `javascript:` и любой другой адрес в знак не попадают.
+ */
+export function validLogo(logo: unknown): string | null {
+  const value = String(logo ?? '');
+  return /^\/api\/v1\/teams\/logo\/[0-9a-f]{32}\.webp$/.test(value) ? value : null;
+}
+
 // Сохранённое оформление команд: приходит с сервера вместе с командой
 // (`look`) или событием (`teamLook`) и складывается сюда, чтобы знак и краска
 // по id команды были одинаковыми на любом экране.
-const looks = new Map<string, { paint: string | null; shape: number | null; letters: string | null }>();
+const looks = new Map<string, { paint: string | null; shape: number | null; letters: string | null; logo: string | null }>();
 const listeners = new Set<() => void>();
 let looksVersion = 0;
 
 /** Запомнить оформление команды; `null` или пустое — вернуть расчёт по умолчанию. */
 export function setTeamLook(teamId: string | number, look: TeamLook | null | undefined): void {
   const key = String(teamId);
-  const next = { paint: validPaint(look?.paint), shape: validShape(look?.shape), letters: validLetters(look?.letters) };
-  const empty = next.paint === null && next.shape === null && next.letters === null;
+  const next = {
+    paint: validPaint(look?.paint),
+    shape: validShape(look?.shape),
+    letters: validLetters(look?.letters),
+    logo: validLogo(look?.logo),
+  };
+  const empty = next.paint === null && next.shape === null && next.letters === null && next.logo === null;
   const prev = looks.get(key);
-  if (empty ? !prev : prev && prev.paint === next.paint && prev.shape === next.shape && prev.letters === next.letters) return;
+  const same = prev && prev.paint === next.paint && prev.shape === next.shape && prev.letters === next.letters && prev.logo === next.logo;
+  if (empty ? !prev : same) return;
   if (empty) looks.delete(key);
   else looks.set(key, next);
+  if (next.logo) watchLogo(next.logo);
   looksVersion += 1;
   listeners.forEach((fn) => fn());
 }
 
 export function savedTeamLook(teamId: string | number): TeamLook | null {
   return looks.get(String(teamId)) ?? null;
+}
+
+// Логотипы, которые не загрузились: вместо них знак рисуется фигурой с буквами.
+const brokenLogos = new Set<string>();
+const checkedLogos = new Set<string>();
+
+/** Картинка логотипа не загрузилась: знаки с ней перерисуются фигурой с буквами. */
+export function markLogoBroken(logo: string): void {
+  if (brokenLogos.has(logo)) return;
+  brokenLogos.add(logo);
+  looksVersion += 1;
+  listeners.forEach((fn) => fn());
+}
+
+/** В браузере — проверить, что логотип загружается (заодно он попадает в кэш до первого знака). */
+function watchLogo(logo: string): void {
+  if (checkedLogos.has(logo) || typeof Image === 'undefined') return;
+  checkedLogos.add(logo);
+  const probe = new Image();
+  probe.onerror = () => markLogoBroken(logo);
+  probe.src = logo;
 }
 
 /** Подписка на смену оформления (для `useSyncExternalStore`). */
@@ -145,6 +189,8 @@ export function teamLooksVersion(): number {
 /** Только для тестов: забыть всё сохранённое оформление. */
 export function resetTeamLooks(): void {
   looks.clear();
+  brokenLogos.clear();
+  checkedLogos.clear();
   looksVersion += 1;
 }
 
@@ -239,7 +285,12 @@ export function markTextBox(shapeIndex: number, size: number, count = 2): { left
   return { left: size / 2 - half, right: size / 2 + half, top: base - MARK_CAP_HEIGHT * fs, bottom: base + MARK_TAIL * fs };
 }
 
-/** Разметка знака в пикселях блока: width, height и viewBox равны `size`. */
+/**
+ * Разметка знака в пикселях блока: width, height и viewBox равны `size`.
+ * У команды со своим логотипом картинка лежит в той же фигуре (маска по её
+ * контуру) на фоне краски команды, без букв. Не загрузилась картинка — знак
+ * перерисовывается фигурой с буквами (`markLogoBroken`).
+ */
 export function teamMarkSvg({ teamId, name, code, size = 40, paint, look }: TeamMarkSpec): string {
   const saved = look === undefined ? savedTeamLook(teamId) : look;
   const shape = TEAM_SHAPES[validShape(saved?.shape) ?? defaultTeamShapeIndex(teamId)];
@@ -248,6 +299,19 @@ export function teamMarkSvg({ teamId, name, code, size = 40, paint, look }: Team
   // Размер букв — из шкалы 12/14/20/28: мелкий знак в ряду — 12, в строке — 14, крупный — 20, огромный — 28.
   const fs = markLetterSize(size);
   const label = esc(name ?? '');
+  const logo = validLogo(saved?.logo);
+  if (logo && !brokenLogos.has(logo)) {
+    const shapeIndex = TEAM_SHAPES.indexOf(shape);
+    // Один и тот же id — всегда один и тот же контур, поэтому повтор на странице безвреден.
+    const clipId = `pbth-mk-${shapeIndex}-${size}`;
+    return (
+      `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
+      `<clipPath id="${clipId}"><path d="${shape.d(size)}"/></clipPath>` +
+      `<path d="${shape.d(size)}" fill="${fill}"/>` +
+      `<image href="${logo}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>` +
+      `</svg>`
+    );
+  }
   return (
     `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
     `<path d="${shape.d(size)}" fill="${fill}"/>` +
