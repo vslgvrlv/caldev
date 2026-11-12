@@ -1,6 +1,6 @@
 import { query } from "../../db/pool.js";
 import { writeAudit } from "../../lib/audit.js";
-import { teamLookOf, type TeamLook } from "../../lib/team-look.js";
+import { teamLookColumns, teamLookOf, type TeamLook, type TeamLookRow } from "../../lib/team-look.js";
 import { withTransaction } from "../../lib/team-captains.js";
 import { findActiveJoinLink, type JoinLinkTeam } from "../teams/join-link.js";
 import { loadPublicNextEvent, type PublicNextEvent } from "../teams/public-next-event.js";
@@ -62,16 +62,13 @@ type RequestRow = {
   team_id: string;
   team_name: string;
   team_short_code: string;
-  mark_paint: string | null;
-  mark_shape: number | null;
-  mark_letters: string | null;
   user_id: string;
-};
+} & TeamLookRow;
 
 const REQUEST_SELECT = `
   SELECT r.id, r.status::text AS status, r.created_at, r.decided_at, r.user_id,
          t.id AS team_id, t.name AS team_name, t.short_code AS team_short_code,
-         t.mark_paint, t.mark_shape, t.mark_letters
+         ${teamLookColumns("t")}
   FROM team_join_requests r
   JOIN teams t ON t.id = r.team_id`;
 

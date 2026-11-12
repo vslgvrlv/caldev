@@ -25,6 +25,8 @@ process.env.TELEGRAM_CALLBACK_URL =
 process.env.DEV_AUTH_ENABLED = "1";
 process.env.DEV_AUTH_SECRET = "";
 process.env.ADMIN_ROLE_ALLOWLIST_IDS = TG.owner;
+// Тесты меняют оформление чаще, чем разрешает предел частоты; сам предел — в team-logo-rate-limit.test.ts.
+process.env.RATE_TEAM_LOOK_MAX = "1000";
 
 let app: typeof import("../../app.js").app;
 let pool: typeof import("../../db/pool.js").pool;
@@ -127,7 +129,7 @@ describe("права на оформление", () => {
     const owner = await login("owner");
     const res = await owner.patch(lookUrl(f.otherTeam)).send({ shape: 5 });
     expect(res.status).toBe(200);
-    expect(res.body.look).toEqual({ paint: null, shape: 5, letters: null });
+    expect(res.body.look).toEqual({ paint: null, shape: 5, letters: null, logo: null });
   });
 });
 
@@ -157,13 +159,13 @@ describe("значения", () => {
     const captain = await login("captain");
     const first = await captain.patch(lookUrl(f.team)).send({ paint: "#4fc3f7", shape: 2, letters: "гз" });
     expect(first.status).toBe(200);
-    expect(first.body.look).toEqual({ paint: "#4FC3F7", shape: 2, letters: "ГЗ" });
+    expect(first.body.look).toEqual({ paint: "#4FC3F7", shape: 2, letters: "ГЗ", logo: null });
 
     const second = await captain.patch(lookUrl(f.team)).send({ shape: 7 });
-    expect(second.body.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: "ГЗ" });
+    expect(second.body.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: "ГЗ", logo: null });
 
     const third = await captain.patch(lookUrl(f.team)).send({ letters: "" });
-    expect(third.body.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(third.body.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
 
     const audit = await pool.query(
       `SELECT payload FROM audit_logs WHERE action = 'teams.look.update' AND payload->>'teamId' = $1`,
@@ -178,7 +180,7 @@ describe("оформление в выдаче", () => {
     const player = await login("player");
     const res = await player.get("/api/v1/init").set("X-PBTH-Team", f.team);
     expect(res.status).toBe(200);
-    const look = { paint: "#4FC3F7", shape: 7, letters: null };
+    const look = { paint: "#4FC3F7", shape: 7, letters: null, logo: null };
     expect(res.body.team.look).toEqual(look);
     expect(res.body.teams.find((t: any) => t.teamId === f.team).look).toEqual(look);
     // Событие без ответа приходит в «нужен ответ», с ответом — в общую ленту.
@@ -190,7 +192,7 @@ describe("оформление в выдаче", () => {
     const trainer = await login("trainer");
     const res = await trainer.get("/api/v1/init");
     expect(res.status).toBe(200);
-    expect(res.body.teams[0].look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(res.body.teams[0].look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
   });
 
   it("команда без выбора отдаёт look: null", async () => {
@@ -204,7 +206,7 @@ describe("оформление в выдаче", () => {
   it("список команд капитана", async () => {
     const captain = await login("captain");
     const res = await captain.get("/api/v1/teams");
-    expect(res.body.teams.find((t: any) => t.id === f.team).look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(res.body.teams.find((t: any) => t.id === f.team).look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
   });
 
   it("приглашение по ссылке: только знак, без входа", async () => {
@@ -213,7 +215,7 @@ describe("оформление в выдаче", () => {
     expect(created.status).toBe(201);
     const res = await request(app).get(`/api/v1/teams/invites/${created.body.token}`);
     expect(res.status).toBe(200);
-    expect(res.body.teamLook).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(res.body.teamLook).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
   });
 
   it("заявка по ссылке команды: знак виден до входа и в заявке", async () => {
@@ -222,12 +224,12 @@ describe("оформление в выдаче", () => {
     expect(link.status).toBe(200);
     const preview = await request(app).get(`/api/v1/join-requests/link/${link.body.code}`);
     expect(preview.status).toBe(200);
-    expect(preview.body.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(preview.body.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
     expect(Object.keys(preview.body.team).sort()).toEqual(["id", "look", "name", "shortCode"]);
 
     const stranger = await login("stranger");
     const sent = await stranger.post("/api/v1/join-requests").send({ code: link.body.code });
-    expect(sent.body.request.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(sent.body.request.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
   });
 
   it("открытые команды (слоты): карточка несёт оформление", async () => {
@@ -239,7 +241,7 @@ describe("оформление в выдаче", () => {
     const stranger = await login("stranger");
     const res = await stranger.get(`/api/v1/slots/teams/${f.team}`);
     expect(res.status).toBe(200);
-    expect(res.body.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null });
+    expect(res.body.team.look).toEqual({ paint: "#4FC3F7", shape: 7, letters: null, logo: null });
   });
 });
 

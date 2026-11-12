@@ -48,8 +48,8 @@ export interface TeamMember extends User {
   balance?: number; // New: Positive = overpaid, Negative = debt
 }
 
-/** Краска (hex из палитры), номер фигуры и буквы знака команды; пустое поле — по умолчанию. */
-export type TeamLookData = { paint: string | null; shape: number | null; letters: string | null };
+/** Краска (hex из палитры), номер фигуры, буквы знака команды и адрес своего логотипа; пустое поле — по умолчанию. */
+export type TeamLookData = { paint: string | null; shape: number | null; letters: string | null; logo?: string | null };
 
 export interface Team {
   id: string;

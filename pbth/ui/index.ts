@@ -24,6 +24,7 @@ export {
   savedTeamLook,
   setTeamLook,
   validLetters,
+  validLogo,
 } from './team-mark';
 export type { TeamLook } from './team-mark';
 export { Screen } from './Screen';

@@ -10,7 +10,7 @@
 //     под блокировкой строки слотов: двое не займут последнее место;
 //   - гость после записи видит событие целиком до его окончания.
 
-import { teamLookOf } from "../../lib/team-look.js";
+import { teamLookColumns, teamLookOf, type TeamLookRow } from "../../lib/team-look.js";
 import type { PoolClient } from "pg";
 import { pool, query } from "../../db/pool.js";
 import { runInBackground, notifySlotBooked, notifySlotOffer, notifySlotRemoved } from "./notify.js";
@@ -111,16 +111,13 @@ type TeamCardRow = {
   id: string;
   name: string;
   logo: string | null;
-  mark_paint: string | null;
-  mark_shape: number | null;
-  mark_letters: string | null;
   following: boolean;
   enabled: boolean;
   open_events: number;
-};
+} & TeamLookRow;
 
 const TEAM_CARD_SQL = `
-  SELECT t.id, t.name, t.logo, t.mark_paint, t.mark_shape, t.mark_letters,
+  SELECT t.id, t.name, t.logo, ${teamLookColumns("t")},
          EXISTS (SELECT 1 FROM team_followers f WHERE f.team_id = t.id AND f.user_id = $1) AS following,
          COALESCE(os.enabled, FALSE) AS enabled,
          (SELECT COUNT(*)::int
@@ -189,6 +186,7 @@ type OfferRow = {
   mark_paint: string | null;
   mark_shape: number | null;
   mark_letters: string | null;
+  mark_logo?: string | null;
   timezone: string | null;
   title: string;
   type: string;
@@ -205,7 +203,7 @@ type OfferRow = {
 };
 
 const OFFER_SELECT = `
-  SELECT s.event_id, s.team_id, t.name AS team_name, t.mark_paint, t.mark_shape, t.mark_letters,
+  SELECT s.event_id, s.team_id, t.name AS team_name, ${teamLookColumns("t")},
          t.timezone, e.title, e.type::text AS type,
          e.start_at, e.end_at, e.location, s.capacity, s.price::text AS price, s.status,
          (SELECT COUNT(*)::int FROM event_slot_guests g WHERE g.event_id = s.event_id AND g.status = 'BOOKED') AS booked,
@@ -379,13 +377,10 @@ async function teamInfo(teamId: string) {
     id: string;
     name: string;
     logo: string | null;
-    mark_paint: string | null;
-    mark_shape: number | null;
-    mark_letters: string | null;
     timezone: string | null;
     enabled: boolean;
-  }>(
-    `SELECT t.id, t.name, t.logo, t.mark_paint, t.mark_shape, t.mark_letters, t.timezone, COALESCE(os.enabled, FALSE) AS enabled
+  } & TeamLookRow>(
+    `SELECT t.id, t.name, t.logo, ${teamLookColumns("t")}, t.timezone, COALESCE(os.enabled, FALSE) AS enabled
      FROM teams t LEFT JOIN team_open_schedules os ON os.team_id = t.id WHERE t.id = $1`,
     [teamId]
   );

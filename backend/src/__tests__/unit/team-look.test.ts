@@ -61,7 +61,20 @@ describe("оформление в ответе", () => {
       paint: null,
       shape: 0,
       letters: null,
+      logo: null,
     });
+  });
+  it("логотип — путь приложения по имени файла; чужое значение в адрес не попадает", () => {
+    const name = "0123456789abcdef0123456789abcdef";
+    expect(teamLookOf({ mark_paint: null, mark_shape: null, mark_letters: null, mark_logo: name })).toEqual({
+      paint: null,
+      shape: null,
+      letters: null,
+      logo: `/api/v1/teams/logo/${name}.webp`,
+    });
+    for (const bad of ["../../etc/passwd", "https://example.com/x.png", name.toUpperCase(), name + "0"]) {
+      expect(teamLookOf({ mark_paint: null, mark_shape: null, mark_letters: null, mark_logo: bad })).toBeNull();
+    }
   });
 });
 

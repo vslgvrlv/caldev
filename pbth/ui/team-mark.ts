@@ -79,7 +79,13 @@ function hash(id: string | number): number {
 }
 
 /** Оформление, которое выбрал капитан. Пустое поле — расчёт по умолчанию. */
-export type TeamLook = { paint?: string | null; shape?: number | null; letters?: string | null };
+export type TeamLook = {
+  paint?: string | null;
+  shape?: number | null;
+  letters?: string | null;
+  /** Свой логотип: адрес в приложении. Встаёт на место фигуры с буквами. */
+  logo?: string | null;
+};
 
 /** Фигура по id команды — когда капитан свою не выбрал. */
 export function defaultTeamShapeIndex(teamId: string | number): number {
@@ -108,20 +114,36 @@ export function validLetters(letters: unknown): string | null {
   return chars.every((ch) => /^[\p{L}\p{N}]$/u.test(ch)) ? chars.join('') : null;
 }
 
+/**
+ * Адрес логотипа или `null`. Берём только путь, под которым сервер отдаёт
+ * перекодированный логотип (`/api/v1/teams/logo/<имя>.webp`): внешняя ссылка,
+ * `javascript:` и любой другой адрес в знак не попадают.
+ */
+export function validLogo(logo: unknown): string | null {
+  const value = String(logo ?? '');
+  return /^\/api\/v1\/teams\/logo\/[0-9a-f]{32}\.webp$/.test(value) ? value : null;
+}
+
 // Сохранённое оформление команд: приходит с сервера вместе с командой
 // (`look`) или событием (`teamLook`) и складывается сюда, чтобы знак и краска
 // по id команды были одинаковыми на любом экране.
-const looks = new Map<string, { paint: string | null; shape: number | null; letters: string | null }>();
+const looks = new Map<string, { paint: string | null; shape: number | null; letters: string | null; logo: string | null }>();
 const listeners = new Set<() => void>();
 let looksVersion = 0;
 
 /** Запомнить оформление команды; `null` или пустое — вернуть расчёт по умолчанию. */
 export function setTeamLook(teamId: string | number, look: TeamLook | null | undefined): void {
   const key = String(teamId);
-  const next = { paint: validPaint(look?.paint), shape: validShape(look?.shape), letters: validLetters(look?.letters) };
-  const empty = next.paint === null && next.shape === null && next.letters === null;
+  const next = {
+    paint: validPaint(look?.paint),
+    shape: validShape(look?.shape),
+    letters: validLetters(look?.letters),
+    logo: validLogo(look?.logo),
+  };
+  const empty = next.paint === null && next.shape === null && next.letters === null && next.logo === null;
   const prev = looks.get(key);
-  if (empty ? !prev : prev && prev.paint === next.paint && prev.shape === next.shape && prev.letters === next.letters) return;
+  const same = prev && prev.paint === next.paint && prev.shape === next.shape && prev.letters === next.letters && prev.logo === next.logo;
+  if (empty ? !prev : same) return;
   if (empty) looks.delete(key);
   else looks.set(key, next);
   looksVersion += 1;
@@ -239,9 +261,23 @@ export function markTextBox(shapeIndex: number, size: number, count = 2): { left
   return { left: size / 2 - half, right: size / 2 + half, top: base - MARK_CAP_HEIGHT * fs, bottom: base + MARK_TAIL * fs };
 }
 
-/** Разметка знака в пикселях блока: width, height и viewBox равны `size`. */
+/** Скругление углов логотипа в долях стороны — как у фигур семейства щитов. */
+export const LOGO_RADIUS = 0.22;
+
+/**
+ * Разметка знака в пикселях блока: width, height и viewBox равны `size`.
+ * У команды со своим логотипом вместо фигуры с буквами — картинка того же размера.
+ */
 export function teamMarkSvg({ teamId, name, code, size = 40, paint, look }: TeamMarkSpec): string {
   const saved = look === undefined ? savedTeamLook(teamId) : look;
+  const logo = validLogo(saved?.logo);
+  if (logo) {
+    return (
+      `<img class="pbth-teammark" src="${logo}" width="${size}" height="${size}" alt="${esc(name ?? '')}" ` +
+      `loading="lazy" decoding="async" draggable="false" ` +
+      `style="display:block;flex:none;width:${size}px;height:${size}px;object-fit:cover;border-radius:${Math.round(size * LOGO_RADIUS)}px"/>`
+    );
+  }
   const shape = TEAM_SHAPES[validShape(saved?.shape) ?? defaultTeamShapeIndex(teamId)];
   const fill = /^#[0-9a-fA-F]{3,8}$/.test(paint ?? '') ? (paint as string) : (validPaint(saved?.paint) ?? defaultTeamPaint(teamId));
   const letters = esc(validLetters(saved?.letters) ?? teamLetters(name, code));
