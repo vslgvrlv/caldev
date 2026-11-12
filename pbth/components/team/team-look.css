@@ -1,0 +1,14 @@
+/* Раскладка шторки «Оформление команды». Вид кнопок, поля и стекла даёт ui-kit. */
+
+.pbth-look { display: flex; flex-direction: column; gap: 16px; }
+.pbth-look__mark { display: flex; justify-content: center; padding: 4px 0 8px; }
+.pbth-look__group { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pbth-look__label { font-size: 14px; color: var(--ui-muted); }
+.pbth-look__hint { font-size: 12px; color: var(--ui-muted); }
+/* Выбранная кнопка отмечена светлой рамкой: зелёный остаётся за «Сохранить». */
+.pbth-look__grid { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: 8px; --ui-accent: var(--ui-text); }
+.pbth-look__opt { min-width: 44px; height: 48px; padding: 0; }
+.pbth-look__dot { display: block; width: 28px; height: 28px; border-radius: 50%; }
+.pbth-look__letters { width: 100%; height: 44px; font-size: 16px; }
+.pbth-look__actions { display: flex; flex-direction: column; gap: 8px; }
+.pbth-look__actions .ui-btn { min-height: 44px; }

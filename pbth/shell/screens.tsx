@@ -182,6 +182,7 @@ export const RosterScreen: React.FC = () => {
         onOpen: () => navigate(teamPath(code, 'money')),
       }}
       menuRows={menuRows.map((row) => ({ id: row.id, label: row.label, icon: row.icon, onOpen: () => navigate(row.to) }))}
+      onLookSaved={() => void shell.reload()}
     />
   );
 };

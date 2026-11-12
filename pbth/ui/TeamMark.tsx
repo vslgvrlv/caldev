@@ -1,18 +1,22 @@
 import React from 'react';
-import { teamMarkSvg, type TeamMarkSpec } from './team-mark';
+import { subscribeTeamLooks, teamLooksVersion, teamMarkSvg, type TeamMarkSpec } from './team-mark';
 
 export { teamPaint } from './team-mark';
 
 export type TeamMarkProps = TeamMarkSpec & { className?: string };
 
 /** Знак команды: фигура цвета краски и две буквы. Размер — сторона квадрата в пикселях. */
-export const TeamMark: React.FC<TeamMarkProps> = ({ className, ...spec }) => (
-  <span
-    className={className}
-    style={{ display: 'inline-flex', flex: 'none', lineHeight: 0 }}
-    dangerouslySetInnerHTML={{ __html: teamMarkSvg(spec) }}
-  />
-);
+export const TeamMark: React.FC<TeamMarkProps> = ({ className, ...spec }) => {
+  // Капитан сменил оформление — знак перерисуется на всех открытых экранах.
+  React.useSyncExternalStore(subscribeTeamLooks, teamLooksVersion, teamLooksVersion);
+  return (
+    <span
+      className={className}
+      style={{ display: 'inline-flex', flex: 'none', lineHeight: 0 }}
+      dangerouslySetInnerHTML={{ __html: teamMarkSvg(spec) }}
+    />
+  );
+};
 
 export type TeamMarkPairProps = {
   a: Omit<TeamMarkSpec, 'size'>;

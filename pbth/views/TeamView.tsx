@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Team, TeamMember, Role, PlayerStatus } from '../types';
 import { confirmAction, errorText, notify } from '../lib/notify';
 import { TeamJoinLinkSheet } from '../components/track1/TeamJoinLinkSheet';
+import { TeamLookSheet } from '../components/team/TeamLookSheet';
 import { teamLinkAccess } from '../lib/team-link-access';
 import { attendanceLabel, filterMembers, groupRoster, isLeader, memberSub, sortRoster } from '../lib/team-roster';
 import { usePendingRequests } from '../lib/use-pending-requests';
@@ -23,6 +24,8 @@ interface TeamViewProps {
   treasury?: { sub?: string; onOpen: () => void };
   /** Пункты меню команды строками (журнал, открытое расписание): значок ui-kit, подпись, переход. */
   menuRows?: Array<{ id: string; label: string; icon: string; onOpen: () => void }>;
+  /** Капитан сохранил оформление команды: перечитать данные. */
+  onLookSaved?: () => void;
 }
 
 type View = 'ROSTER' | 'STATS';
@@ -50,10 +53,13 @@ export const TeamView: React.FC<TeamViewProps> = ({
   onOpenRequests,
   treasury,
   menuRows = [],
+  onLookSaved,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   // Ссылка команды (трек 1): постоянная, с кодом и QR.
   const [linkOpen, setLinkOpen] = useState(false);
+  // Оформление команды (краска, фигура, буквы знака) меняет капитан.
+  const [lookOpen, setLookOpen] = useState(false);
   const [view, setView] = useState<View>('ROSTER');
   const [quickMember, setQuickMember] = useState<TeamMember | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
@@ -123,6 +129,15 @@ export const TeamView: React.FC<TeamViewProps> = ({
             sub="ссылка команды"
             chevron
             onClick={() => setLinkOpen(true)}
+          />
+        )}
+        {view === 'ROSTER' && isAdminOrCaptain && (
+          <Row
+            lead={<span className="pbth-iconlead ui-glass2"><Icon name="palette" /></span>}
+            title="Оформление"
+            sub="краска, фигура и буквы знака"
+            chevron
+            onClick={() => setLookOpen(true)}
           />
         )}
         {view === 'ROSTER' &&
@@ -207,6 +222,16 @@ export const TeamView: React.FC<TeamViewProps> = ({
           teamName={team.name}
           canRotate={linkAccess.canRotate}
           onClose={() => setLinkOpen(false)}
+        />
+      )}
+
+      {lookOpen && (
+        <TeamLookSheet
+          teamId={team.id}
+          teamName={team.name}
+          shortCode={team.shortCode}
+          onClose={() => setLookOpen(false)}
+          onSaved={onLookSaved}
         />
       )}
 

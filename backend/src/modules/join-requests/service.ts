@@ -1,5 +1,6 @@
 import { query } from "../../db/pool.js";
 import { writeAudit } from "../../lib/audit.js";
+import { teamLookOf, type TeamLook } from "../../lib/team-look.js";
 import { withTransaction } from "../../lib/team-captains.js";
 import { findActiveJoinLink, type JoinLinkTeam } from "../teams/join-link.js";
 import { loadPublicNextEvent, type PublicNextEvent } from "../teams/public-next-event.js";
@@ -40,7 +41,7 @@ export type JoinRequestView = {
   status: JoinRequestStatus;
   createdAt: string;
   decidedAt: string | null;
-  team: { id: string; name: string; shortCode: string };
+  team: { id: string; name: string; shortCode: string; look: TeamLook | null };
   /**
    * Ближайшее игровое событие — только пока заявка ждёт решения: время, тип,
    * пояс. Без названия, места, состава и денег — человек ещё не в команде.
@@ -61,12 +62,16 @@ type RequestRow = {
   team_id: string;
   team_name: string;
   team_short_code: string;
+  mark_paint: string | null;
+  mark_shape: number | null;
+  mark_letters: string | null;
   user_id: string;
 };
 
 const REQUEST_SELECT = `
   SELECT r.id, r.status::text AS status, r.created_at, r.decided_at, r.user_id,
-         t.id AS team_id, t.name AS team_name, t.short_code AS team_short_code
+         t.id AS team_id, t.name AS team_name, t.short_code AS team_short_code,
+         t.mark_paint, t.mark_shape, t.mark_letters
   FROM team_join_requests r
   JOIN teams t ON t.id = r.team_id`;
 
@@ -76,7 +81,7 @@ async function toView(row: RequestRow): Promise<JoinRequestView> {
     status: row.status,
     createdAt: iso(row.created_at)!,
     decidedAt: iso(row.decided_at),
-    team: { id: row.team_id, name: row.team_name, shortCode: row.team_short_code },
+    team: { id: row.team_id, name: row.team_name, shortCode: row.team_short_code, look: teamLookOf(row) },
     nextEvent: row.status === "PENDING" ? await loadPublicNextEvent(row.team_id) : null,
   };
 }
@@ -110,7 +115,7 @@ export async function findMembership(teamId: string, userId: string): Promise<{ 
 
 export type CreateJoinRequestResult =
   | { kind: "invalid_link" }
-  | { kind: "member"; team: { id: string; name: string; shortCode: string } }
+  | { kind: "member"; team: { id: string; name: string; shortCode: string; look: TeamLook | null } }
   | { kind: "request"; created: boolean; request: JoinRequestView };
 
 async function notifyApprovers(request: JoinRequestView, link: JoinLinkTeam, requesterId: string) {
@@ -146,7 +151,7 @@ async function notifyApprovers(request: JoinRequestView, link: JoinLinkTeam, req
 export async function createJoinRequest(userId: string, rawCode: unknown): Promise<CreateJoinRequestResult> {
   const link = await findActiveJoinLink(rawCode);
   if (!link) return { kind: "invalid_link" };
-  const team = { id: link.teamId, name: link.teamName, shortCode: link.teamShortCode };
+  const team = { id: link.teamId, name: link.teamName, shortCode: link.teamShortCode, look: link.teamLook };
 
   if (await findMembership(link.teamId, userId)) return { kind: "member", team };
 

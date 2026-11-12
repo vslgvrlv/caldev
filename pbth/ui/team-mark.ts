@@ -1,6 +1,7 @@
 // ui-kit-allow-file: знак команды (фигура и краска), а не значок из набора Lucide; фигуры считаются в пикселях блока
 // Знак команды: фигура из девяти силуэтов в цвете краски и две тёмные буквы.
-// Пока у команды нет своих фигуры и краски, они выбираются по id команды.
+// Капитан может выбрать краску, фигуру и буквы (оформление команды); пока поле
+// не выбрано, краска и фигура берутся по id команды, буквы — из названия.
 
 export const TEAM_PAINTS = ['#FF8A1F', '#4FC3F7', '#FF6B57', '#A58BFF', '#FFD23F', '#FF6FB0', '#F2F3F5', '#D9B98A', '#4F7CFF'] as const;
 
@@ -77,13 +78,106 @@ function hash(id: string | number): number {
   return h >>> 0;
 }
 
-export function teamShapeIndex(teamId: string | number): number {
+/** Оформление, которое выбрал капитан. Пустое поле — расчёт по умолчанию. */
+export type TeamLook = { paint?: string | null; shape?: number | null; letters?: string | null };
+
+/** Фигура по id команды — когда капитан свою не выбрал. */
+export function defaultTeamShapeIndex(teamId: string | number): number {
   return hash(teamId) % TEAM_SHAPE_COUNT;
 }
 
-/** Краска команды (hex) по id; пока у команды нет своей. */
-export function teamPaint(teamId: string | number): string {
+/** Краска по id команды — когда капитан свою не выбрал. */
+export function defaultTeamPaint(teamId: string | number): string {
   return TEAM_PAINTS[Math.floor(hash(teamId) / TEAM_SHAPE_COUNT) % TEAM_PAINTS.length];
+}
+
+/** Краска из палитры (в верхнем регистре) или `null`: чужой цвет в знак не попадает. */
+export function validPaint(paint: unknown): string | null {
+  const value = String(paint ?? '').trim().toUpperCase();
+  return (TEAM_PAINTS as readonly string[]).includes(value) ? value : null;
+}
+
+export function validShape(shape: unknown): number | null {
+  return typeof shape === 'number' && Number.isInteger(shape) && shape >= 0 && shape < TEAM_SHAPE_COUNT ? shape : null;
+}
+
+/** Буквы знака, как их ввели: одна или две буквы или цифры, заглавными; иначе `null`. */
+export function validLetters(letters: unknown): string | null {
+  const chars = Array.from(String(letters ?? '').trim().toUpperCase());
+  if (chars.length < 1 || chars.length > 2) return null;
+  return chars.every((ch) => /^[\p{L}\p{N}]$/u.test(ch)) ? chars.join('') : null;
+}
+
+// Сохранённое оформление команд: приходит с сервера вместе с командой
+// (`look`) или событием (`teamLook`) и складывается сюда, чтобы знак и краска
+// по id команды были одинаковыми на любом экране.
+const looks = new Map<string, { paint: string | null; shape: number | null; letters: string | null }>();
+const listeners = new Set<() => void>();
+let looksVersion = 0;
+
+/** Запомнить оформление команды; `null` или пустое — вернуть расчёт по умолчанию. */
+export function setTeamLook(teamId: string | number, look: TeamLook | null | undefined): void {
+  const key = String(teamId);
+  const next = { paint: validPaint(look?.paint), shape: validShape(look?.shape), letters: validLetters(look?.letters) };
+  const empty = next.paint === null && next.shape === null && next.letters === null;
+  const prev = looks.get(key);
+  if (empty ? !prev : prev && prev.paint === next.paint && prev.shape === next.shape && prev.letters === next.letters) return;
+  if (empty) looks.delete(key);
+  else looks.set(key, next);
+  looksVersion += 1;
+  listeners.forEach((fn) => fn());
+}
+
+export function savedTeamLook(teamId: string | number): TeamLook | null {
+  return looks.get(String(teamId)) ?? null;
+}
+
+/** Подписка на смену оформления (для `useSyncExternalStore`). */
+export function subscribeTeamLooks(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function teamLooksVersion(): number {
+  return looksVersion;
+}
+
+/** Только для тестов: забыть всё сохранённое оформление. */
+export function resetTeamLooks(): void {
+  looks.clear();
+  looksVersion += 1;
+}
+
+const isLook = (v: unknown): v is TeamLook | null => v === null || (typeof v === 'object' && !Array.isArray(v));
+
+/**
+ * Собрать оформление команд из ответа сервера: `{ id | teamId, look }` — команда,
+ * `{ teamId, teamLook }` — событие, приглашение, слот. Обходит ответ целиком,
+ * поэтому новая ручка с командой внутри не требует своей строки здесь.
+ */
+export function harvestTeamLooks(data: unknown, depth = 0): void {
+  if (!data || typeof data !== 'object' || depth > 6) return;
+  if (Array.isArray(data)) {
+    for (const item of data) harvestTeamLooks(item, depth + 1);
+    return;
+  }
+  const o = data as Record<string, unknown>;
+  const id = typeof o.teamId === 'string' ? o.teamId : typeof o.id === 'string' ? o.id : null;
+  if ('look' in o && id && isLook(o.look)) setTeamLook(id, o.look);
+  if ('teamLook' in o && typeof o.teamId === 'string' && isLook(o.teamLook)) setTeamLook(o.teamId, o.teamLook);
+  for (const key in o) {
+    const value = o[key];
+    if (value && typeof value === 'object') harvestTeamLooks(value, depth + 1);
+  }
+}
+
+export function teamShapeIndex(teamId: string | number): number {
+  return looks.get(String(teamId))?.shape ?? defaultTeamShapeIndex(teamId);
+}
+
+/** Краска команды (hex): выбранная капитаном, иначе по id. */
+export function teamPaint(teamId: string | number): string {
+  return looks.get(String(teamId))?.paint ?? defaultTeamPaint(teamId);
 }
 
 /** Первые буквы названия: два первых слова без слов в скобках, одно слово — его две первые буквы. */
@@ -113,8 +207,10 @@ export type TeamMarkSpec = {
   name?: string | null;
   code?: string | null;
   size?: number;
-  /** Своя краска (hex) вместо выбранной по id. */
+  /** Своя краска (hex) вместо краски команды. */
   paint?: string;
+  /** Оформление вместо сохранённого: живой знак в настройке, пока капитан выбирает. */
+  look?: TeamLook | null;
 };
 
 /** Размер букв знака из шкалы текста приложения. */
@@ -144,10 +240,11 @@ export function markTextBox(shapeIndex: number, size: number, count = 2): { left
 }
 
 /** Разметка знака в пикселях блока: width, height и viewBox равны `size`. */
-export function teamMarkSvg({ teamId, name, code, size = 40, paint }: TeamMarkSpec): string {
-  const shape = TEAM_SHAPES[teamShapeIndex(teamId)];
-  const fill = /^#[0-9a-fA-F]{3,8}$/.test(paint ?? '') ? (paint as string) : teamPaint(teamId);
-  const letters = esc(teamLetters(name, code));
+export function teamMarkSvg({ teamId, name, code, size = 40, paint, look }: TeamMarkSpec): string {
+  const saved = look === undefined ? savedTeamLook(teamId) : look;
+  const shape = TEAM_SHAPES[validShape(saved?.shape) ?? defaultTeamShapeIndex(teamId)];
+  const fill = /^#[0-9a-fA-F]{3,8}$/.test(paint ?? '') ? (paint as string) : (validPaint(saved?.paint) ?? defaultTeamPaint(teamId));
+  const letters = esc(validLetters(saved?.letters) ?? teamLetters(name, code));
   // Размер букв — из шкалы 12/14/20/28: мелкий знак в ряду — 12, в строке — 14, крупный — 20, огромный — 28.
   const fs = markLetterSize(size);
   const label = esc(name ?? '');

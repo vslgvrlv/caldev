@@ -18,6 +18,7 @@ import { writeAudit } from "../../lib/audit.js";
 import { sendError } from "../../lib/http-error.js";
 import { appUrl, sendTrackError } from "../join-requests/delivery.js";
 import { ensureActiveJoinLink, joinLinkUrl, rotateJoinLink } from "./join-link.js";
+import { loadTeamLook, loadTeamLooks, teamLookPatchSchema, updateTeamLook } from "../../lib/team-look.js";
 
 const createTeamSchema = z.object({
   name: z.string().min(2).max(120),
@@ -91,12 +92,14 @@ teamsRouter.get(
              ORDER BY t.name ASC`,
             [req.authUser!.id]
           );
+    const looks = await loadTeamLooks(ownTeams.rows.map((t) => t.id));
     return res.json({
       teams: ownTeams.rows.map((t) => ({
         id: t.id,
         name: t.name,
         shortCode: t.short_code,
         logo: t.logo,
+        look: looks.get(t.id) ?? null,
         budget: Number(t.budget),
         timezone: t.timezone,
         role: t.role,
@@ -248,6 +251,8 @@ teamsRouter.get(
     return res.json({
       teamId: invite.team_id,
       teamName: invite.team_name,
+      // Только знак команды: краска, фигура и буквы.
+      teamLook: await loadTeamLook(invite.team_id),
       role: invite.role,
       expiresAt: invite.expires_at,
       isValid: true,
@@ -373,6 +378,28 @@ teamsRouter.post(
 );
 
 // Ссылка команды `/join/<код>` (трек 1). Видят капитан и тренер — заявки
+// Оформление команды: краска, фигура знака и буквы. Меняет капитан (владелец
+// платформы — как капитан); тренер и игрок видят знак, но не правят его.
+// Присланное поле записывается, `null` возвращает расчёт по умолчанию.
+teamsRouter.patch(
+  "/:teamId/look",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const teamId = z.string().uuid().parse(req.params.teamId);
+    const teamExists = await query(`SELECT 1 FROM teams WHERE id = $1`, [teamId]);
+    if (!teamExists.rowCount) return res.status(404).json({ detail: "Team not found" });
+    const { isOwner, isCaptain } = await resolveTeamManager(req, teamId);
+    if (!isOwner && !isCaptain) {
+      return res.status(403).json({ detail: "Only the team captain can change the team look" });
+    }
+    const patch = teamLookPatchSchema.parse(req.body);
+    const look = await updateTeamLook(teamId, patch);
+    if (look === undefined) return res.status(404).json({ detail: "Team not found" });
+    await writeAudit(req.authUser!.id, "teams.look.update", { teamId, ...patch });
+    return res.json({ look });
+  })
+);
+
 // одобряют оба (решение Василия); отзывает и выпускает новую только капитан
 // (владелец платформы — как капитан). Ссылка не впускает сразу: она создаёт
 // заявку, которую одобряет капитан или тренер.

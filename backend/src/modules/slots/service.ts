@@ -10,6 +10,7 @@
 //     под блокировкой строки слотов: двое не займут последнее место;
 //   - гость после записи видит событие целиком до его окончания.
 
+import { teamLookOf } from "../../lib/team-look.js";
 import type { PoolClient } from "pg";
 import { pool, query } from "../../db/pool.js";
 import { runInBackground, notifySlotBooked, notifySlotOffer, notifySlotRemoved } from "./notify.js";
@@ -110,13 +111,16 @@ type TeamCardRow = {
   id: string;
   name: string;
   logo: string | null;
+  mark_paint: string | null;
+  mark_shape: number | null;
+  mark_letters: string | null;
   following: boolean;
   enabled: boolean;
   open_events: number;
 };
 
 const TEAM_CARD_SQL = `
-  SELECT t.id, t.name, t.logo,
+  SELECT t.id, t.name, t.logo, t.mark_paint, t.mark_shape, t.mark_letters,
          EXISTS (SELECT 1 FROM team_followers f WHERE f.team_id = t.id AND f.user_id = $1) AS following,
          COALESCE(os.enabled, FALSE) AS enabled,
          (SELECT COUNT(*)::int
@@ -130,6 +134,7 @@ function teamCard(row: TeamCardRow) {
     id: row.id,
     name: row.name,
     logo: row.logo,
+    look: teamLookOf(row),
     following: row.following,
     openSchedule: row.enabled,
     openEvents: row.enabled ? row.open_events : 0,
@@ -181,6 +186,9 @@ type OfferRow = {
   event_id: string;
   team_id: string;
   team_name: string;
+  mark_paint: string | null;
+  mark_shape: number | null;
+  mark_letters: string | null;
   timezone: string | null;
   title: string;
   type: string;
@@ -197,7 +205,8 @@ type OfferRow = {
 };
 
 const OFFER_SELECT = `
-  SELECT s.event_id, s.team_id, t.name AS team_name, t.timezone, e.title, e.type::text AS type,
+  SELECT s.event_id, s.team_id, t.name AS team_name, t.mark_paint, t.mark_shape, t.mark_letters,
+         t.timezone, e.title, e.type::text AS type,
          e.start_at, e.end_at, e.location, s.capacity, s.price::text AS price, s.status,
          (SELECT COUNT(*)::int FROM event_slot_guests g WHERE g.event_id = s.event_id AND g.status = 'BOOKED') AS booked,
          mine.status AS my_status, mine.paid AS my_paid, mine.price::text AS my_price
@@ -214,6 +223,7 @@ function offerCard(row: OfferRow) {
     eventId: row.event_id,
     teamId: row.team_id,
     teamName: row.team_name,
+    teamLook: teamLookOf(row),
     timezone: row.timezone,
     title: row.title,
     type: row.type,
@@ -396,8 +406,17 @@ export async function managerView(eventId: string, teamId: string) {
 }
 
 async function teamInfo(teamId: string) {
-  const result = await query<{ id: string; name: string; logo: string | null; timezone: string | null; enabled: boolean }>(
-    `SELECT t.id, t.name, t.logo, t.timezone, COALESCE(os.enabled, FALSE) AS enabled
+  const result = await query<{
+    id: string;
+    name: string;
+    logo: string | null;
+    mark_paint: string | null;
+    mark_shape: number | null;
+    mark_letters: string | null;
+    timezone: string | null;
+    enabled: boolean;
+  }>(
+    `SELECT t.id, t.name, t.logo, t.mark_paint, t.mark_shape, t.mark_letters, t.timezone, COALESCE(os.enabled, FALSE) AS enabled
      FROM teams t LEFT JOIN team_open_schedules os ON os.team_id = t.id WHERE t.id = $1`,
     [teamId]
   );
@@ -462,6 +481,7 @@ export async function eventForViewer(userId: string, eventId: string, managerRol
     teamId: team.id,
     teamName: team.name,
     teamLogo: team.logo,
+    teamLook: teamLookOf(team),
     timezone: team.timezone,
     title: event.title,
     type: event.type,

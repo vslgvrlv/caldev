@@ -49,7 +49,7 @@ joinRequestsRouter.get(
   asyncHandler(async (req, res) => {
     const link = await findActiveJoinLink(req.params.code);
     if (!link) return sendError(req, res, 404, "JOIN_LINK_NOT_FOUND", "Join link not found or revoked");
-    const team = { id: link.teamId, name: link.teamName, shortCode: link.teamShortCode };
+    const team = { id: link.teamId, name: link.teamName, shortCode: link.teamShortCode, look: link.teamLook };
     const facts = (await loadInviteFacts(link.teamId)) ?? {};
     const user = await attachAuthUser(req);
     if (!user) return res.json({ team, authenticated: false, member: false, request: null, ...facts });

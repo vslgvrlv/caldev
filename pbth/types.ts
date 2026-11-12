@@ -48,11 +48,16 @@ export interface TeamMember extends User {
   balance?: number; // New: Positive = overpaid, Negative = debt
 }
 
+/** Краска (hex из палитры), номер фигуры и буквы знака команды; пустое поле — по умолчанию. */
+export type TeamLookData = { paint: string | null; shape: number | null; letters: string | null };
+
 export interface Team {
   id: string;
   name: string;
   shortCode: string;
   logo?: string;
+  /** Оформление знака, выбранное капитаном; `null` — расчёт по умолчанию. */
+  look?: TeamLookData | null;
   timezone?: string;
   role: Role;
   budget: number; // New: Team treasury
@@ -329,6 +334,7 @@ export interface TeamContext {
   teamId: string;
   teamName: string;
   shortCode?: string;
+  look?: TeamLookData | null;
   role: Role;
   /** 'owner' — команда, где владелец платформы не состоит: он там как владелец. */
   via?: 'membership' | 'owner';
