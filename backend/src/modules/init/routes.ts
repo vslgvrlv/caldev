@@ -21,6 +21,7 @@ import {
   type TeamAccess,
 } from "../../lib/team-access.js";
 import { debtsOnlyBalance, financeScopeForRole, loadMemberChargeTotals } from "../../lib/finance-visibility.js";
+import { loadTeamLooks, type TeamLook } from "../../lib/team-look.js";
 
 type RawEvent = {
   id: string;
@@ -66,12 +67,14 @@ type AttendeePreviewRow = {
 // владельцу платформы ещё и все остальные — `via: "owner"`, роль капитана.
 async function listTeamsForExplicitInit(
   req: Parameters<typeof isPlatformOwner>[0],
-  memberships: Awaited<ReturnType<typeof getUserMemberships>>
+  memberships: Awaited<ReturnType<typeof getUserMemberships>>,
+  looks: Map<string, TeamLook>
 ) {
   const own = memberships.map((m) => ({
     teamId: m.team_id,
     teamName: m.team_name,
     shortCode: m.team_short_code,
+    look: looks.get(m.team_id) ?? null,
     role: m.role,
     membershipId: m.id as string | null,
     via: "membership" as "membership" | "owner",
@@ -81,12 +84,15 @@ async function listTeamsForExplicitInit(
   const all = await query<{ id: string; name: string; short_code: string }>(
     `SELECT id, name, short_code FROM teams ORDER BY name ASC`
   );
+  // Чужие команды владельца в общий запрос оформления не попали — дочитываем.
+  const otherLooks = await loadTeamLooks(all.rows.filter((t) => !mine.has(t.id)).map((t) => t.id));
   const others = all.rows
     .filter((t) => !mine.has(t.id))
     .map((t) => ({
       teamId: t.id,
       teamName: t.name,
       shortCode: t.short_code,
+      look: otherLooks.get(t.id) ?? null,
       role: "CAPTAIN" as const,
       membershipId: null,
       via: "owner" as const,
@@ -135,6 +141,7 @@ initRouter.get(
            ORDER BY t.name ASC`
         );
 
+        const managedLooks = await loadTeamLooks(managedTeams.rows.map((t) => t.id));
         return res.json({
           admin: true,
           pendingUsersHint: true,
@@ -143,6 +150,7 @@ initRouter.get(
             name: t.name,
             shortCode: t.short_code,
             logo: t.logo,
+            look: managedLooks.get(t.id) ?? null,
             budget: Number(t.budget),
             timezone: t.timezone,
           })),
@@ -520,6 +528,9 @@ initRouter.get(
       }
     }
 
+    // Оформление команд ленты и переключателя — одним запросом по ключу.
+    const looks = await loadTeamLooks([team.id, ...teamIds]);
+
     const mapEventForFeed = (e: RawEvent, rsvpStatus: "UNANSWERED" | "PENDING" | "CONFIRMED" | "DECLINED") => {
       // Лента содержит события всех memberships пользователя. Проекции события
       // должны выбираться по команде самого события, а не по активной вкладке:
@@ -539,6 +550,7 @@ initRouter.get(
         viewerInRoster: Boolean(e.viewer_in_roster),
         teamName: e.team_name,
         teamShortCode: e.team_short_code,
+        teamLook: looks.get(e.team_id) ?? null,
         teamTimezone: e.team_timezone,
         type: e.type,
         title: e.title,
@@ -580,6 +592,7 @@ initRouter.get(
         name: team.name,
         shortCode: team.short_code,
         logo: team.logo,
+        look: looks.get(team.id) ?? null,
         role: active.role,
         budget: financeScope === "FULL" ? Number(team.budget) : 0,
         timezone: team.timezone,
@@ -607,10 +620,11 @@ initRouter.get(
           },
         };
       }),
-      teams: explicitTeam ? await listTeamsForExplicitInit(req, memberships) : memberships.map((m) => ({
+      teams: explicitTeam ? await listTeamsForExplicitInit(req, memberships, looks) : memberships.map((m) => ({
         teamId: m.team_id,
         teamName: m.team_name,
         shortCode: m.team_short_code,
+        look: looks.get(m.team_id) ?? null,
         role: m.role,
         membershipId: m.id,
       })),

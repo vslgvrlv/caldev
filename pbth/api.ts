@@ -18,6 +18,7 @@ import {
 } from './lib/offline';
 import { enqueue, flushOutbox, type OutboxEntry } from './lib/outbox';
 import { teamCodeOf } from './lib/team-url';
+import { harvestTeamLooks } from './ui/team-mark';
 
 const baseFromEnv = ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.replace(/\/$/, '');
 const API_URL = baseFromEnv ? `${baseFromEnv}/api/v1` : '/api/v1';
@@ -628,13 +629,18 @@ export async function request<T>(path: string, options?: RequestOptions): Promis
     err.status = res.status;
     throw err;
   }
-  return res.json() as Promise<T>;
+  const body = await res.json();
+  // Оформление команд (краска, фигура, буквы) приходит внутри ответов — запоминаем его для знака.
+  harvestTeamLooks(body);
+  return body as T;
 }
 
 // Нормализация ответа /init вынесена наружу, потому что путей теперь два —
 // свежий ответ и снимок из IndexedDB. Две копии этой раскладки разъехались бы,
 // и офлайн-режим тихо показывал бы события не так, как онлайн.
 export function normalizeInitPayload(data: Record<string, any>) {
+  // Снимок из IndexedDB идёт мимо `request` — оформление команд берём и из него.
+  harvestTeamLooks(data);
   const mergedEvents = [...(data.events || []), ...(data.actionRequiredEvents || [])];
   const normalizedEvents = mergedEvents.map((e: any) => {
     const rawStart = e.startAt || e.startDate;
@@ -1317,6 +1323,14 @@ export const api = {
         ...(payload.timezone ? { timezone: payload.timezone } : {}),
       },
     });
+  },
+
+  /** Оформление команды: меняются только присланные поля, `null` возвращает расчёт по умолчанию. */
+  async updateTeamLook(
+    teamId: string,
+    patch: { paint?: string | null; shape?: number | null; letters?: string | null },
+  ): Promise<{ look: { paint: string | null; shape: number | null; letters: string | null } | null }> {
+    return request(`/teams/${encodeURIComponent(teamId)}/look`, { method: 'PATCH', body: patch });
   },
 
   async createTeamInvite(

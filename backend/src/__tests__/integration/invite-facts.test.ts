@@ -69,7 +69,7 @@ const PERSON_STRINGS = Object.values(PEOPLE).flatMap((p) => [
 // Свободный текст событий: ни одно из этого не уходит наружу.
 const EVENT_TEXT = ["Ближайшая тренировка", "Турнир позже", "Закрытое собрание", "Ремонт маркеров", "Личное", "Арена", "maps.example", "secret?x=1", "Гараж", "Дом капитана", "секретное описание"];
 
-const INVITE_KEYS = ["expiresAt", "isExpired", "isRevoked", "isUsed", "isValid", "membersCount", "nextEvent", "note", "role", "singleUse", "teamId", "teamName"];
+const INVITE_KEYS = ["expiresAt", "isExpired", "isRevoked", "isUsed", "isValid", "membersCount", "nextEvent", "note", "role", "singleUse", "teamId", "teamLook", "teamName"];
 const LINK_KEYS = ["authenticated", "member", "membersCount", "nextEvent", "request", "team"];
 const NEXT_EVENT_KEYS = ["startsAt", "timezone", "type"];
 const REQUEST_KEYS = ["createdAt", "decidedAt", "id", "nextEvent", "status", "team"];
@@ -234,7 +234,8 @@ describe("GET /join-requests/link/:code без входа", () => {
     expect(res.body.request).toBeNull();
     expect(res.body.membersCount).toBe(3);
     expectPublicEvent(res.body.nextEvent);
-    expect(Object.keys(res.body.team).sort()).toEqual(["id", "name", "shortCode"]);
+    // `look` — оформление знака команды (краска, фигура, буквы), не личные данные.
+    expect(Object.keys(res.body.team).sort()).toEqual(["id", "look", "name", "shortCode"]);
     expectNoLeaks(res.body);
   });
 

@@ -17,5 +17,14 @@ export { Row } from './Row';
 export { Avatar } from './Avatar';
 export { TeamMark, TeamMarkPair, teamPaint } from './TeamMark';
 export { teamMarkSvg, teamLetters, avatarHtml, avatarPhotoSrc, initialsOf, TEAM_PAINTS, TEAM_SHAPES } from './team-mark';
+export {
+  defaultTeamPaint,
+  defaultTeamShapeIndex,
+  harvestTeamLooks,
+  savedTeamLook,
+  setTeamLook,
+  validLetters,
+} from './team-mark';
+export type { TeamLook } from './team-mark';
 export { Screen } from './Screen';
 export { spotColor, paintStrength } from './paint-spot';

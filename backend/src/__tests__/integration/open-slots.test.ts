@@ -200,7 +200,7 @@ describe("открытое расписание команды", () => {
     expect(list.body.teams.map((t: any) => t.id)).toContain(f.team);
     // В списке нет ни кода команды, ни состава, ни денег.
     const card = list.body.teams.find((t: any) => t.id === f.team);
-    expect(Object.keys(card).sort()).toEqual(["following", "id", "logo", "name", "openEvents", "openSchedule"]);
+    expect(Object.keys(card).sort()).toEqual(["following", "id", "logo", "look", "name", "openEvents", "openSchedule"]);
 
     for (const who of ["guest", "second", "third"] as Who[]) {
       const res = await (await login(who)).post(`/api/v1/slots/teams/${f.team}/follow`);
