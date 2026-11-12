@@ -1,8 +1,8 @@
 import React from 'react';
-import { Button, Glass, TeamMark } from '../ui';
+import { Button, Glass, TeamMark, teamPaint } from '../ui';
 import type { TeamContext } from '../types';
 import { teamCodeOf } from '../lib/team-url';
-import { shouldCompact } from './section-head';
+import { shouldCompact, titleLayout, type TitleLayout } from './section-head';
 import './home.css';
 
 export type SectionHeaderProps = {
@@ -15,6 +15,11 @@ export type SectionHeaderProps = {
   teams: TeamContext[];
   /** Код текущей команды: её знак в ряду отмечен. Нет — не отмечен ни один. */
   currentCode?: string | null;
+  /**
+   * Ряд знаков — фильтр, а не переключатель («Моё», «Календарь»): тап включает
+   * и выключает показ команды, никуда не ведёт, текущей команды нет.
+   */
+  filter?: { isShown: (teamId: string) => boolean; onToggle: (team: TeamContext) => void };
   /** Значки справа (расширения шапки: заявки, слоты). */
   badges?: React.ReactNode;
   onPickTeam: (team: TeamContext) => void;
@@ -36,6 +41,21 @@ function naturalWidth(el: HTMLElement): number {
   return w;
 }
 
+/** Ширина самого длинного слова названия при 28px: по ней решаем, как уложить название (`titleFit`). */
+function longestWordWidth(el: HTMLElement): number {
+  const { whiteSpace, width, display, fontSize } = el.style;
+  el.style.whiteSpace = 'normal';
+  el.style.width = 'min-content';
+  el.style.display = 'block';
+  el.style.fontSize = '28px';
+  const w = el.scrollWidth;
+  el.style.whiteSpace = whiteSpace;
+  el.style.width = width;
+  el.style.display = display;
+  el.style.fontSize = fontSize;
+  return w;
+}
+
 /** Прокручивает ряд знаков так, чтобы текущая команда была видна целиком. */
 export function scrollMarkIntoView(row: HTMLElement, mark: HTMLElement) {
   const left = mark.offsetLeft - row.offsetLeft;
@@ -50,7 +70,7 @@ export function scrollMarkIntoView(row: HTMLElement, mark: HTMLElement) {
  * ряд знаков команд. Название и инструменты всегда в одной строке: не хватает
  * места — «Команды» остаётся значком без подписи.
  */
-export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, mark, note, teams, currentCode, badges, onPickTeam, onOpenTeams, onHeight }) => {
+export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, mark, note, teams, currentCode, filter, badges, onPickTeam, onOpenTeams, onHeight }) => {
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const topRef = React.useRef<HTMLDivElement>(null);
   const titlesRef = React.useRef<HTMLDivElement>(null);
@@ -60,6 +80,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, m
   const [compact, setCompact] = React.useState(false);
   const compactRef = React.useRef(compact);
   compactRef.current = compact;
+  const [layout, setLayout] = React.useState<TitleLayout>({ fit: 'lg', stacked: false });
+  const layoutRef = React.useRef(layout);
+  layoutRef.current = layout;
 
   React.useLayoutEffect(() => {
     const row = rowRef.current;
@@ -86,6 +109,17 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, m
         compact: compactRef.current,
       });
       if (next !== compactRef.current) setCompact(next);
+      // Название не рвётся внутри слова: место — ширина строки без инструментов и знака.
+      const h1 = titles.querySelector<HTMLElement>('.pbth-sectionhead__title');
+      if (h1) {
+        const next = titleLayout({
+          longestWord: longestWordWidth(h1),
+          inline: top.clientWidth - (lead ? lead.offsetWidth + 12 : 0) - tools.offsetWidth - 12,
+          full: top.clientWidth,
+        });
+        const prev = layoutRef.current;
+        if (next.fit !== prev.fit || next.stacked !== prev.stacked) setLayout(next);
+      }
       onHeight?.(wrap.offsetHeight);
     };
     measure();
@@ -100,10 +134,12 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, m
   return (
     <div ref={wrapRef} className="pbth-sectionhead">
       <Glass as="header" className="pbth-sectionhead__bar">
-        <div ref={topRef} className="pbth-sectionhead__top">
+        <div ref={topRef} className={`pbth-sectionhead__top${layout.stacked ? ' is-stacked' : ''}`}>
           {mark ? <span className="pbth-sectionhead__lead">{mark}</span> : null}
           <div ref={titlesRef} className="pbth-sectionhead__titles">
-            <h1 className="pbth-sectionhead__title">{title}</h1>
+            <h1 className={`pbth-sectionhead__title${layout.fit === 'lg' ? '' : ` is-${layout.fit}`}`} title={layout.fit === 'clip' ? title : undefined}>
+              {title}
+            </h1>
             {subtitle ? <div className="pbth-sectionhead__sub">{subtitle}</div> : null}
           </div>
           <div ref={toolsRef} className="pbth-sectionhead__tools">
@@ -121,8 +157,30 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, m
         </div>
         {note ? <div className="pbth-sectionhead__note">{note}</div> : null}
         {teams.length > 0 && (
-          <div ref={rowRef} className="pbth-sectionhead__marks" role="list" aria-label="Команды">
+          <div
+            ref={rowRef}
+            className="pbth-sectionhead__marks"
+            role={filter ? 'group' : 'list'}
+            aria-label={filter ? 'Показывать события команд' : 'Команды'}
+          >
             {teams.map((t) => {
+              if (filter) {
+                const shown = filter.isShown(t.teamId);
+                return (
+                  <button
+                    key={t.teamId}
+                    type="button"
+                    className={`pbth-sectionhead__mark${shown ? '' : ' is-off'}`}
+                    style={{ ['--pbth-paint' as string]: teamPaint(t.teamId) }}
+                    aria-pressed={shown}
+                    aria-label={t.teamName}
+                    title={t.teamName}
+                    onClick={() => filter.onToggle(t)}
+                  >
+                    <TeamMark teamId={t.teamId} name={t.teamName} code={t.shortCode} size={30} />
+                  </button>
+                );
+              }
               const current = Boolean(currentCode) && teamCodeOf({ teamId: t.teamId, shortCode: t.shortCode }) === currentCode;
               return (
                 <button

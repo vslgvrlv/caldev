@@ -59,6 +59,9 @@ export const track1Api = {
   myJoinRequests: () => request<{ requests: JoinRequest[] }>('/join-requests/mine').then((r) => r.requests),
   /** Ждущие заявки команды запроса (заголовок команды ставит оболочка). */
   teamJoinRequests: () => request<{ count: number; requests: PendingJoinRequest[] }>('/join-requests'),
+  /** Ждущие заявки указанной команды (не той, что открыта): «Моё» спрашивает по каждой своей команде. */
+  teamJoinRequestsOf: (teamId: string) =>
+    request<{ count: number; requests: PendingJoinRequest[] }>('/join-requests', { headers: { 'X-PBTH-Team': String(teamId) } }),
   decideJoinRequest: (id: string, decision: 'approve' | 'decline') =>
     request<{ ok: true; status: 'APPROVED' | 'DECLINED' }>(`/join-requests/${encodeURIComponent(id)}/${decision}`, {
       method: 'POST',

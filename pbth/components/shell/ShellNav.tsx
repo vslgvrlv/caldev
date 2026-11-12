@@ -9,6 +9,8 @@ export type ShellNavProps = {
   teamCode: string | null;
   /** Центральное действие «плюс» (создать событие): только тем, кому это сейчас доступно. */
   canCreate?: boolean;
+  /** Своё действие «плюса» (выбор команды на «Моё» и в «Календаре»); без него — форма команды панели. */
+  onCreate?: () => void;
 };
 
 /**
@@ -45,14 +47,19 @@ export function navActivePath(pathname: string): string {
 }
 
 /** Плавающая стеклянная нижняя панель оболочки: пункты команды, профиль и «плюс». */
-export const ShellNav: React.FC<ShellNavProps> = ({ teamCode, canCreate }) => {
+export const ShellNav: React.FC<ShellNavProps> = ({ teamCode, canCreate, onCreate }) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const items = React.useMemo(() => shellNavItems(teamCode), [teamCode]);
+  const onCreateRef = React.useRef(onCreate);
+  onCreateRef.current = onCreate;
   const action = React.useMemo(
     () =>
       canCreate && teamCode
-        ? { label: 'Создать событие', onClick: () => navigate(teamPath(teamCode, 'new')) }
+        ? {
+            label: 'Создать событие',
+            onClick: () => (onCreateRef.current ? onCreateRef.current() : navigate(teamPath(teamCode, 'new'))),
+          }
         : undefined,
     [canCreate, teamCode, navigate],
   );

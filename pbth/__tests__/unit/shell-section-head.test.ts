@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { hasSectionHead, markTarget, sectionHeadText, sectionPaints, shouldCompact, teamScreenRows } from '../../shell/section-head';
+import { hasSectionHead, markTarget, sectionHeadText, sectionPaints, shouldCompact, teamScreenRows, titleLayout } from '../../shell/section-head';
 import { contrastRatio, glassOverSpot, MIN_CONTRAST, MUTED_TEXT, paintStrength, parseHex, spotColor, SPOT_PEAK } from '../../ui/paint-spot';
 import { TEAM_PAINTS, teamPaint } from '../../ui/team-mark';
 import { treasuryRowSub } from '../../lib/treasury-view';
@@ -49,6 +49,18 @@ describe('шапка раздела: где есть и что написано'
     // Уже без подписи: решение считается по полной ширине, поэтому не мигает.
     expect(shouldCompact({ rowWidth: 326, titleWidth: 74, toolsWidth: 44 + 132, labelWidth: 80, compact: true })).toBe(true);
     expect(shouldCompact({ rowWidth: 326, titleWidth: 74, toolsWidth: 44, labelWidth: 80, compact: true })).toBe(false);
+  });
+
+  it('название не рвётся внутри слова: рядом с инструментами 28px или 20px по словам, иначе своей строкой', () => {
+    // «Молния» рядом помещается.
+    expect(titleLayout({ longestWord: 110, inline: 125, full: 327 })).toEqual({ fit: 'lg', stacked: false });
+    // Длинное слово влезает при 20px.
+    expect(titleLayout({ longestWord: 150, inline: 125, full: 327 })).toEqual({ fit: 'md', stacked: false });
+    // «Северный» рядом со знаком и тремя значками не помещается и при 20px — своей строкой, 28px.
+    expect(titleLayout({ longestWord: 145, inline: 97, full: 327 })).toEqual({ fit: 'lg', stacked: true });
+    // Слово длиннее всей шапки — одна строка с многоточием.
+    expect(titleLayout({ longestWord: 600, inline: 97, full: 327 })).toEqual({ fit: 'clip', stacked: true });
+    expect(titleLayout({ longestWord: 400, inline: 0, full: 0 })).toEqual({ fit: 'lg', stacked: false });
   });
 
   it('пункты меню команды — строками на экране команды, без повторов «Заявок» и «Консоли»', () => {
