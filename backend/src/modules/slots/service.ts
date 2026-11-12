@@ -363,6 +363,37 @@ export async function listGuests(eventId: string) {
   }));
 }
 
+export type PublicGuest = { userId: string; name: string; avatar: string | null };
+
+// Имя для показа остальным: `users.name` — свободный текст, у части людей там
+// запасное `tg-<id>`, телефон или почта. Такое наружу не уходит.
+const FALLBACK_GUEST_NAME = "Гость";
+export function guestDisplayName(name: string | null | undefined): string {
+  const value = (name ?? "").trim();
+  if (!value) return FALLBACK_GUEST_NAME;
+  if (/^tg[-_ ]?\d+$/i.test(value)) return FALLBACK_GUEST_NAME;
+  if (value.includes("@")) return FALLBACK_GUEST_NAME;
+  if (/^[+\d][\d\s().-]{5,}$/.test(value)) return FALLBACK_GUEST_NAME;
+  return value;
+}
+
+/**
+ * Гости события для тех, кто видит состав: участники команды (любая роль,
+ * включая запас) и сам записанный гость. Только `userId`, имя и аватар —
+ * без телефона, ника, оплаты, времени брони. Оплата и «Снять» остаются в
+ * `managerView`.
+ */
+export async function listPublicGuests(eventId: string): Promise<PublicGuest[]> {
+  const result = await query<{ user_id: string; name: string; avatar: string | null }>(
+    `SELECT g.user_id, u.name, u.avatar
+     FROM event_slot_guests g JOIN users u ON u.id = g.user_id
+     WHERE g.event_id = $1 AND g.status = 'BOOKED'
+     ORDER BY g.booked_at ASC`,
+    [eventId]
+  );
+  return result.rows.map((row) => ({ userId: row.user_id, name: guestDisplayName(row.name), avatar: row.avatar }));
+}
+
 /** Блок «Свободные слоты» у капитана и тренера. */
 export async function managerView(eventId: string, teamId: string) {
   const [slot, guests, enabled, followers] = await Promise.all([
@@ -462,7 +493,16 @@ export async function eventForViewer(userId: string, eventId: string, managerRol
   };
 
   if (role) {
-    return { viewer: (role === "CAPTAIN" || role === "TRAINER" ? "MANAGER" : "MEMBER") as EventViewer, ...base, slot: slotView(slot), myBooking: null };
+    if (role === "CAPTAIN" || role === "TRAINER") {
+      return { viewer: "MANAGER" as EventViewer, ...base, slot: slotView(slot), myBooking: null };
+    }
+    return {
+      viewer: "MEMBER" as EventViewer,
+      ...base,
+      slot: slotView(slot),
+      myBooking: null,
+      guests: await listPublicGuests(eventId),
+    };
   }
 
   if (myRow?.status === "BOOKED" && !event.ended) {
@@ -481,6 +521,7 @@ export async function eventForViewer(userId: string, eventId: string, managerRol
       locationUrl: url,
       slot: slotView(slot),
       myBooking: { paid: myRow.paid, price: Number(myRow.price) },
+      guests: await listPublicGuests(eventId),
       schedule: games.rows.map((g) => ({ id: g.id, time: g.time_label, opponent: g.opponent, score: g.score })),
       going,
     };

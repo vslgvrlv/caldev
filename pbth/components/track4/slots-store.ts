@@ -1,5 +1,5 @@
 import React from 'react';
-import { slotsApi, type SlotGuest, type SlotManageView } from '../../api/track4';
+import { slotsApi, type PublicSlotGuest, type SlotGuest, type SlotManageView } from '../../api/track4';
 import { confirmAction, errorText, notify } from '../../lib/notify';
 
 // Свежий вид слотов события для капитана и тренера: его читают блок «Свободные слоты»
@@ -28,6 +28,30 @@ export function useSlotsView(eventId: string): SlotManageView | null {
 /** Гости события: пусто, пока вид слотов не загружен или у человека нет прав на него. */
 export function useSlotGuests(eventId: string): SlotGuest[] {
   return useSlotsView(eventId)?.guests ?? [];
+}
+
+/**
+ * Гости события для экрана: капитан и тренер берут их из вида слотов (с оплатой),
+ * остальные участники команды и сам гость — из ответа события (только имя и аватар).
+ */
+export function useEventGuests(eventId: string, canManage: boolean): Array<PublicSlotGuest & { paid?: boolean }> {
+  const managed = useSlotGuests(eventId);
+  const [shared, setShared] = React.useState<PublicSlotGuest[]>([]);
+  React.useEffect(() => {
+    if (canManage) return;
+    let live = true;
+    setShared([]);
+    slotsApi
+      .event(eventId)
+      .then((view) => {
+        if (live) setShared(view.guests ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [eventId, canManage]);
+  return canManage ? managed : shared;
 }
 
 /** «Снять» и «оплатил» для гостя в блоке состава. */
