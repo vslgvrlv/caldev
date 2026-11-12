@@ -50,6 +50,13 @@ export type SlotGuest = {
   bookedAt: string;
 };
 
+/** Гость события для тех, кто видит состав: без оплаты, ника и времени брони. */
+export type PublicSlotGuest = {
+  userId: string;
+  name: string;
+  avatar: string | null;
+};
+
 export type SlotManageView = {
   openSchedule: boolean;
   followers: number;
@@ -78,6 +85,8 @@ export type SlotEventView = {
   locationUrl?: string | null;
   schedule?: Array<{ id: string; time: string; opponent: string; score: string | null }>;
   going?: Array<{ name: string; nickname: string; avatar: string | null; guest: boolean }>;
+  // Участнику команды и гостю события:
+  guests?: PublicSlotGuest[];
 };
 
 export type SlotFeed = { following: SlotTeamCard[]; slots: SlotOffer[]; bookings: SlotOffer[] };

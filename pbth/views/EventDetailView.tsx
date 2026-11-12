@@ -46,7 +46,7 @@ import { Glass, Screen, ScreenBar, TeamMark, teamPaint } from '../ui';
 import { CaptainPanel, type PanelTile } from '../components/event/CaptainPanel';
 import { EventHero, type SeriesState } from '../components/event/EventHero';
 import { RosterBlock } from '../components/event/RosterBlock';
-import { useGuestActions, useSlotGuests } from '../components/track4/slots-store';
+import { useEventGuests, useGuestActions } from '../components/track4/slots-store';
 import { EventMoney, type CollectionSummary } from '../components/event/EventMoney';
 import { EventPlace } from '../components/event/EventPlace';
 import { GameSchedule } from '../components/event/GameSchedule';
@@ -146,7 +146,7 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const extRef = useRef<HTMLDivElement>(null);
-  const slotGuests = useSlotGuests(event.id);
+  const slotGuests = useEventGuests(event.id, canManageSlots(currentUserRole));
   const guestActions = useGuestActions(event.id);
   const [slotsState, setSlotsState] = useState<SlotsTileState>(null);
   useEffect(() => {
