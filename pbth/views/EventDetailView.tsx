@@ -46,6 +46,7 @@ import { Glass, Screen, ScreenBar, TeamMark, teamPaint } from '../ui';
 import { CaptainPanel, type PanelTile } from '../components/event/CaptainPanel';
 import { EventHero, type SeriesState } from '../components/event/EventHero';
 import { RosterBlock } from '../components/event/RosterBlock';
+import { useGuestActions, useSlotGuests } from '../components/track4/slots-store';
 import { EventMoney, type CollectionSummary } from '../components/event/EventMoney';
 import { EventPlace } from '../components/event/EventPlace';
 import { GameSchedule } from '../components/event/GameSchedule';
@@ -145,6 +146,8 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
   const [isRemindingDebtors, setIsRemindingDebtors] = useState(false);
 
   const extRef = useRef<HTMLDivElement>(null);
+  const slotGuests = useSlotGuests(event.id);
+  const guestActions = useGuestActions(event.id);
   const [slotsState, setSlotsState] = useState<SlotsTileState>(null);
   useEffect(() => {
     const onState = (e: globalThis.Event) => {
@@ -614,6 +617,10 @@ export const EventDetailView: React.FC<EventDetailViewProps> = ({
           onRemindSilent={perms.canRemind ? handleRemindSilent : undefined}
           reminding={isReminding}
           hideFree={phase === 'past'}
+          guests={slotGuests}
+          onRemoveGuest={canManageSlots(currentUserRole) ? (guest) => void guestActions.remove(guest) : undefined}
+          onGuestPaid={canManageSlots(currentUserRole) ? (guest, paid) => void guestActions.setPaid(guest, paid) : undefined}
+          guestsBusy={guestActions.busy}
         />
 
         <EventMoney cost={event.cost} collection={collection} onOpenMoney={onOpenMoney} />

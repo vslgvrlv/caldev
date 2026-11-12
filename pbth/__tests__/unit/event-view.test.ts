@@ -5,6 +5,8 @@ import {
   buildAttendanceDraft,
   buildEditDraft,
   buildRoster,
+  rosterBarLabel,
+  ROSTER_DOTS_MAX,
   canManageSlots,
   eventDateLabel,
   eventPermissions,
@@ -112,6 +114,21 @@ describe('состав', () => {
     const roster = buildRoster({ attendees, maxAttendees: 8 });
     expect(roster.capacity).toBe(8);
     expect(roster.fives[1].free).toBe(2);
+  });
+
+  it('до 15 мест — точки, больше — полоса заполнения той же краской', () => {
+    const attendees = Array.from({ length: 15 }, (_, i) => person(String(i + 1)));
+    const few = buildRoster({ attendees, maxAttendees: ROSTER_DOTS_MAX });
+    expect(few.bar).toBeNull();
+    expect(few.dots.flat()).toHaveLength(15);
+
+    const many = buildRoster({ attendees, maxAttendees: 30 });
+    expect(many.dots).toEqual([]);
+    expect(many.bar).toEqual({ going: 15, capacity: 30, percent: 50 });
+    expect(rosterBarLabel(many.bar!)).toBe('идут 15 из 30');
+    expect(rosterHeadline(many)).toBe('Идут 15 из 30');
+    // Лимит 16 уже полоса; арифметика состава та же.
+    expect(buildRoster({ attendees, maxAttendees: 16 }).bar).toEqual({ going: 15, capacity: 16, percent: 94 });
   });
 
   it('тренеры идут отдельной группой и не занимают пятёрку; себя находит по id', () => {

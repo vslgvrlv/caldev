@@ -1,7 +1,7 @@
 import React from 'react';
 import { groupMoney, sanitizeMoney } from '../../lib/money-input';
 
-type Base = { id: string; error?: string; disabled?: boolean; placeholder?: string };
+type Base = { id: string; error?: string; disabled?: boolean; placeholder?: string; required?: boolean };
 
 const describe = (id: string, error?: string) => (error ? { 'aria-invalid': true as const, 'aria-describedby': `${id}-error` } : {});
 const cls = (error?: string, extra = '') => `ui-input${error ? ' pbth-form__input--bad' : ''}${extra ? ` ${extra}` : ''}`;
@@ -27,6 +27,7 @@ export const TextInput: React.FC<TextInputProps> = ({ id, value, onChange, error
       onChange={(e) => onChange(e.target.value)}
       disabled={rest.disabled}
       placeholder={rest.placeholder}
+      required={rest.required}
       {...describe(id, error)}
     />
   ) : (

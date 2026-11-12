@@ -1,6 +1,7 @@
 import React from 'react';
-import { Avatar, Button, Glass, Icon, Row } from '../../ui';
-import { rosterHeadline, rosterSub, type Roster, type RosterPerson } from '../../lib/event-view';
+import { Avatar, Button, Glass, Icon, Row, Switch } from '../../ui';
+import type { SlotGuest } from '../../api/track4';
+import { rosterBarLabel, rosterHeadline, rosterSub, type Roster, type RosterPerson } from '../../lib/event-view';
 
 type Props = {
   roster: Roster;
@@ -12,6 +13,12 @@ type Props = {
   reminding?: boolean;
   /** Событие прошло: свободные места не показываются. */
   hideFree?: boolean;
+  /** Приглашённые: записались гостями на свободные слоты; стоят сразу после основного состава. */
+  guests?: SlotGuest[];
+  /** Капитан и тренер: «Снять» и «оплатил» у гостя. Без них гости только показываются. */
+  onRemoveGuest?: (guest: SlotGuest) => void;
+  onGuestPaid?: (guest: SlotGuest, paid: boolean) => void;
+  guestsBusy?: boolean;
 };
 
 const PersonRow: React.FC<{ person: RosterPerson; onPerson: Props['onPerson']; trailing: React.ReactNode }> = ({
@@ -49,19 +56,34 @@ const GoingTag: React.FC<{ self: boolean }> = ({ self }) => (
 );
 
 /** «Идут N из M»: точки, идущие плотными строками по пятёркам, молчуны и отказавшиеся свёрнуто. */
-export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin, onRemindSilent, reminding, hideFree }) => (
+export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin, onRemindSilent, reminding, hideFree, guests = [], onRemoveGuest, onGuestPaid, guestsBusy }) => {
+  const freeSeats = roster.fives.reduce((sum, five) => sum + five.free, 0);
+  return (
   <Glass layer={1} className="pbth-event__panel" data-testid="event-roster">
     <div className="pbth-event__head">
       <h2 className="pbth-event__h pbth-event__h--nowrap">{rosterHeadline(roster)}</h2>
-      <div className="pbth-event__dots" aria-hidden="true">
-        {roster.dots.map((group, gi) => (
-          <span key={gi} className="pbth-event__dotgroup">
-            {group.map((on, i) => (
-              <span key={i} className={`pbth-event__dot${on ? ' pbth-event__dot--on' : ''}`} />
-            ))}
-          </span>
-        ))}
-      </div>
+      {roster.bar ? (
+        <div
+          className="pbth-event__meter"
+          role="progressbar"
+          aria-label={rosterBarLabel(roster.bar)}
+          aria-valuemin={0}
+          aria-valuemax={roster.bar.capacity}
+          aria-valuenow={roster.bar.going}
+        >
+          <span className="pbth-event__meterfill" style={{ width: `${roster.bar.percent}%` }} />
+        </div>
+      ) : (
+        <div className="pbth-event__dots" aria-hidden="true">
+          {roster.dots.map((group, gi) => (
+            <span key={gi} className="pbth-event__dotgroup">
+              {group.map((on, i) => (
+                <span key={i} className={`pbth-event__dot${on ? ' pbth-event__dot--on' : ''}`} />
+              ))}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
 
     {loading ? <div className="pbth-event__muted">Загружаем состав…</div> : null}
@@ -86,21 +108,64 @@ export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin
             {five.people.map((p) => (
               <PersonRow key={p.userId} person={p} onPerson={onPerson} trailing={<GoingTag self={p.isSelf} />} />
             ))}
-            {Array.from({ length: hideFree ? 0 : five.free }, (_, i) => (
-              <Row
-                key={`free-${i}`}
-                lead={
-                  <span className="pbth-event__free">
-                    <Icon name="plus" size={20} />
-                  </span>
-                }
-                title={<span className="pbth-event__free-title">Свободно</span>}
-                {...(onJoin ? { onClick: onJoin } : {})}
-              />
-            ))}
           </div>
         ))
       : null}
+
+    {!loading && guests.length > 0 ? (
+      <div data-testid="event-guests">
+        <div className="pbth-event__group">Гости</div>
+        {guests.map((guest) => (
+          <Row
+            key={guest.userId}
+            lead={<Avatar name={guest.name} src={guest.avatar} size={40} />}
+            title={guest.name}
+            sub={`гость · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
+            trailing={
+              onRemoveGuest || onGuestPaid ? (
+                <span className="pbth-event__inline">
+                  {onGuestPaid ? (
+                    <Switch
+                      checked={guest.paid}
+                      disabled={guestsBusy}
+                      label={`${guest.name}: оплатил`}
+                      onChange={(paid) => onGuestPaid(guest, paid)}
+                    />
+                  ) : null}
+                  {onRemoveGuest ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="x"
+                      aria-label={`Снять ${guest.name}`}
+                      disabled={guestsBusy}
+                      onClick={() => onRemoveGuest(guest)}
+                    />
+                  ) : null}
+                </span>
+              ) : null
+            }
+          />
+        ))}
+      </div>
+    ) : null}
+
+    {!loading && !hideFree && freeSeats > 0 ? (
+      <div data-testid="event-free-seats">
+        {Array.from({ length: freeSeats }, (_, i) => (
+          <Row
+            key={`free-${i}`}
+            lead={
+              <span className="pbth-event__free">
+                <Icon name="plus" size={20} />
+              </span>
+            }
+            title={<span className="pbth-event__free-title">Свободно</span>}
+            {...(onJoin ? { onClick: onJoin } : {})}
+          />
+        ))}
+      </div>
+    ) : null}
 
     {!loading && roster.silent.length > 0 ? (
       <Fold label={`Не ответили · ${roster.silent.length}`}>
@@ -127,5 +192,5 @@ export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin
         ))}
       </Fold>
     ) : null}
-  </Glass>
-);
+  </Glass>  );
+};

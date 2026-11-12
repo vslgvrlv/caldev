@@ -42,6 +42,8 @@
 .pbth-event__dots { display: flex; gap: 8px; flex: none; }
 .pbth-event__dotgroup { display: flex; gap: 3px; }
 .pbth-event__dot { box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ui-muted); }
+.pbth-event__meter { flex: 1 1 0; min-width: 48px; height: 8px; overflow: hidden; border-radius: 4px; background: var(--ui-surface-2); }
+.pbth-event__meterfill { display: block; height: 100%; border-radius: 4px; background: var(--pbth-event-paint); }
 .pbth-event__dot--on { border-color: var(--pbth-event-paint); background: var(--pbth-event-paint); }
 
 .pbth-event__group { padding: 8px 4px 0; font-size: 14px; font-weight: 700; color: var(--ui-muted); }
@@ -73,7 +75,7 @@
 .pbth-event__field { display: flex; flex-direction: column; }
 .pbth-event__field .ui-input, .pbth-event__field .ui-select { width: 100%; box-sizing: border-box; }
 .pbth-event__area.ui-input { height: auto; min-height: 88px; padding-block: 12px; resize: none; }
-.pbth-event__two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pbth-event__two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .pbth-event__two > * { min-width: 0; }
 .pbth-event__footer { display: flex; gap: 12px; padding-top: 4px; }
 .pbth-event__footer > .ui-btn { flex: 1 1 0; }
