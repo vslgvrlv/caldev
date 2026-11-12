@@ -4,6 +4,7 @@ import {
   defaultTeamPaint,
   defaultTeamShapeIndex,
   harvestTeamLooks,
+  markLogoBroken,
   resetTeamLooks,
   savedTeamLook,
   setTeamLook,
@@ -172,14 +173,16 @@ describe('шторка оформления', () => {
 describe('свой логотип', () => {
   const LOGO = `/api/v1/teams/logo/${'ab12'.repeat(8)}.webp`;
 
-  it('логотип встаёт на место фигуры с буквами, краска команды остаётся', () => {
+  it('логотип лежит в фигуре команды на фоне её краски, без букв', () => {
     setTeamLook(ID, { paint: otherPaint, shape: otherShape, letters: 'HG', logo: LOGO });
-    const html = teamMarkSvg({ teamId: ID, name: 'Holy "Guns"', size: 40 });
-    expect(html).toContain(`<img class="pbth-teammark" src="${LOGO}" width="40" height="40"`);
-    expect(html).toContain('alt="Holy &quot;Guns&quot;"');
-    expect(html).toContain('loading="lazy"');
-    expect(html).not.toContain('<path');
-    expect(html).not.toContain('>HG<');
+    const svg = teamMarkSvg({ teamId: ID, name: 'Holy "Guns"', size: 40 });
+    const d = TEAM_SHAPES[otherShape].d(40);
+    expect(svg).toContain(`<clipPath id="pbth-mk-${otherShape}-40"><path d="${d}"/></clipPath>`);
+    expect(svg).toContain(`<path d="${d}" fill="${otherPaint}"/>`);
+    expect(svg).toContain(`<image href="${LOGO}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice" clip-path="url(#pbth-mk-${otherShape}-40)"/>`);
+    expect(svg).toContain('aria-label="Holy &quot;Guns&quot;"');
+    expect(svg).not.toContain('<text');
+    expect(svg).not.toContain('preserveAspectRatio="none"');
     expect(teamPaint(ID)).toBe(otherPaint);
   });
 
@@ -187,7 +190,21 @@ describe('свой логотип', () => {
     setTeamLook(ID, { shape: otherShape, logo: LOGO });
     setTeamLook(ID, { shape: otherShape, logo: null });
     const svg = teamMarkSvg({ teamId: ID, name: 'Holy Guns', size: 40 });
-    expect(svg).toContain('<svg');
+    expect(svg).not.toContain('<image');
+    expect(svg).toContain('>HG</text>');
+  });
+
+  it('картинка не загрузилась — знак рисуется фигурой с буквами, подписчики узнают', () => {
+    setTeamLook(ID, { shape: otherShape, logo: LOGO });
+    let calls = 0;
+    const off = subscribeTeamLooks(() => (calls += 1));
+    markLogoBroken(LOGO);
+    markLogoBroken(LOGO);
+    off();
+    expect(calls).toBe(1);
+    const svg = teamMarkSvg({ teamId: ID, name: 'Holy Guns', size: 40 });
+    expect(svg).not.toContain('<image');
+    expect(svg).toContain('>HG</text>');
     expect(svg).toContain(`d="${TEAM_SHAPES[otherShape].d(40)}"`);
   });
 
@@ -214,7 +231,7 @@ describe('свой логотип', () => {
     for (const value of bad) expect(validLogo(value), String(value)).toBeNull();
     setTeamLook(ID, { logo: 'https://example.com/logo.webp' });
     expect(savedTeamLook(ID)).toBeNull();
-    expect(teamMarkSvg({ teamId: ID, name: 'Holy Guns', look: { logo: LOGO + '" onerror="alert(1)' } })).toContain('<svg');
+    expect(teamMarkSvg({ teamId: ID, name: 'Holy Guns', look: { logo: LOGO + '" onerror="alert(1)' } })).not.toContain('<image');
   });
 
   it('файл проверяется до отправки: тип и размер', () => {

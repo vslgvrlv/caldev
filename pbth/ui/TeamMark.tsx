@@ -3,12 +3,17 @@ import { subscribeTeamLooks, teamLooksVersion, teamMarkSvg, type TeamMarkSpec } 
 
 export { teamPaint } from './team-mark';
 
+/** Номер версии оформления команд: добавь в зависимости `useMemo`, где знак собирается строкой. */
+export function useTeamLooksVersion(): number {
+  return React.useSyncExternalStore(subscribeTeamLooks, teamLooksVersion, teamLooksVersion);
+}
+
 export type TeamMarkProps = TeamMarkSpec & { className?: string };
 
 /** Знак команды: фигура цвета краски и две буквы. Размер — сторона квадрата в пикселях. */
 export const TeamMark: React.FC<TeamMarkProps> = ({ className, ...spec }) => {
   // Капитан сменил оформление — знак перерисуется на всех открытых экранах.
-  React.useSyncExternalStore(subscribeTeamLooks, teamLooksVersion, teamLooksVersion);
+  useTeamLooksVersion();
   return (
     <span
       className={className}

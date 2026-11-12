@@ -146,12 +146,34 @@ export function setTeamLook(teamId: string | number, look: TeamLook | null | und
   if (empty ? !prev : same) return;
   if (empty) looks.delete(key);
   else looks.set(key, next);
+  if (next.logo) watchLogo(next.logo);
   looksVersion += 1;
   listeners.forEach((fn) => fn());
 }
 
 export function savedTeamLook(teamId: string | number): TeamLook | null {
   return looks.get(String(teamId)) ?? null;
+}
+
+// Логотипы, которые не загрузились: вместо них знак рисуется фигурой с буквами.
+const brokenLogos = new Set<string>();
+const checkedLogos = new Set<string>();
+
+/** Картинка логотипа не загрузилась: знаки с ней перерисуются фигурой с буквами. */
+export function markLogoBroken(logo: string): void {
+  if (brokenLogos.has(logo)) return;
+  brokenLogos.add(logo);
+  looksVersion += 1;
+  listeners.forEach((fn) => fn());
+}
+
+/** В браузере — проверить, что логотип загружается (заодно он попадает в кэш до первого знака). */
+function watchLogo(logo: string): void {
+  if (checkedLogos.has(logo) || typeof Image === 'undefined') return;
+  checkedLogos.add(logo);
+  const probe = new Image();
+  probe.onerror = () => markLogoBroken(logo);
+  probe.src = logo;
 }
 
 /** Подписка на смену оформления (для `useSyncExternalStore`). */
@@ -167,6 +189,8 @@ export function teamLooksVersion(): number {
 /** Только для тестов: забыть всё сохранённое оформление. */
 export function resetTeamLooks(): void {
   looks.clear();
+  brokenLogos.clear();
+  checkedLogos.clear();
   looksVersion += 1;
 }
 
@@ -261,29 +285,33 @@ export function markTextBox(shapeIndex: number, size: number, count = 2): { left
   return { left: size / 2 - half, right: size / 2 + half, top: base - MARK_CAP_HEIGHT * fs, bottom: base + MARK_TAIL * fs };
 }
 
-/** Скругление углов логотипа в долях стороны — как у фигур семейства щитов. */
-export const LOGO_RADIUS = 0.22;
-
 /**
  * Разметка знака в пикселях блока: width, height и viewBox равны `size`.
- * У команды со своим логотипом вместо фигуры с буквами — картинка того же размера.
+ * У команды со своим логотипом картинка лежит в той же фигуре (маска по её
+ * контуру) на фоне краски команды, без букв. Не загрузилась картинка — знак
+ * перерисовывается фигурой с буквами (`markLogoBroken`).
  */
 export function teamMarkSvg({ teamId, name, code, size = 40, paint, look }: TeamMarkSpec): string {
   const saved = look === undefined ? savedTeamLook(teamId) : look;
-  const logo = validLogo(saved?.logo);
-  if (logo) {
-    return (
-      `<img class="pbth-teammark" src="${logo}" width="${size}" height="${size}" alt="${esc(name ?? '')}" ` +
-      `loading="lazy" decoding="async" draggable="false" ` +
-      `style="display:block;flex:none;width:${size}px;height:${size}px;object-fit:cover;border-radius:${Math.round(size * LOGO_RADIUS)}px"/>`
-    );
-  }
   const shape = TEAM_SHAPES[validShape(saved?.shape) ?? defaultTeamShapeIndex(teamId)];
   const fill = /^#[0-9a-fA-F]{3,8}$/.test(paint ?? '') ? (paint as string) : (validPaint(saved?.paint) ?? defaultTeamPaint(teamId));
   const letters = esc(validLetters(saved?.letters) ?? teamLetters(name, code));
   // Размер букв — из шкалы 12/14/20/28: мелкий знак в ряду — 12, в строке — 14, крупный — 20, огромный — 28.
   const fs = markLetterSize(size);
   const label = esc(name ?? '');
+  const logo = validLogo(saved?.logo);
+  if (logo && !brokenLogos.has(logo)) {
+    const shapeIndex = TEAM_SHAPES.indexOf(shape);
+    // Один и тот же id — всегда один и тот же контур, поэтому повтор на странице безвреден.
+    const clipId = `pbth-mk-${shapeIndex}-${size}`;
+    return (
+      `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
+      `<clipPath id="${clipId}"><path d="${shape.d(size)}"/></clipPath>` +
+      `<path d="${shape.d(size)}" fill="${fill}"/>` +
+      `<image href="${logo}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>` +
+      `</svg>`
+    );
+  }
   return (
     `<svg class="pbth-teammark" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${label}" focusable="false">` +
     `<path d="${shape.d(size)}" fill="${fill}"/>` +

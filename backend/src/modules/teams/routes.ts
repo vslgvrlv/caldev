@@ -501,6 +501,12 @@ teamsRouter.get(
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("Content-Disposition", "inline");
+    // Имя файла меняется при каждой загрузке, поэтому оно же — метка версии.
+    const etag = `"${match![1]}"`;
+    res.setHeader("ETag", etag);
+    if (String(req.get("if-none-match") || "").split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag)) {
+      return res.status(304).end();
+    }
     res.setHeader("Content-Length", String(data.length));
     return res.end(data);
   })

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Feed, Glass, Icon, Screen, TeamMark, teamMarkSvg, teamPaint, type FeedItem, type FeedType } from '../ui';
+import { Button, Feed, Glass, Icon, Screen, TeamMark, teamMarkSvg, teamPaint, useTeamLooksVersion, type FeedItem, type FeedType } from '../ui';
 import { Event, RSVPStatus, TeamContext } from '../types';
 import { EVENT_LABELS } from '../constants';
 import { canCommitToSeries, type CaptainHomeHints } from '../lib/events';
@@ -249,6 +249,8 @@ const DayPanel: React.FC<{
   // Колбэки экрана меняются на каждый рендер; лента перерисовывается только от данных.
   const callbacks = React.useRef({ onRsvp, onCommitSeries });
   callbacks.current = { onRsvp, onCommitSeries };
+  // Знак в ленте собирается строкой: пересобираем её, когда у команды сменилось оформление.
+  const looksVersion = useTeamLooksVersion();
   const byHref = React.useMemo(() => {
     const map = new Map<string, Event>();
     const items: FeedItem[] = group.events.map((event) => {
@@ -278,7 +280,7 @@ const DayPanel: React.FC<{
       };
     });
     return { map, items };
-  }, [group.events, teams, multi, currentCode]);
+  }, [group.events, teams, multi, currentCode, looksVersion]);
 
   const press = useRowPress(
     (el) => {

@@ -22,7 +22,7 @@ import { Button, Sheet, TEAM_PAINTS, TEAM_SHAPES, TeamMark, savedTeamLook, setTe
 import './team-look.css';
 
 // Оформление команды — шторка капитана: живой знак, краска, фигура, буквы и
-// свой логотип. Краска, фигура и буквы сохраняются кнопкой «Сохранить»;
+// свой логотип (он лежит в выбранной фигуре вместо букв). Краска, фигура и буквы сохраняются кнопкой «Сохранить»;
 // логотип загружается и убирается сразу.
 
 /**
@@ -162,8 +162,8 @@ export const TeamLookSheet: React.FC<{
           </div>
           <span className="pbth-look__hint">
             {logo
-              ? 'Логотип стоит на месте фигуры с буквами. Уберёшь — они вернутся.'
-              : 'PNG, JPEG или WebP до 2 МБ — встанет на место фигуры.'}
+              ? 'Логотип стоит в фигуре вместо букв. Уберёшь — буквы вернутся.'
+              : 'PNG, JPEG или WebP до 2 МБ — встанет в фигуру вместо букв.'}
           </span>
         </div>
 
@@ -186,47 +186,45 @@ export const TeamLookSheet: React.FC<{
           </div>
         </div>
 
-        {!logo && (
-          <>
-            <div className="pbth-look__group" role="group" aria-label="Фигура">
-              <div className="pbth-look__label">Фигура</div>
-              <div className="pbth-look__grid">
-                {TEAM_SHAPES.map((shape, i) => (
-                  <button
-                    key={shape.name}
-                    type="button"
-                    className="ui-btn ui-btn--glass2 pbth-look__opt"
-                    aria-pressed={shown.shape === i}
-                    aria-label={`Фигура: ${shape.name}`}
-                    disabled={busy}
-                    onClick={() => setDraft((d) => ({ ...d, shape: i }))}
-                  >
-                    <TeamMark teamId={teamId} name={teamName} code={shortCode} size={32} look={{ ...lookOfDraft(draft), shape: i }} />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className="pbth-look__group">
-              <span className="pbth-look__label">Буквы на знаке</span>
-              <input
-                className="ui-input pbth-look__letters"
-                value={draft.letters}
-                placeholder={shownLook(teamId, teamName, shortCode, { ...draft, letters: '' }).letters}
-                maxLength={4}
-                autoCapitalize="characters"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-invalid={!lettersValid}
+        <div className="pbth-look__group" role="group" aria-label="Фигура">
+          <div className="pbth-look__label">Фигура</div>
+          <div className="pbth-look__grid">
+            {TEAM_SHAPES.map((shape, i) => (
+              <button
+                key={shape.name}
+                type="button"
+                className="ui-btn ui-btn--glass2 pbth-look__opt"
+                aria-pressed={shown.shape === i}
+                aria-label={`Фигура: ${shape.name}`}
                 disabled={busy}
-                onChange={(e) => setDraft((d) => ({ ...d, letters: typedLetters(e.target.value) }))}
-              />
-              <span className="pbth-look__hint">
-                {lettersValid ? 'Одна или две буквы или цифры. Пусто — буквы из названия.' : 'Только буквы и цифры, без знаков.'}
-              </span>
-            </label>
-          </>
+                onClick={() => setDraft((d) => ({ ...d, shape: i }))}
+              >
+                <TeamMark teamId={teamId} name={teamName} code={shortCode} size={32} look={{ ...lookOfDraft(draft), shape: i, logo }} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!logo && (
+          <label className="pbth-look__group">
+            <span className="pbth-look__label">Буквы на знаке</span>
+            <input
+              className="ui-input pbth-look__letters"
+              value={draft.letters}
+              placeholder={shownLook(teamId, teamName, shortCode, { ...draft, letters: '' }).letters}
+              maxLength={4}
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-invalid={!lettersValid}
+              disabled={busy}
+              onChange={(e) => setDraft((d) => ({ ...d, letters: typedLetters(e.target.value) }))}
+            />
+            <span className="pbth-look__hint">
+              {lettersValid ? 'Одна или две буквы или цифры. Пусто — буквы из названия.' : 'Только буквы и цифры, без знаков.'}
+            </span>
+          </label>
         )}
 
         <div className="pbth-look__actions">

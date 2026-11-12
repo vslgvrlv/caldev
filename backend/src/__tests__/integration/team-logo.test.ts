@@ -196,6 +196,11 @@ describe("загрузка, отдача и удаление", () => {
     expect(res.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
     expect(res.headers["content-security-policy"]).toContain("default-src 'none'");
     expect(res.headers).not.toHaveProperty("pragma");
+    expect(res.headers.etag).toBe(`"${firstUrl.slice(-37, -5)}"`);
+    const again = await request(app).get(firstUrl).set("If-None-Match", res.headers.etag);
+    expect(again.status).toBe(304);
+    expect(again.text ?? "").toBe("");
+    expect((await request(app).get(firstUrl).set("If-None-Match", '"other"')).status).toBe(200);
     const meta = await sharp(res.body as Buffer).metadata();
     expect([meta.format, meta.width, meta.height]).toEqual(["webp", 256, 256]);
   });
