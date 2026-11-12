@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import sharp from "sharp";
 import { query } from "../db/pool.js";
+import { logger } from "./logger.js";
 import { isLogoName } from "./team-look.js";
 
 // Свой логотип команды. Капитан присылает PNG, JPEG или WebP до 2 МБ; сервер
@@ -15,7 +15,7 @@ export const LOGO_SIZE = 256;
 /** Предел по пикселям на входе: картинка крупнее не разворачивается в память. */
 export const LOGO_MAX_PIXELS = 4096 * 4096;
 
-export type LogoErrorCode = "LOGO_EMPTY" | "LOGO_TOO_LARGE" | "LOGO_TYPE" | "LOGO_BAD_IMAGE";
+export type LogoErrorCode = "LOGO_EMPTY" | "LOGO_TOO_LARGE" | "LOGO_TYPE" | "LOGO_BAD_IMAGE" | "LOGO_UNAVAILABLE";
 
 export class LogoError extends Error {
   constructor(public code: LogoErrorCode, public status: number, message: string) {
@@ -33,12 +33,33 @@ export function sniffLogoType(data: Buffer): LogoType | null {
   return null;
 }
 
+// `sharp` — нативная библиотека. Она загружается при первой загрузке логотипа,
+// а не при старте: если её сборка не поднялась в образе, сервер работает, а
+// отказ получает только `PUT /teams/:teamId/logo` (503 `LOGO_UNAVAILABLE`).
+type Sharp = typeof import("sharp");
+let sharpLoaded: Sharp | null = null;
+
+async function loadSharp(): Promise<Sharp> {
+  if (sharpLoaded) return sharpLoaded;
+  try {
+    const mod = (await import("sharp")) as unknown as { default?: Sharp } & Sharp;
+    const sharp = mod.default ?? mod;
+    if (typeof sharp !== "function") throw new Error("sharp export is not a function");
+    sharpLoaded = sharp;
+    return sharp;
+  } catch (error) {
+    logger.error("team_logo.sharp_unavailable", { error: error instanceof Error ? error.message : String(error) });
+    throw new LogoError("LOGO_UNAVAILABLE", 503, "Logo upload is temporarily unavailable");
+  }
+}
+
 /** Проверить файл и перекодировать: квадрат 256×256 WebP, метаданные сняты. */
 export async function encodeLogo(data: Buffer): Promise<Buffer> {
   if (!Buffer.isBuffer(data) || data.length === 0) throw new LogoError("LOGO_EMPTY", 400, "Logo file is empty");
   if (data.length > LOGO_MAX_BYTES) throw new LogoError("LOGO_TOO_LARGE", 413, "Logo file is larger than 2 MB");
   const type = sniffLogoType(data);
   if (!type) throw new LogoError("LOGO_TYPE", 415, "Logo must be a PNG, JPEG or WebP image");
+  const sharp = await loadSharp();
   try {
     const image = sharp(data, { limitInputPixels: LOGO_MAX_PIXELS, failOn: "error", animated: false, sequentialRead: true });
     const meta = await image.metadata();

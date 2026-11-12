@@ -169,7 +169,7 @@ export const env = {
     publicLinkWindowMs: asNumber(process.env.RATE_PUBLIC_LINK_WINDOW_MS || "60000", "RATE_PUBLIC_LINK_WINDOW_MS"),
     publicLinkMax: asNumber(process.env.RATE_PUBLIC_LINK_MAX || "30", "RATE_PUBLIC_LINK_MAX"),
     // Оформление команды (`/teams/:teamId/look`, `/teams/:teamId/logo`): смена
-    // знака и загрузка логотипа — редкие действия, предел на IP общий на обе ручки.
+    // знака и загрузка логотипа — редкие действия, предел на человека общий на обе ручки.
     teamLookWindowMs: asNumber(process.env.RATE_TEAM_LOOK_WINDOW_MS || "600000", "RATE_TEAM_LOOK_WINDOW_MS"),
     teamLookMax: asNumber(process.env.RATE_TEAM_LOOK_MAX || "30", "RATE_TEAM_LOOK_MAX"),
   },

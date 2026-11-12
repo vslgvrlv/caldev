@@ -383,13 +383,17 @@ teamsRouter.post(
 // Ссылка команды `/join/<код>` (трек 1). Видят капитан и тренер — заявки
 // Оформление команды: краска, фигура знака, буквы и свой логотип. Меняет
 // капитан (владелец платформы — как капитан); тренер и игрок видят знак, но не
-// правят его. У смены оформления свой предел частоты на IP: это редкое
+// правят его. У смены оформления свой предел частоты на человека: это редкое
 // действие, а загрузка логотипа ещё и перекодирует картинку.
 const teamLookWriteLimiter = rateLimit({
   windowMs: env.rateLimit.teamLookWindowMs,
   limit: env.rateLimit.teamLookMax,
   standardHeaders: true,
   legacyHeaders: false,
+  // Счёт по вошедшему человеку, а не по IP: стоит после `requireAuth`, поэтому
+  // запросы без входа получают 401 и ничью квоту не тратят, а два капитана за
+  // одним Wi-Fi площадки не делят предел.
+  keyGenerator: (req) => `user:${req.authUser?.id ?? "anonymous"}`,
   handler: (req, res) => {
     res.status(429).json({ code: "RATE_LIMITED", detail: "Too many requests, try again later", correlationId: req.correlationId });
   },
@@ -410,8 +414,8 @@ const requireLookManager: RequestHandler = asyncHandler(async (req, res, next) =
 // Присланное поле записывается, `null` возвращает расчёт по умолчанию.
 teamsRouter.patch(
   "/:teamId/look",
-  teamLookWriteLimiter,
   requireAuth,
+  teamLookWriteLimiter,
   requireLookManager,
   asyncHandler(async (req, res) => {
     const teamId = req.params.teamId;
@@ -438,8 +442,8 @@ const readLogoBody: RequestHandler = (req, res, next) => {
 
 teamsRouter.put(
   "/:teamId/logo",
-  teamLookWriteLimiter,
   requireAuth,
+  teamLookWriteLimiter,
   requireLookManager,
   readLogoBody,
   asyncHandler(async (req, res) => {
@@ -462,8 +466,8 @@ teamsRouter.put(
 // Убрать логотип: знак возвращается к фигуре с буквами.
 teamsRouter.delete(
   "/:teamId/logo",
-  teamLookWriteLimiter,
   requireAuth,
+  teamLookWriteLimiter,
   requireLookManager,
   asyncHandler(async (req, res) => {
     const teamId = req.params.teamId;
