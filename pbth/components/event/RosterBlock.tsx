@@ -1,6 +1,6 @@
 import React from 'react';
 import { Avatar, Button, Glass, Icon, Row, Switch } from '../../ui';
-import type { SlotGuest } from '../../api/track4';
+import type { PublicSlotGuest, SlotGuest } from '../../api/track4';
 import { rosterBarLabel, rosterHeadline, rosterSub, type Roster, type RosterPerson } from '../../lib/event-view';
 
 type Props = {
@@ -14,10 +14,10 @@ type Props = {
   /** Событие прошло: свободные места не показываются. */
   hideFree?: boolean;
   /** Приглашённые: записались гостями на свободные слоты; стоят сразу после основного состава. */
-  guests?: SlotGuest[];
+  guests?: Array<PublicSlotGuest & { paid?: boolean }>;
   /** Капитан и тренер: «Снять» и «оплатил» у гостя. Без них гости только показываются. */
-  onRemoveGuest?: (guest: SlotGuest) => void;
-  onGuestPaid?: (guest: SlotGuest, paid: boolean) => void;
+  onRemoveGuest?: (guest: PublicSlotGuest) => void;
+  onGuestPaid?: (guest: PublicSlotGuest, paid: boolean) => void;
   guestsBusy?: boolean;
 };
 
@@ -120,13 +120,13 @@ export const RosterBlock: React.FC<Props> = ({ roster, loading, onPerson, onJoin
             key={guest.userId}
             lead={<Avatar name={guest.name} src={guest.avatar} size={40} />}
             title={guest.name}
-            sub={`гость · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
+            sub={guest.paid === undefined ? 'гость' : `гость · ${guest.paid ? 'оплатил' : 'не оплатил'}`}
             trailing={
               onRemoveGuest || onGuestPaid ? (
                 <span className="pbth-event__inline">
                   {onGuestPaid ? (
                     <Switch
-                      checked={guest.paid}
+                      checked={Boolean(guest.paid)}
                       disabled={guestsBusy}
                       label={`${guest.name}: оплатил`}
                       onChange={(paid) => onGuestPaid(guest, paid)}

@@ -49,4 +49,15 @@ describe('состав события: приглашённые гости', () 
     expect(render({ guests, onRemoveGuest: () => {}, onGuestPaid: () => {} })).toContain('Снять Гость g1');
     expect(render({ guests })).toContain('Идут 6 из 8');
   });
+
+  it('игрок видит группу «Гости» после состава без оплаты и кнопок; пустой группы нет', () => {
+    const guests = [{ userId: 'g1', name: 'Гость g1', avatar: null }];
+    const html = render({ guests });
+    expect(html.indexOf('Гости')).toBeGreaterThan(html.indexOf('Вторая пятёрка'));
+    expect(html).toContain('Гость g1');
+    expect(html).not.toContain('оплатил');
+    expect(html).not.toContain('Снять');
+    expect(html).not.toContain('role="switch"');
+    expect(render({ guests: [] })).not.toContain('Гости');
+  });
 });
